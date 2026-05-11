@@ -1,0 +1,189 @@
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+
+ffmpeg.setFfmpegPath(ffmpegStatic);
+
+const downloadFile = async (url, dest) => {
+  if (!url) throw new Error('URL is missing');
+  
+  if (url.startsWith('data:')) {
+    const matches = url.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+)?(?:;charset=[a-zA-Z0-9-]+)?(;base64)?,(.*)$/);
+    if (!matches) throw new Error('Invalid data URI');
+    const isBase64 = matches[2] === ';base64';
+    const dataString = matches[3];
+    const buffer = Buffer.from(isBase64 ? dataString : decodeURIComponent(dataString), isBase64 ? 'base64' : 'utf8');
+    fs.writeFileSync(dest, buffer);
+    return;
+  }
+  
+  if (url.startsWith('/')) {
+    url = `http://localhost:${process.env.PORT || 3000}${url}`;
+  }
+  
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  fs.writeFileSync(dest, buffer);
+};
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  try {
+    const { audioUrl, templateMediaUrl, scriptData, template, styleOverrides = {} } = req.body;
+    if (!templateMediaUrl || !template) return res.status(400).json({ error: 'Missing required parameters.' });
+
+    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'reel-'));
+    console.log("Working in temp directory:", tempDir);
+
+    const backgroundPath = path.join(tempDir, 'background.mp4');
+    const fontPath = path.join(tempDir, 'font.ttf');
+    const outputPath = path.join(tempDir, 'output.mp4');
+
+    let audioPath = null;
+    if (audioUrl) {
+      audioPath = path.join(tempDir, 'audio.wav');
+      await downloadFile(audioUrl, audioPath);
+    }
+    await downloadFile(templateMediaUrl, backgroundPath);
+    await downloadFile('https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf', fontPath);
+
+    // Get coordinates
+    const parseCoords = (cStr) => cStr.split(',').map(Number);
+    const vBox = parseCoords(template.coordinates.video_box);
+    const hBox = parseCoords(template.coordinates.headline_box);
+    const sBox = parseCoords(template.coordinates.subtitle_box);
+    const tBox = parseCoords(template.coordinates.ticker_box);
+
+    const filterGraph = [
+      {
+        filter: 'scale',
+        options: '1080:1920',
+        inputs: '0:v',
+        outputs: 'bg_scaled'
+      }
+    ];
+
+    let currentOutput = 'bg_scaled';
+
+    if (scriptData.headline && template.coordinates.headline_box && template.coordinates.headline_box !== 'hidden') {
+      const headlinePath = path.join(tempDir, 'headline.txt');
+      fs.writeFileSync(headlinePath, String(scriptData.headline));
+      filterGraph.push({
+        filter: 'drawtext',
+        options: {
+          fontfile: fontPath,
+          fontcolor: styleOverrides.headlineColor || 'white',
+          fontsize: styleOverrides.headlineSize || '50',
+          x: hBox[0],
+          y: hBox[1],
+          textfile: headlinePath,
+          box: '1',
+          boxcolor: 'black@0.5',
+          boxborderw: '10'
+        },
+        inputs: currentOutput,
+        outputs: 'with_headline'
+      });
+      currentOutput = 'with_headline';
+    }
+
+    if (scriptData.ticker && template.coordinates.ticker_box && template.coordinates.ticker_box !== 'hidden') {
+      const tickerPath = path.join(tempDir, 'ticker.txt');
+      fs.writeFileSync(tickerPath, String(scriptData.ticker));
+      filterGraph.push({
+        filter: 'drawtext',
+        options: {
+          fontfile: fontPath,
+          fontcolor: styleOverrides.tickerColor || 'white',
+          fontsize: styleOverrides.tickerSize || '40',
+          x: `mod(max(t*${template.style_rules.ticker_speed || 80}\\, 1080)\\-1080\\, 2000)`, 
+          y: tBox[1],
+          textfile: tickerPath,
+          box: '1',
+          boxcolor: styleOverrides.tickerBg || 'red@0.8',
+          boxborderw: '10'
+        },
+        inputs: currentOutput,
+        outputs: 'with_ticker'
+      });
+      currentOutput = 'with_ticker';
+    }
+
+    if (scriptData.subtitles && template.coordinates.subtitle_box && template.coordinates.subtitle_box !== 'hidden') {
+      const subtitleLines = Array.isArray(scriptData.subtitles) ? scriptData.subtitles : [scriptData.subtitles].filter(Boolean);
+      const timePerSubtitle = 3.5; // Estimated 3.5s per line
+
+      subtitleLines.forEach((sub, index) => {
+        const nextOutput = `sub_${index}`;
+        const subPath = path.join(tempDir, `sub_${index}.txt`);
+        fs.writeFileSync(subPath, String(sub));
+        const startT = index * timePerSubtitle;
+        const endT = (index + 1) * timePerSubtitle;
+
+        filterGraph.push({
+          filter: 'drawtext',
+          options: {
+            fontfile: fontPath,
+            fontcolor: styleOverrides.subtitleColor || 'yellow',
+            fontsize: styleOverrides.subtitleSize || '45',
+            x: sBox[0],
+            y: sBox[1],
+            textfile: subPath,
+            box: '1',
+            boxcolor: 'black@0.6',
+            boxborderw: '10',
+            enable: `between(t,${startT},${endT})` // Timeline editing to sync subtitles over audio duration
+          },
+          inputs: currentOutput,
+          outputs: nextOutput
+        });
+        currentOutput = nextOutput;
+      });
+    }
+
+    console.log("Starting FFmpeg with comprehensive layout and subtitle pass...");
+
+    await new Promise((resolve, reject) => {
+      let command = ffmpeg()
+        .input(backgroundPath)
+        .inputOptions(['-stream_loop', '-1']);
+      
+      if (audioPath) {
+        command = command.input(audioPath);
+      }
+        
+      let outOpts = [
+          '-c:v libx264',
+          '-pix_fmt yuv420p',
+          '-shortest', 
+      ];
+      
+      if (audioPath) {
+        outOpts = ['-map 1:a', ...outOpts, '-c:a aac'];
+      }
+
+      command
+        .complexFilter(filterGraph)
+        .map(currentOutput)
+        .outputOptions(outOpts)
+        .save(outputPath)
+        .on('end', () => resolve())
+        .on('error', (err) => reject(err));
+    });
+
+    const outputBuffer = fs.readFileSync(outputPath);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Length', outputBuffer.length);
+    return res.status(200).send(outputBuffer);
+  } catch (error) {
+    console.error('Error rendering reel:', error);
+    return res.status(500).json({ error: error.message || 'Failed to render reel' });
+  }
+}

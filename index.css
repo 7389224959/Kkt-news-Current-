@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Noto Sans Devanagari", ui-sans-serif, system-ui, sans-serif;
+  --color-bhaskar-orange: #f27d26;
+  --color-bhaskar-dark: #1a1a1a;
+  --color-bhaskar-gray: #f4f4f4;
+}
+
+@layer base {
+  body {
+    @apply bg-white text-bhaskar-dark antialiased;
+  }
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes ticker {
+  0% { transform: translateX(100vw); }
+  100% { transform: translateX(-100%); }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.shimmer-bg {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Performance optimizations */
+.content-visibility-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 500px;
+}
+
+.animate-ticker {
+  display: inline-block;
+  white-space: nowrap;
+  animation: ticker 30s linear infinite;
+}
+
+/* News portal specific styles */
+.news-title {
+  @apply font-bold leading-tight hover:text-bhaskar-orange transition-colors duration-200;
+}
+
+.category-tag {
+  @apply text-[10px] font-bold uppercase tracking-wider text-bhaskar-orange mb-1 block;
+}
+
+/* Markdown Styling */
+.markdown-body h3 {
+  @apply text-xl font-bold mt-8 mb-4 text-bhaskar-dark border-l-4 border-bhaskar-orange pl-3;
+}
+
+.markdown-body p {
+  @apply mb-4 leading-relaxed text-lg;
+}
+
+.markdown-body ul {
+  @apply list-disc pl-6 mb-6 space-y-2;
+}
+
+.markdown-body li {
+  @apply text-gray-700;
+}
+
+.markdown-body strong {
+  @apply font-bold text-bhaskar-dark;
+}

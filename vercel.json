@@ -1,0 +1,11 @@
+{
+  "functions": {
+    "api/**/*.js": {
+      "includeFiles": "dist/**"
+    }
+  },
+  "rewrites": [
+    { "source": "/article/:slug", "destination": "/api/article?slug=:slug" },
+    { "source": "/(.*)", "destination": "/" }
+  ]
+}
