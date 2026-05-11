@@ -8,7 +8,6 @@ import {
   createArticle,
   updateArticle,
   deleteArticle,
-  sortArticlesByDate,
   getBreakingNews,
   getSiteSettings,
   saveBreakingNews,
@@ -29,7 +28,6 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import NewsImage from '../components/NewsImage';
-import NewsScraper from '../components/NewsScraper';
 import ReelTemplatesAdmin from '../components/ReelTemplatesAdmin';
 import ReelWizard from '../components/ReelWizard';
 
@@ -40,7 +38,6 @@ const Admin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates'>('articles');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [showScraperModal, setShowScraperModal] = useState(false);
 
   // --- Data State ---
   const { articles: contextArticles, breakingNews: contextBreakingNews, settings: contextSettings, trendingKeywords: contextKeywords } = useApp();
@@ -291,13 +288,6 @@ const Admin: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-
-  const handleSortLatest = async () => {
-    const sorted = sortArticlesByDate(articles);
-    setArticles(sorted);
-    alert("Articles rearranged by latest date successfully!");
   };
 
   // --- Auth Handlers ---
@@ -1468,27 +1458,6 @@ const Admin: React.FC = () => {
                  <h2 className="font-bold text-xl text-slate-800">Articles List ({articles.length})</h2>
                  <div className="flex flex-wrap gap-2">
                    <button 
-                     onClick={refreshData}
-                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-all disabled:opacity-50"
-                   >
-                     <RefreshCw size={18} />
-                     Refresh Data
-                   </button>
-                   <button 
-                     onClick={handleSortLatest}
-                     className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-all"
-                     title="Arrange from latest to old chronology"
-                   >
-                     <RefreshCw size={18} /> Sort by Latest
-                   </button>
-                   <button 
-                     onClick={() => setShowScraperModal(true)}
-                     className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-all"
-                   >
-                     <Sparkles size={18} />
-                     News Scraper
-                   </button>
-                   <button 
                      onClick={() => setShowDailyNewsModal(true)}
                      className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-all"
                    >
@@ -1812,17 +1781,6 @@ const Admin: React.FC = () => {
           />
         )}
       </>
-    )}
-
-    {/* --- NEWS SCRAPER MODAL --- */}
-    {showScraperModal && (
-      <NewsScraper 
-        onClose={() => setShowScraperModal(false)} 
-        onSuccess={() => {
-          setShowScraperModal(false);
-          refreshData();
-        }} 
-      />
     )}
 
       </div>
