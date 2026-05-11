@@ -1,10 +1,10 @@
 import ffmpeg from 'fluent-ffmpeg';
-import ffmpegStatic from 'ffmpeg-static';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-ffmpeg.setFfmpegPath(ffmpegStatic);
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 const downloadFile = async (url, dest) => {
   if (!url) throw new Error('URL is missing');
@@ -149,22 +149,22 @@ export default async function handler(req, res) {
     console.log("Starting FFmpeg with comprehensive layout and subtitle pass...");
 
     await new Promise((resolve, reject) => {
-      let command = ffmpeg()
-        .input(backgroundPath)
-        .inputOptions(['-stream_loop', '-1']);
+      let command = ffmpeg();
       
       if (audioPath) {
+        command = command.input(backgroundPath).inputOptions(['-stream_loop', '-1']);
         command = command.input(audioPath);
+      } else {
+        command = command.input(backgroundPath);
       }
         
       let outOpts = [
           '-c:v libx264',
           '-pix_fmt yuv420p',
-          '-shortest', 
       ];
       
       if (audioPath) {
-        outOpts = ['-map 1:a', ...outOpts, '-c:a aac'];
+        outOpts = ['-map 1:a', ...outOpts, '-c:a aac', '-shortest'];
       }
 
       command
