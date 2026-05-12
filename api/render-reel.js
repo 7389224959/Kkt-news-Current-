@@ -1,10 +1,11 @@
+export const maxDuration = 300;
 import ffmpeg from 'fluent-ffmpeg';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+ffmpeg.setFfmpegPath(ffmpegStatic);
 
 const downloadFile = async (url, dest) => {
   if (!url) throw new Error('URL is missing');
@@ -160,6 +161,8 @@ export default async function handler(req, res) {
         
       let outOpts = [
           '-c:v libx264',
+          '-preset ultrafast',
+          '-crf 28',
           '-pix_fmt yuv420p',
       ];
       
