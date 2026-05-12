@@ -546,29 +546,94 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
                 const c = parseCoords(template.coordinates[boxName]);
                 const scale = 360 / 1080; // visual scale relative to logical 1080px width
                 
+                // MOCK FFmpeg Styles
+                let boxStyle: React.CSSProperties = {
+                  left: `${c.x * scale}px`,
+                  top: `${c.y * scale}px`,
+                  width: `${c.w * scale}px`,
+                  height: `${c.h * scale}px`,
+                  position: 'absolute',
+                  cursor: dragAction === 'move' && activeBox === boxName ? 'grabbing' : 'grab',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'flex-start',
+                  border: `2px dashed ${boxColors[boxName].replace('0.4', '1')}`,
+                  backgroundColor: boxColors[boxName],
+                  overflow: 'visible',
+                  whiteSpace: 'nowrap'
+                };
+
+                let content = <span className="bg-black/50 text-white px-2 py-1 text-[10px] font-bold rounded capitalize pointer-events-none">{boxName.replace('_box', '')}</span>;
+
+                if (boxName === 'headline_box') {
+                  const fontSize = 50 * scale;
+                  const padding = 10 * scale;
+                  boxStyle.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+                  boxStyle.border = `2px dashed rgba(255,255,255,0.8)`;
+                  boxStyle.alignItems = 'flex-start';
+                  content = (
+                    <div style={{
+                      padding: `${padding}px`,
+                      color: 'white',
+                      fontSize: `${fontSize}px`,
+                      fontFamily: '"Noto Sans Devanagari", sans-serif',
+                      lineHeight: 1,
+                      pointerEvents: 'none'
+                    }}>
+                      MOCK HEADLINE TEXT
+                    </div>
+                  );
+                } else if (boxName === 'subtitle_box') {
+                  const fontSize = 45 * scale;
+                  const padding = 10 * scale;
+                  boxStyle.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                  boxStyle.border = `2px dashed rgba(255,255,0,0.8)`;
+                  content = (
+                    <div style={{
+                      padding: `${padding}px`,
+                      color: 'yellow',
+                      fontSize: `${fontSize}px`,
+                      fontFamily: '"Noto Sans Devanagari", sans-serif',
+                      lineHeight: 1,
+                      pointerEvents: 'none'
+                    }}>
+                      Current Subtitle Line
+                    </div>
+                  );
+                } else if (boxName === 'ticker_box') {
+                  const fontSize = 40 * scale;
+                  const padding = 10 * scale;
+                  boxStyle.backgroundColor = 'rgba(255, 0, 0, 0.8)';
+                  boxStyle.border = `2px dashed rgba(255,0,0,0.9)`;
+                  content = (
+                    <div style={{
+                      padding: `${padding}px`,
+                      color: 'white',
+                      fontSize: `${fontSize}px`,
+                      fontFamily: '"Noto Sans Devanagari", sans-serif',
+                      lineHeight: 1,
+                      pointerEvents: 'none'
+                    }}>
+                      LATEST NEWS TICKER SCROLLING ...
+                    </div>
+                  );
+                } else if (boxName === 'video_box') {
+                  boxStyle.alignItems = 'center';
+                  boxStyle.justifyContent = 'center';
+                }
+
                 return (
                     <div 
                     key={boxName}
-                    className="absolute border-2 border-dashed flex items-center justify-center"
-                    style={{
-                      left: `${c.x * scale}px`,
-                      top: `${c.y * scale}px`,
-                      width: `${c.w * scale}px`,
-                      height: `${c.h * scale}px`,
-                      backgroundColor: boxColors[boxName],
-                      borderColor: boxColors[boxName].replace('0.4', '1'),
-                      cursor: dragAction === 'move' && activeBox === boxName ? 'grabbing' : 'grab'
-                    }}
+                    style={boxStyle}
                     onMouseDown={(e) => handleDragStart(e, boxName, 'move')}
                     onTouchStart={(e) => handleDragStart(e, boxName, 'move')}
                   >
-                    <span className="bg-black/50 text-white px-2 py-1 text-[10px] font-bold rounded capitalize pointer-events-none">
-                      {boxName.replace('_box', '')}
-                    </span>
+                    {content}
                     
                     {/* Resize handle */}
                     <div 
-                      className="absolute bottom-0 right-0 w-8 h-8 -mr-4 -mb-4 bg-transparent cursor-nwse-resize flex items-center justify-center pointer-events-auto"
+                      className="absolute bottom-0 right-0 w-8 h-8 -mr-4 -mb-4 bg-transparent cursor-nwse-resize flex items-center justify-center pointer-events-auto z-10"
                       onMouseDown={(e) => handleDragStart(e, boxName, 'resize')}
                       onTouchStart={(e) => handleDragStart(e, boxName, 'resize')}
                     >
