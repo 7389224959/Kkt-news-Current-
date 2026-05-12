@@ -19,11 +19,14 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
   const [visualMode, setVisualMode] = useState<'template'|'post'|'upload'|'ai'>('template');
   const [customMediaUrl, setCustomMediaUrl] = useState<string>('');
   
+  const [overlayMode, setOverlayMode] = useState<'none'|'post'|'upload'|'ai'>('post');
+  const [overlayMediaUrl, setOverlayMediaUrl] = useState<string>('');
+
   const [audioUrl, setAudioUrl] = useState('');
   const [audioDataUri, setAudioDataUri] = useState('');
   const [videoBase64, setVideoBase64] = useState('');
   
-  const [customCoords, setCustomCoords] = useState({ headline: '', ticker: '', subtitle: '' });
+  const [customCoords, setCustomCoords] = useState({ headline: '', ticker: '', subtitle: '', video: '' });
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [status, setStatus] = useState('');
@@ -45,7 +48,8 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
       setCustomCoords({
         headline: first.coordinates?.headline_box || '',
         ticker: first.coordinates?.ticker_box || '',
-        subtitle: first.coordinates?.subtitle_box || ''
+        subtitle: first.coordinates?.subtitle_box || '',
+        video: first.coordinates?.video_box || ''
       });
     }
   }, [activeTemplates, selectedTemplateId]);
@@ -57,7 +61,8 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
       setCustomCoords({
         headline: t.coordinates?.headline_box || '',
         ticker: t.coordinates?.ticker_box || '',
-        subtitle: t.coordinates?.subtitle_box || ''
+        subtitle: t.coordinates?.subtitle_box || '',
+        video: t.coordinates?.video_box || ''
       });
     }
   };
@@ -130,6 +135,22 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
     }
   }
 
+  const handleGenerateOverlayAI = async () => {
+    setIsGenerating(true);
+    setStatus('Generating AI overlay visual...');
+    try {
+      const prompt = `Realistic Indian news photo representing: ${selectedArticle?.title}. Photorealistic, 4:5 aspect ratio, no text.`;
+      const base64 = await generateAiImage(prompt);
+      setOverlayMediaUrl(`data:image/jpeg;base64,${base64}`);
+    } catch(e) {
+      console.error(e);
+      alert("AI Image generation failed.");
+    } finally {
+      setIsGenerating(false);
+      setStatus('');
+    }
+  }
+
   const generateHTMLPreview = () => {
     setStep(4);
   };
@@ -148,6 +169,15 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
          finalMediaUrl = customMediaUrl;
       }
 
+      let finalOverlayUrl = null;
+      if (visualMode === 'template' && overlayMode !== 'none') {
+         if (overlayMode === 'post' && selectedArticle?.image) {
+            finalOverlayUrl = selectedArticle.image;
+         } else if ((overlayMode === 'upload' || overlayMode === 'ai') && overlayMediaUrl) {
+            finalOverlayUrl = overlayMediaUrl;
+         }
+      }
+
       // Hide elements if requested by zeroing them in a cloned template
       const renderTemplate = JSON.parse(JSON.stringify(template));
       if (!showHeadline) renderTemplate.coordinates.headline_box = "hidden";
@@ -159,12 +189,15 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
       if (!showSubtitles) renderTemplate.coordinates.subtitle_box = "hidden";
       else if (customCoords.subtitle) renderTemplate.coordinates.subtitle_box = customCoords.subtitle;
 
+      if (customCoords.video) renderTemplate.coordinates.video_box = customCoords.video;
+
       const renderRes = await fetch('/api/render-reel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           audioUrl: audioDataUri,
           templateMediaUrl: finalMediaUrl,
+          overlayMediaUrl: finalOverlayUrl,
           scriptData: scriptData,
           template: renderTemplate,
           styleOverrides: styleOverrides
@@ -354,6 +387,51 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
                   {customMediaUrl && <img src={customMediaUrl} alt="AI" className="max-h-40 mt-4 rounded border" />}
                 </div>
               )}
+
+              {visualMode === 'template' && (
+                 <div className="mt-4 p-4 border rounded bg-pink-50/50">
+                    <h4 className="font-medium mb-2">Picture-in-Picture Overlay (Optional)</h4>
+                    <p className="text-xs text-gray-500 mb-3">Add a news image or video inside the template's video frame.</p>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                       <button onClick={()=>setOverlayMode('none')} className={`px-3 py-1.5 rounded border text-sm ${overlayMode === 'none' ? 'bg-pink-100 border-pink-500 font-medium' : 'bg-white'}`}>None</button>
+                       <button onClick={()=>setOverlayMode('post')} className={`px-3 py-1.5 rounded border text-sm ${overlayMode === 'post' ? 'bg-pink-100 border-pink-500 font-medium' : 'bg-white'}`}>From Post</button>
+                       <button onClick={()=>setOverlayMode('upload')} className={`px-3 py-1.5 rounded border text-sm ${overlayMode === 'upload' ? 'bg-pink-100 border-pink-500 font-medium' : 'bg-white'}`}>Upload Custom</button>
+                       <button onClick={()=>setOverlayMode('ai')} className={`px-3 py-1.5 rounded border text-sm ${overlayMode === 'ai' ? 'bg-pink-100 border-pink-500 font-medium' : 'bg-white'}`}>Generate AI</button>
+                    </div>
+
+                    {overlayMode === 'post' && (
+                      <div className="p-3 bg-white border rounded">
+                        {selectedArticle?.image ? (
+                           <img src={selectedArticle.image} alt="post overlay" className="max-h-32 rounded" />
+                        ) : <p className="text-gray-500 text-sm">No image available in this post.</p>}
+                      </div>
+                    )}
+
+                    {overlayMode === 'upload' && (
+                      <div className="p-3 bg-white border rounded">
+                        <input type="file" accept="image/*,video/mp4" onChange={async (e) => {
+                           const file = e.target.files?.[0];
+                           if (!file) return;
+                           const reader = new FileReader();
+                           reader.onloadend = () => {
+                              setOverlayMediaUrl(reader.result as string);
+                           };
+                           reader.readAsDataURL(file);
+                        }} className="mb-2 block w-full text-sm" />
+                        {overlayMediaUrl && <div className="text-xs text-green-600">Overlay media loaded.</div>}
+                      </div>
+                    )}
+                    
+                    {overlayMode === 'ai' && (
+                      <div className="p-3 bg-white border rounded">
+                        <button onClick={handleGenerateOverlayAI} disabled={isGenerating} className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded flex gap-2 items-center text-sm">
+                          {isGenerating ? <RefreshCw className="animate-spin" size={16}/> : <ImageIcon size={16} />} Generate AI Overlay Image
+                        </button>
+                        {overlayMediaUrl && <img src={overlayMediaUrl} alt="AI Overlay" className="max-h-32 mt-3 rounded border" />}
+                      </div>
+                    )}
+                 </div>
+              )}
            </div>
 
            <div className="bg-gray-50 p-4 rounded border mt-4">
@@ -397,6 +475,7 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
             activeTemplates={activeTemplates}
             scriptData={scriptData} setScriptData={setScriptData}
             visualMode={visualMode} customMediaUrl={customMediaUrl}
+            overlayMode={overlayMode} overlayMediaUrl={overlayMediaUrl}
             selectedArticle={selectedArticle} audioDataUri={audioDataUri}
             showHeadline={showHeadline} showTicker={showTicker} showSubtitles={showSubtitles}
             customCoords={customCoords} setCustomCoords={setCustomCoords}
@@ -420,13 +499,15 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
 
 function ReelEditorView({
   onClose, templateId, activeTemplates, scriptData, setScriptData,
-  visualMode, customMediaUrl, selectedArticle, showHeadline, showTicker, showSubtitles,
+  visualMode, customMediaUrl, overlayMode, overlayMediaUrl, selectedArticle, showHeadline, showTicker, showSubtitles,
   customCoords, setCustomCoords, setStep, handleRender, videoBase64, isGenerating, setStatus, audioUrl
 }: any) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [activeBox, setActiveBox] = useState<string | null>(null);
+  const [dragAction, setDragAction] = useState<'move' | 'resize' | null>(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [startCoords, setStartCoords] = useState<{x:number,y:number,w:number,h:number} | null>(null);
+
   const [editPrompt, setEditPrompt] = useState('');
   const [styleOverrides, setStyleOverrides] = useState<any>({});
 
@@ -437,6 +518,7 @@ function ReelEditorView({
     if (boxName === 'headline_box' && customCoords.headline) raw = customCoords.headline;
     if (boxName === 'ticker_box' && customCoords.ticker) raw = customCoords.ticker;
     if (boxName === 'subtitle_box' && customCoords.subtitle) raw = customCoords.subtitle;
+    if (boxName === 'video_box' && customCoords.video) raw = customCoords.video;
     if (!raw || raw === 'hidden') return { x:0, y:0, w:0, h:0, hidden: true };
     const [x,y,w,h] = raw.split(',').map(Number);
     return { x: isNaN(x)?0:x, y: isNaN(y)?0:y, w: isNaN(w)?100:w, h: isNaN(h)?100:h, hidden: false };
@@ -447,12 +529,14 @@ function ReelEditorView({
     if (boxName === 'headline_box') setCustomCoords((p: any) => ({...p, headline: s}));
     if (boxName === 'ticker_box') setCustomCoords((p: any) => ({...p, ticker: s}));
     if (boxName === 'subtitle_box') setCustomCoords((p: any) => ({...p, subtitle: s}));
+    if (boxName === 'video_box') setCustomCoords((p: any) => ({...p, video: s}));
   };
 
-  const handleDragStart = (e: React.MouseEvent | React.TouchEvent, boxName: string) => {
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent, boxName: string, action: 'move' | 'resize' = 'move') => {
     e.preventDefault();
     e.stopPropagation();
     setActiveBox(boxName);
+    setDragAction(action);
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     setDragStart({ x: clientX, y: clientY });
@@ -460,7 +544,7 @@ function ReelEditorView({
   };
 
   React.useEffect(() => {
-    if (!activeBox || !startCoords || !containerRef.current) return;
+    if (!activeBox || !dragAction || !startCoords || !containerRef.current) return;
     const handleWindowMouseMove = (e: globalThis.MouseEvent | globalThis.TouchEvent) => {
       if (e.cancelable) e.preventDefault();
       const rect = containerRef.current!.getBoundingClientRect();
@@ -470,11 +554,21 @@ function ReelEditorView({
       const clientY = 'touches' in e ? e.touches[0].clientY : (e as globalThis.MouseEvent).clientY;
       const dx = (clientX - dragStart.x) * scaleX;
       const dy = (clientY - dragStart.y) * scaleY;
-      const newX = Math.max(0, Math.min(1080 - startCoords.w, startCoords.x + dx));
-      const newY = Math.max(0, Math.min(1920 - startCoords.h, startCoords.y + dy));
-      setCoordFromDrag(activeBox, { ...startCoords, x: newX, y: newY });
+      
+      if (dragAction === 'move') {
+        const newX = Math.max(0, Math.min(1080 - startCoords.w, startCoords.x + dx));
+        const newY = Math.max(0, Math.min(1920 - startCoords.h, startCoords.y + dy));
+        setCoordFromDrag(activeBox, { ...startCoords, x: newX, y: newY });
+      } else if (dragAction === 'resize') {
+        const newW = Math.max(20, Math.min(1080 - startCoords.x, startCoords.w + dx));
+        const newH = Math.max(20, Math.min(1920 - startCoords.y, startCoords.h + dy));
+        setCoordFromDrag(activeBox, { ...startCoords, w: newW, h: newH });
+      }
     };
-    const handleWindowMouseUp = () => { setActiveBox(null); };
+    const handleWindowMouseUp = () => { 
+      setActiveBox(null); 
+      setDragAction(null); 
+    };
     window.addEventListener('mousemove', handleWindowMouseMove, { passive: false });
     window.addEventListener('mouseup', handleWindowMouseUp);
     window.addEventListener('touchmove', handleWindowMouseMove, { passive: false });
@@ -490,6 +584,15 @@ function ReelEditorView({
   let finalMediaUrl = template.mediaUrl || template.screenshotUrl;
   if (visualMode === 'post' && selectedArticle?.image) finalMediaUrl = selectedArticle.image; 
   if ((visualMode === 'upload' || visualMode === 'ai') && customMediaUrl) finalMediaUrl = customMediaUrl;
+
+  let finalOverlayUrl: string | null = null;
+  if (visualMode === 'template' && overlayMode !== 'none') {
+      if (overlayMode === 'post' && selectedArticle?.image) {
+        finalOverlayUrl = selectedArticle.image;
+      } else if ((overlayMode === 'upload' || overlayMode === 'ai') && overlayMediaUrl) {
+        finalOverlayUrl = overlayMediaUrl;
+      }
+  }
 
   const handleAIEdit = async () => {
     if (!editPrompt) return;
@@ -510,6 +613,7 @@ function ReelEditorView({
   const headlineBox = parseOrCustom('headline_box');
   const tickerBox = parseOrCustom('ticker_box');
   const subtitleBox = parseOrCustom('subtitle_box');
+  const videoBox = parseOrCustom('video_box');
   const scale = 360 / 1080; 
 
   const isVideo = finalMediaUrl?.match(/\.(mp4|webm|mov)$/i) || finalMediaUrl?.startsWith('data:video');
@@ -529,6 +633,27 @@ function ReelEditorView({
              ) : (
                <img src={finalMediaUrl} alt="Preview bg" className="absolute inset-0 w-full h-full object-cover pointer-events-none opacity-80" />
              )}
+
+             {finalOverlayUrl && !videoBox.hidden && (
+               <div
+                  className="absolute border-2 border-dashed border-red-400 hover:border-red-500 cursor-grab active:cursor-grabbing pointer-events-auto"
+                  style={{
+                    left: videoBox.x * scale, top: videoBox.y * scale, 
+                    width: videoBox.w * scale, height: videoBox.h * scale,
+                  }}
+                  onMouseDown={(e) => handleDragStart(e, 'video_box', 'move')}
+                  onTouchStart={(e) => handleDragStart(e, 'video_box', 'move')}
+               >
+                 <img src={finalOverlayUrl} alt="Overlay preview" className="w-full h-full object-cover pointer-events-none" />
+                 <div 
+                   className="absolute bottom-0 right-0 w-8 h-8 -mr-4 -mb-4 bg-transparent cursor-nwse-resize flex items-center justify-center pointer-events-auto"
+                   onMouseDown={(e) => handleDragStart(e, 'video_box', 'resize')}
+                   onTouchStart={(e) => handleDragStart(e, 'video_box', 'resize')}
+                 >
+                   <div className="w-4 h-4 bg-white border border-gray-400"></div>
+                 </div>
+               </div>
+             )}
              
              {showHeadline && !headlineBox.hidden && (
                 <div 
@@ -538,31 +663,47 @@ function ReelEditorView({
                     width: headlineBox.w * scale, height: headlineBox.h * scale,
                     backgroundColor: 'rgba(0,0,0,0.5)'
                   }}
-                  onMouseDown={(e) => handleDragStart(e, 'headline_box')}
-                  onTouchStart={(e) => handleDragStart(e, 'headline_box')}
+                  onMouseDown={(e) => handleDragStart(e, 'headline_box', 'move')}
+                  onTouchStart={(e) => handleDragStart(e, 'headline_box', 'move')}
                 >
-                   <span className="text-center font-bold" style={{
+                   <span className="text-center font-bold pointer-events-none" style={{
                       color: styleOverrides.headlineColor || 'white', 
                       fontSize: `${(parseInt(styleOverrides.headlineSize || '50') * scale)}px`
                    }}>{scriptData.headline}</span>
+                   <div 
+                     className="absolute bottom-0 right-0 w-8 h-8 -mr-4 -mb-4 bg-transparent cursor-nwse-resize flex items-center justify-center pointer-events-auto"
+                     onMouseDown={(e) => handleDragStart(e, 'headline_box', 'resize')}
+                     onTouchStart={(e) => handleDragStart(e, 'headline_box', 'resize')}
+                   >
+                     <div className="w-4 h-4 bg-white border border-gray-400"></div>
+                   </div>
                 </div>
              )}
 
              {showTicker && !tickerBox.hidden && (
                 <div 
-                  className="absolute flex items-center text-white px-2 cursor-grab active:cursor-grabbing border-2 border-dashed border-yellow-400 hover:border-yellow-500 whitespace-nowrap overflow-hidden"
+                  className="absolute flex items-center text-white px-2 cursor-grab active:cursor-grabbing border-2 border-dashed border-yellow-400 hover:border-yellow-500 whitespace-nowrap overflow-visible"
                   style={{
                     left: tickerBox.x * scale, top: tickerBox.y * scale, 
                     width: tickerBox.w * scale, height: tickerBox.h * scale,
                     backgroundColor: styleOverrides.tickerBg?.replace('@', ',').replace('.8', '0.8') || 'rgba(255,0,0,0.8)'
                   }}
-                  onMouseDown={(e) => handleDragStart(e, 'ticker_box')}
-                  onTouchStart={(e) => handleDragStart(e, 'ticker_box')}
+                  onMouseDown={(e) => handleDragStart(e, 'ticker_box', 'move')}
+                  onTouchStart={(e) => handleDragStart(e, 'ticker_box', 'move')}
                 >
-                   <span className="font-bold" style={{
-                      color: styleOverrides.tickerColor || 'white', 
-                      fontSize: `${(parseInt(styleOverrides.tickerSize || '40') * scale)}px`
-                   }}>{scriptData.ticker}</span>
+                   <div className="w-full h-full overflow-hidden flex items-center pointer-events-none">
+                     <span className="font-bold" style={{
+                        color: styleOverrides.tickerColor || 'white', 
+                        fontSize: `${(parseInt(styleOverrides.tickerSize || '40') * scale)}px`
+                     }}>{scriptData.ticker}</span>
+                   </div>
+                   <div 
+                     className="absolute bottom-0 right-0 w-8 h-8 -mr-4 -mb-4 bg-transparent cursor-nwse-resize flex items-center justify-center pointer-events-auto"
+                     onMouseDown={(e) => handleDragStart(e, 'ticker_box', 'resize')}
+                     onTouchStart={(e) => handleDragStart(e, 'ticker_box', 'resize')}
+                   >
+                     <div className="w-4 h-4 bg-white border border-gray-400"></div>
+                   </div>
                 </div>
              )}
 
@@ -574,13 +715,20 @@ function ReelEditorView({
                     width: subtitleBox.w * scale, height: subtitleBox.h * scale,
                     backgroundColor: 'rgba(0,0,0,0.6)'
                   }}
-                  onMouseDown={(e) => handleDragStart(e, 'subtitle_box')}
-                  onTouchStart={(e) => handleDragStart(e, 'subtitle_box')}
+                  onMouseDown={(e) => handleDragStart(e, 'subtitle_box', 'move')}
+                  onTouchStart={(e) => handleDragStart(e, 'subtitle_box', 'move')}
                 >
-                   <span className="text-center font-bold" style={{
+                   <span className="text-center font-bold pointer-events-none" style={{
                       color: styleOverrides.subtitleColor || 'yellow', 
                       fontSize: `${(parseInt(styleOverrides.subtitleSize || '45') * scale)}px`
                    }}>{scriptData.subtitles?.[0] || 'Subtitle prev...'}</span>
+                   <div 
+                     className="absolute bottom-0 right-0 w-8 h-8 -mr-4 -mb-4 bg-transparent cursor-nwse-resize flex items-center justify-center pointer-events-auto"
+                     onMouseDown={(e) => handleDragStart(e, 'subtitle_box', 'resize')}
+                     onTouchStart={(e) => handleDragStart(e, 'subtitle_box', 'resize')}
+                   >
+                     <div className="w-4 h-4 bg-white border border-gray-400"></div>
+                   </div>
                 </div>
              )}
           </div>

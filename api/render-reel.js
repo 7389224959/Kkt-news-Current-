@@ -45,6 +45,13 @@ export default async function handler(req, res) {
     const fontPath = path.join(tempDir, 'font.ttf');
     const outputPath = path.join(tempDir, 'output.mp4');
 
+    const { overlayMediaUrl } = req.body;
+    let overlayPath = null;
+    if (overlayMediaUrl) {
+      overlayPath = path.join(tempDir, 'overlay.mp4');
+      await downloadFile(overlayMediaUrl, overlayPath);
+    }
+
     let audioPath = null;
     if (audioUrl) {
       audioPath = path.join(tempDir, 'audio.wav');
@@ -55,10 +62,10 @@ export default async function handler(req, res) {
 
     // Get coordinates
     const parseCoords = (cStr) => cStr.split(',').map(Number);
-    const vBox = parseCoords(template.coordinates.video_box);
-    const hBox = parseCoords(template.coordinates.headline_box);
-    const sBox = parseCoords(template.coordinates.subtitle_box);
-    const tBox = parseCoords(template.coordinates.ticker_box);
+    const vBox = template.coordinates.video_box !== 'hidden' ? parseCoords(template.coordinates.video_box) : null;
+    const hBox = template.coordinates.headline_box !== 'hidden' ? parseCoords(template.coordinates.headline_box) : null;
+    const sBox = template.coordinates.subtitle_box !== 'hidden' ? parseCoords(template.coordinates.subtitle_box) : null;
+    const tBox = template.coordinates.ticker_box !== 'hidden' ? parseCoords(template.coordinates.ticker_box) : null;
 
     const filterGraph = [
       {
@@ -70,8 +77,33 @@ export default async function handler(req, res) {
     ];
 
     let currentOutput = 'bg_scaled';
+    let nextInputIndex = 1;
 
-    if (scriptData.headline && template.coordinates.headline_box && template.coordinates.headline_box !== 'hidden') {
+    let overlayIndex = -1;
+    if (overlayPath && vBox) {
+      overlayIndex = nextInputIndex++;
+      filterGraph.push({
+        filter: 'scale',
+        options: `${vBox[2]}:${vBox[3]}:force_original_aspect_ratio=increase`,
+        inputs: `${overlayIndex}:v`,
+        outputs: 'ov_scaled'
+      });
+      filterGraph.push({
+        filter: 'crop',
+        options: `${vBox[2]}:${vBox[3]}`,
+        inputs: 'ov_scaled',
+        outputs: 'ov_cropped'
+      });
+      filterGraph.push({
+        filter: 'overlay',
+        options: `x=${vBox[0]}:y=${vBox[1]}`,
+        inputs: [currentOutput, 'ov_cropped'],
+        outputs: 'with_overlay'
+      });
+      currentOutput = 'with_overlay';
+    }
+
+    if (scriptData.headline && hBox) {
       const headlinePath = path.join(tempDir, 'headline.txt');
       fs.writeFileSync(headlinePath, String(scriptData.headline));
       filterGraph.push({
@@ -93,7 +125,7 @@ export default async function handler(req, res) {
       currentOutput = 'with_headline';
     }
 
-    if (scriptData.ticker && template.coordinates.ticker_box && template.coordinates.ticker_box !== 'hidden') {
+    if (scriptData.ticker && tBox) {
       const tickerPath = path.join(tempDir, 'ticker.txt');
       fs.writeFileSync(tickerPath, String(scriptData.ticker));
       filterGraph.push({
@@ -115,7 +147,7 @@ export default async function handler(req, res) {
       currentOutput = 'with_ticker';
     }
 
-    if (scriptData.subtitles && template.coordinates.subtitle_box && template.coordinates.subtitle_box !== 'hidden') {
+    if (scriptData.subtitles && sBox) {
       const subtitleLines = Array.isArray(scriptData.subtitles) ? scriptData.subtitles : [scriptData.subtitles].filter(Boolean);
       const timePerSubtitle = 3.5; // Estimated 3.5s per line
 
@@ -152,11 +184,16 @@ export default async function handler(req, res) {
     await new Promise((resolve, reject) => {
       let command = ffmpeg();
       
+      command = command.input(backgroundPath).inputOptions(['-stream_loop', '-1']);
+      
+      if (overlayPath && vBox) {
+        command = command.input(overlayPath);
+      }
+      
+      let audioIndex = -1;
       if (audioPath) {
-        command = command.input(backgroundPath).inputOptions(['-stream_loop', '-1']);
+        audioIndex = nextInputIndex++;
         command = command.input(audioPath);
-      } else {
-        command = command.input(backgroundPath);
       }
         
       let outOpts = [
@@ -167,7 +204,7 @@ export default async function handler(req, res) {
       ];
       
       if (audioPath) {
-        outOpts = ['-map 1:a', ...outOpts, '-c:a aac', '-shortest'];
+        outOpts = [`-map ${audioIndex}:a`, ...outOpts, '-c:a aac', '-shortest'];
       }
 
       command
