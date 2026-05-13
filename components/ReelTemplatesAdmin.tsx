@@ -371,11 +371,9 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
       const dx = (clientX - dragStart.x) * scaleX;
       const dy = (clientY - dragStart.y) * scaleY;
 
-      const isTextBox = activeBox === 'headline_box' || activeBox === 'subtitle_box' || activeBox === 'ticker_box';
-
       if (dragAction === 'move') {
-        const newX = activeBox === 'ticker_box' ? 0 : Math.max(0, Math.min(1080 - (isTextBox ? 0 : startCoords.w), startCoords.x + dx));
-        const newY = Math.max(0, Math.min(1920 - (isTextBox ? 0 : startCoords.h), startCoords.y + dy));
+        const newX = Math.max(0, Math.min(1080 - startCoords.w, startCoords.x + dx));
+        const newY = Math.max(0, Math.min(1920 - startCoords.h, startCoords.y + dy));
         
         setTemplate(prev => ({
           ...prev,
@@ -548,23 +546,20 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
                 const c = parseCoords(template.coordinates[boxName]);
                 const scale = 360 / 1080; // visual scale relative to logical 1080px width
                 
-                const isTextBox = boxName === 'headline_box' || boxName === 'subtitle_box' || boxName === 'ticker_box';
-                const paddingPx = 10 * scale;
-
                 // MOCK FFmpeg Styles
                 let boxStyle: React.CSSProperties = {
-                  left: isTextBox ? `${c.x * scale - paddingPx}px` : `${c.x * scale}px`,
-                  top: isTextBox ? `${c.y * scale - paddingPx}px` : `${c.y * scale}px`,
-                  width: isTextBox ? (boxName === 'ticker_box' ? `${1080 * scale}px` : 'max-content') : `${c.w * scale}px`,
-                  height: isTextBox ? 'max-content' : `${c.h * scale}px`,
+                  left: `${c.x * scale}px`,
+                  top: `${c.y * scale}px`,
+                  width: `${c.w * scale}px`,
+                  height: `${c.h * scale}px`,
                   position: 'absolute',
                   cursor: dragAction === 'move' && activeBox === boxName ? 'grabbing' : 'grab',
                   display: 'flex',
                   alignItems: 'flex-start',
                   justifyContent: 'flex-start',
-                  border: isTextBox ? 'none' : `2px dashed ${boxColors[boxName].replace('0.4', '1')}`,
-                  backgroundColor: isTextBox ? 'transparent' : boxColors[boxName],
-                  overflow: isTextBox ? 'visible' : 'hidden',
+                  border: `2px dashed ${boxColors[boxName].replace('0.4', '1')}`,
+                  backgroundColor: boxColors[boxName],
+                  overflow: 'hidden',
                   whiteSpace: 'nowrap',
                   zIndex: activeBox === boxName ? 50 : 10
                 };
@@ -573,59 +568,53 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
 
                 if (boxName === 'headline_box') {
                   const fontSize = 50 * scale;
+                  const padding = 10 * scale;
+                  boxStyle.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+                  boxStyle.border = `2px dashed rgba(255,255,255,0.8)`;
                   content = (
                     <div style={{
-                      padding: `${paddingPx}px`,
-                      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                      padding: `${padding}px`,
                       color: 'white',
                       fontSize: `${fontSize}px`,
                       fontFamily: '"Noto Sans Devanagari", sans-serif',
                       lineHeight: 1,
                       pointerEvents: 'none',
-                      border: '2px dotted rgba(255,255,255,0.7)'
                     }}>
                       BREAKING NEWS TEXT
                     </div>
                   );
                 } else if (boxName === 'subtitle_box') {
                   const fontSize = 45 * scale;
+                  const padding = 10 * scale;
+                  boxStyle.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                  boxStyle.border = `2px dashed rgba(255,255,0,0.8)`;
                   content = (
                     <div style={{
-                      padding: `${paddingPx}px`,
-                      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                      padding: `${padding}px`,
                       color: 'yellow',
                       fontSize: `${fontSize}px`,
                       fontFamily: '"Noto Sans Devanagari", sans-serif',
                       lineHeight: 1,
                       pointerEvents: 'none',
-                      border: '2px dotted rgba(255,255,0,0.7)'
                     }}>
                       Current Subtitle Line
                     </div>
                   );
                 } else if (boxName === 'ticker_box') {
                   const fontSize = 40 * scale;
-                  
-                  // For ticker, x is animated and spans the screen in FFmpeg
-                  boxStyle.left = '0px';
-                  boxStyle.transform = `translateY(0)`; // just y
-                  
+                  const padding = 10 * scale;
+                  boxStyle.backgroundColor = 'rgba(255, 0, 0, 0.8)';
+                  boxStyle.border = `2px dashed rgba(255,0,0,0.9)`;
                   content = (
                     <div style={{
-                      width: '100%',
-                      padding: `${paddingPx}px`,
-                      backgroundColor: 'rgba(255, 0, 0, 0.8)',
+                      padding: `${padding}px`,
                       color: 'white',
                       fontSize: `${fontSize}px`,
                       fontFamily: '"Noto Sans Devanagari", sans-serif',
                       lineHeight: 1,
                       pointerEvents: 'none',
-                      border: '2px dotted rgba(255,0,0,0.7)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      overflow: 'hidden'
                     }}>
-                      <span className="animate-pulse whitespace-nowrap">LATEST NEWS TICKER SCROLLING ... LATEST NEWS ...</span>
+                      LATEST NEWS TICKER SCROLLING ... LATEST NEWS ...
                     </div>
                   );
                 } else if (boxName === 'video_box') {
@@ -643,15 +632,13 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
                     {content}
                     
                     {/* Resize handle */}
-                    {!isTextBox && (
-                      <div 
-                        className="absolute bottom-0 right-0 w-8 h-8 -mr-4 -mb-4 bg-transparent cursor-nwse-resize flex items-center justify-center pointer-events-auto z-10"
-                        onMouseDown={(e) => handleDragStart(e, boxName, 'resize')}
-                        onTouchStart={(e) => handleDragStart(e, boxName, 'resize')}
-                      >
-                        <div className="w-4 h-4 bg-white border border-gray-400"></div>
-                      </div>
-                    )}
+                    <div 
+                      className="absolute bottom-0 right-0 w-8 h-8 -mr-4 -mb-4 bg-transparent cursor-nwse-resize flex items-center justify-center pointer-events-auto z-10"
+                      onMouseDown={(e) => handleDragStart(e, boxName, 'resize')}
+                      onTouchStart={(e) => handleDragStart(e, boxName, 'resize')}
+                    >
+                      <div className="w-4 h-4 bg-white border border-gray-400"></div>
+                    </div>
                   </div>
                 );
              })}

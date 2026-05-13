@@ -60,17 +60,20 @@ export default async function handler(req, res) {
     await downloadFile(templateMediaUrl, backgroundPath);
     await downloadFile('https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf', fontPath);
 
+    // Scale factor for 720p
+    const scaleFactor = 720 / 1080;
+    const parseAndScaleCoords = (cStr) => cStr.split(',').map(n => Math.round(Number(n) * scaleFactor));
+    
     // Get coordinates
-    const parseCoords = (cStr) => cStr.split(',').map(Number);
-    const vBox = template.coordinates.video_box !== 'hidden' ? parseCoords(template.coordinates.video_box) : null;
-    const hBox = template.coordinates.headline_box !== 'hidden' ? parseCoords(template.coordinates.headline_box) : null;
-    const sBox = template.coordinates.subtitle_box !== 'hidden' ? parseCoords(template.coordinates.subtitle_box) : null;
-    const tBox = template.coordinates.ticker_box !== 'hidden' ? parseCoords(template.coordinates.ticker_box) : null;
+    const vBox = template.coordinates.video_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.video_box) : null;
+    const hBox = template.coordinates.headline_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.headline_box) : null;
+    const sBox = template.coordinates.subtitle_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.subtitle_box) : null;
+    const tBox = template.coordinates.ticker_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.ticker_box) : null;
 
     const filterGraph = [
       {
         filter: 'scale',
-        options: '1080:1920',
+        options: '720:1280',
         inputs: '0:v',
         outputs: 'bg_scaled'
       }
@@ -111,13 +114,13 @@ export default async function handler(req, res) {
         options: {
           fontfile: fontPath,
           fontcolor: styleOverrides.headlineColor || 'white',
-          fontsize: styleOverrides.headlineSize || '50',
+          fontsize: Math.round(parseInt(styleOverrides.headlineSize || '50') * scaleFactor).toString(),
           x: hBox[0],
           y: hBox[1],
           textfile: headlinePath,
           box: '1',
           boxcolor: 'black@0.5',
-          boxborderw: '10'
+          boxborderw: Math.round(10 * scaleFactor).toString()
         },
         inputs: currentOutput,
         outputs: 'with_headline'
@@ -128,18 +131,21 @@ export default async function handler(req, res) {
     if (scriptData.ticker && tBox) {
       const tickerPath = path.join(tempDir, 'ticker.txt');
       fs.writeFileSync(tickerPath, String(scriptData.ticker));
+      
+      const speed = Math.round((template.style_rules.ticker_speed || 80) * scaleFactor);
+      
       filterGraph.push({
         filter: 'drawtext',
         options: {
           fontfile: fontPath,
           fontcolor: styleOverrides.tickerColor || 'white',
-          fontsize: styleOverrides.tickerSize || '40',
-          x: `mod(max(t*${template.style_rules.ticker_speed || 80}\\, 1080)\\-1080\\, 2000)`, 
+          fontsize: Math.round(parseInt(styleOverrides.tickerSize || '40') * scaleFactor).toString(),
+          x: `mod(max(t*${speed}\\, 720)\\-720\\, 1400)`, 
           y: tBox[1],
           textfile: tickerPath,
           box: '1',
           boxcolor: styleOverrides.tickerBg || 'red@0.8',
-          boxborderw: '10'
+          boxborderw: Math.round(10 * scaleFactor).toString()
         },
         inputs: currentOutput,
         outputs: 'with_ticker'
@@ -163,13 +169,13 @@ export default async function handler(req, res) {
           options: {
             fontfile: fontPath,
             fontcolor: styleOverrides.subtitleColor || 'yellow',
-            fontsize: styleOverrides.subtitleSize || '45',
+            fontsize: Math.round(parseInt(styleOverrides.subtitleSize || '45') * scaleFactor).toString(),
             x: sBox[0],
             y: sBox[1],
             textfile: subPath,
             box: '1',
             boxcolor: 'black@0.6',
-            boxborderw: '10',
+            boxborderw: Math.round(10 * scaleFactor).toString(),
             enable: `between(t,${startT},${endT})` // Timeline editing to sync subtitles over audio duration
           },
           inputs: currentOutput,
@@ -199,12 +205,14 @@ export default async function handler(req, res) {
       let outOpts = [
           '-c:v libx264',
           '-preset ultrafast',
-          '-crf 28',
+          '-crf 30',
+          '-r 24', // set lower framerate
           '-pix_fmt yuv420p',
+          '-threads 2', // limit threads to be memory safe on Vercel
       ];
       
       if (audioPath) {
-        outOpts = [`-map ${audioIndex}:a`, ...outOpts, '-c:a aac', '-shortest'];
+        outOpts = [`-map ${audioIndex}:a`, ...outOpts, '-c:a aac', '-b:a 128k', '-shortest'];
       }
 
       command
