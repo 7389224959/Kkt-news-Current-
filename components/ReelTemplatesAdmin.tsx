@@ -239,6 +239,8 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
   const [isUploading, setIsUploading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRenderingPreview, setIsRenderingPreview] = useState(false);
+  const [ffmpegPreviewUrl, setFfmpegPreviewUrl] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
   // Drag state
@@ -254,6 +256,49 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
 
   const stringifyCoords = (c: { x: number, y: number, w: number, h: number }) => {
     return `${Math.round(c.x)},${Math.round(c.y)},${Math.round(c.w)},${Math.round(c.h)}`;
+  };
+
+  const handleRenderPreview = async () => {
+    const backgroundUrl = template.mediaUrl || template.screenshotUrl;
+    if (!backgroundUrl) {
+      alert("Please upload a Background Media or Screenshot Preview first.");
+      return;
+    }
+
+    setIsRenderingPreview(true);
+    setFfmpegPreviewUrl(null);
+    try {
+      const response = await fetch('/api/render-reel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          templateMediaUrl: backgroundUrl,
+          template: template,
+          scriptData: {
+            headline: "BREAKING NEWS TEXT",
+            ticker: "LATEST NEWS TICKER SCROLLING ... LATEST NEWS ... LATEST NEWS TICKER SCROLLING ...",
+            subtitles: ["Current Subtitle Line"]
+          },
+          overlayMediaUrl: template.coordinates.video_box !== 'hidden' ? 'https://raw.githubusercontent.com/shadcn-ui/ui/main/apps/www/public/og.jpg' : undefined // Using a dummy image if video box is active
+        })
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to render');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setFfmpegPreviewUrl(url);
+    } catch (err: any) {
+      console.error(err);
+      alert("Render failed: " + err.message);
+    } finally {
+      setIsRenderingPreview(false);
+    }
   };
 
   const handleScreenshotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -523,15 +568,27 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
 
         {/* Visual Editor */}
         <div className="lg:col-span-8 flex flex-col items-center">
-          <p className="text-sm text-gray-500 mb-2 font-bold">
-            Visual Editor (Drag boxes to move, drag bottom-right corner to resize)
-          </p>
+          <div className="flex flex-col sm:flex-row justify-between w-full max-w-[360px] items-end sm:items-center mb-2 gap-2">
+            <p className="text-sm text-gray-500 font-bold leading-tight">
+              Visual Editor<br/>
+              <span className="text-xs font-normal">Drag to move, corner to resize</span>
+            </p>
+            <button
+              onClick={handleRenderPreview}
+              disabled={isRenderingPreview}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs font-bold transition-colors shadow-sm disabled:opacity-50"
+            >
+              {isRenderingPreview ? 'Rendering...' : 'Test FFmpeg Render'}
+            </button>
+          </div>
           <div 
              ref={containerRef}
              className="relative border-4 border-gray-200 bg-gray-100 shadow-xl overflow-hidden touch-none select-none"
              style={{ width: '360px', height: '640px' }} // Scale factor: 360/1080 = 0.333
           >
-             {template.screenshotUrl ? (
+             {ffmpegPreviewUrl ? (
+                <video src={ffmpegPreviewUrl} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+             ) : template.screenshotUrl ? (
                 <img src={template.screenshotUrl} alt="Preview" className="absolute inset-0 w-full h-full object-cover opacity-80 pointer-events-none" />
              ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-gray-400 font-bold text-lg pointer-events-none">
@@ -558,65 +615,77 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
                   alignItems: 'flex-start',
                   justifyContent: 'flex-start',
                   border: `2px dashed ${boxColors[boxName].replace('0.4', '1')}`,
-                  backgroundColor: boxColors[boxName],
+                  backgroundColor: ffmpegPreviewUrl ? 'transparent' : boxColors[boxName],
                   overflow: 'hidden',
                   whiteSpace: 'nowrap',
                   zIndex: activeBox === boxName ? 50 : 10
                 };
 
-                let content = <span className="bg-black/50 text-white px-2 py-1 text-[10px] font-bold rounded capitalize pointer-events-none">{boxName.replace('_box', '')}</span>;
+                let content = <span className={`px-2 py-1 text-[10px] font-bold rounded capitalize pointer-events-none ${ffmpegPreviewUrl ? 'text-white drop-shadow-md' : 'bg-black/50 text-white'}`}>{boxName.replace('_box', '')}</span>;
 
                 if (boxName === 'headline_box') {
                   const fontSize = 50 * scale;
                   const padding = 10 * scale;
-                  boxStyle.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-                  boxStyle.border = `2px dashed rgba(255,255,255,0.8)`;
-                  content = (
-                    <div style={{
-                      padding: `${padding}px`,
-                      color: 'white',
-                      fontSize: `${fontSize}px`,
-                      fontFamily: '"Noto Sans Devanagari", sans-serif',
-                      lineHeight: 1,
-                      pointerEvents: 'none',
-                    }}>
-                      BREAKING NEWS TEXT
-                    </div>
-                  );
+                  if (!ffmpegPreviewUrl) {
+                    boxStyle.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+                  }
+                  boxStyle.border = `2px dashed ${ffmpegPreviewUrl ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.8)'}`;
+                  if (!ffmpegPreviewUrl) {
+                    content = (
+                      <div style={{
+                        padding: `${padding}px`,
+                        color: 'white',
+                        fontSize: `${fontSize}px`,
+                        fontFamily: '"Noto Sans Devanagari", sans-serif',
+                        lineHeight: 1,
+                        pointerEvents: 'none',
+                      }}>
+                        BREAKING NEWS TEXT
+                      </div>
+                    );
+                  }
                 } else if (boxName === 'subtitle_box') {
                   const fontSize = 45 * scale;
                   const padding = 10 * scale;
-                  boxStyle.backgroundColor = 'rgba(0, 0, 0, 0.6)';
-                  boxStyle.border = `2px dashed rgba(255,255,0,0.8)`;
-                  content = (
-                    <div style={{
-                      padding: `${padding}px`,
-                      color: 'yellow',
-                      fontSize: `${fontSize}px`,
-                      fontFamily: '"Noto Sans Devanagari", sans-serif',
-                      lineHeight: 1,
-                      pointerEvents: 'none',
-                    }}>
-                      Current Subtitle Line
-                    </div>
-                  );
+                  if (!ffmpegPreviewUrl) {
+                    boxStyle.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                  }
+                  boxStyle.border = `2px dashed ${ffmpegPreviewUrl ? 'rgba(255,255,0,0.4)' : 'rgba(255,255,0,0.8)'}`;
+                  if (!ffmpegPreviewUrl) {
+                    content = (
+                      <div style={{
+                        padding: `${padding}px`,
+                        color: 'yellow',
+                        fontSize: `${fontSize}px`,
+                        fontFamily: '"Noto Sans Devanagari", sans-serif',
+                        lineHeight: 1,
+                        pointerEvents: 'none',
+                      }}>
+                        Current Subtitle Line
+                      </div>
+                    );
+                  }
                 } else if (boxName === 'ticker_box') {
                   const fontSize = 40 * scale;
                   const padding = 10 * scale;
-                  boxStyle.backgroundColor = 'rgba(255, 0, 0, 0.8)';
-                  boxStyle.border = `2px dashed rgba(255,0,0,0.9)`;
-                  content = (
-                    <div style={{
-                      padding: `${padding}px`,
-                      color: 'white',
-                      fontSize: `${fontSize}px`,
-                      fontFamily: '"Noto Sans Devanagari", sans-serif',
-                      lineHeight: 1,
-                      pointerEvents: 'none',
-                    }}>
-                      LATEST NEWS TICKER SCROLLING ... LATEST NEWS ...
-                    </div>
-                  );
+                  if (!ffmpegPreviewUrl) {
+                    boxStyle.backgroundColor = 'rgba(255, 0, 0, 0.8)';
+                  }
+                  boxStyle.border = `2px dashed ${ffmpegPreviewUrl ? 'rgba(255,0,0,0.4)' : 'rgba(255,0,0,0.9)'}`;
+                  if (!ffmpegPreviewUrl) {
+                    content = (
+                      <div style={{
+                        padding: `${padding}px`,
+                        color: 'white',
+                        fontSize: `${fontSize}px`,
+                        fontFamily: '"Noto Sans Devanagari", sans-serif',
+                        lineHeight: 1,
+                        pointerEvents: 'none',
+                      }}>
+                        LATEST NEWS TICKER SCROLLING ... LATEST NEWS ...
+                      </div>
+                    );
+                  }
                 } else if (boxName === 'video_box') {
                   boxStyle.alignItems = 'center';
                   boxStyle.justifyContent = 'center';
