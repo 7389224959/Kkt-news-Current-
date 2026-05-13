@@ -281,7 +281,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
             ticker: "LATEST NEWS TICKER SCROLLING ... LATEST NEWS ... LATEST NEWS TICKER SCROLLING ...",
             subtitles: ["Current Subtitle Line"]
           },
-          overlayMediaUrl: template.coordinates.video_box !== 'hidden' ? 'https://raw.githubusercontent.com/shadcn-ui/ui/main/apps/www/public/og.jpg' : undefined // Using a dummy image if video box is active
+          overlayMediaUrl: template.coordinates.video_box !== 'hidden' ? 'https://images.unsplash.com/photo-1542204165-65bf26472b9b?auto=format&fit=crop&q=80&w=1000' : undefined // Using a dummy image if video box is active
         })
       });
 
