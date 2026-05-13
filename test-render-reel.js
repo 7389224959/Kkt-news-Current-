@@ -58,19 +58,18 @@ export default async function handler(req, res) {
       await downloadFile(audioUrl, audioPath);
     }
     await downloadFile(templateMediaUrl, backgroundPath);
-    await downloadFile('https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf', fontPath);
+    await downloadFile('https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf', fontPath);
 
-    // Scale factor for 720p
     const targetW = 720;
     const targetH = 1280;
     const scaleFactor = targetW / 1080;
-    const parseAndScaleCoords = (cStr) => cStr.split(',').map(n => Math.round(Number(n) * scaleFactor));
-    
+
     // Get coordinates
-    const vBox = template.coordinates.video_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.video_box) : null;
-    const hBox = template.coordinates.headline_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.headline_box) : null;
-    const sBox = template.coordinates.subtitle_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.subtitle_box) : null;
-    const tBox = template.coordinates.ticker_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.ticker_box) : null;
+    const parseCoords = (cStr) => cStr.split(',').map(n => Math.round(Number(n) * scaleFactor));
+    const vBox = template.coordinates.video_box !== 'hidden' ? parseCoords(template.coordinates.video_box) : null;
+    const hBox = template.coordinates.headline_box !== 'hidden' ? parseCoords(template.coordinates.headline_box) : null;
+    const sBox = template.coordinates.subtitle_box !== 'hidden' ? parseCoords(template.coordinates.subtitle_box) : null;
+    const tBox = template.coordinates.ticker_box !== 'hidden' ? parseCoords(template.coordinates.ticker_box) : null;
 
     // Helper for approximate word wrap based on pixel width
     const wrapText = (text, maxWidth, fontSize) => {
