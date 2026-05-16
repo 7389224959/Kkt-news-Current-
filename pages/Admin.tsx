@@ -2248,19 +2248,49 @@ const Admin: React.FC = () => {
                   <h3 className="font-bold text-lg border-b pb-2 flex justify-between items-center">
                      Preview & Post
                      {viralPost?.theme && viralPost.theme.startsWith('custom_') && (
-                       <button 
-                         onClick={() => {
-                            if (!isAdjustingLayout && !viralTemplateOverrides) {
+                       <div className="flex items-center gap-2">
+                         {isAdjustingLayout && viralTemplateOverrides && (
+                           <button
+                             onClick={async () => {
+                               if (!settings) return;
                                const tmplId = viralPost!.theme!.replace('custom_', '');
-                               const tmpl = settings?.viralTemplates?.find((t: ViralTemplate) => t.id === tmplId);
-                               if (tmpl) setViralTemplateOverrides(tmpl);
-                            }
-                            setIsAdjustingLayout(!isAdjustingLayout);
-                         }}
-                         className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 uppercase font-bold"
-                       >
-                         {isAdjustingLayout ? 'View Final Result' : 'Adjust Layout'}
-                       </button>
+                               const originalTmpl = settings.viralTemplates?.find((t: ViralTemplate) => t.id === tmplId);
+                               if (!originalTmpl) return;
+
+                               const newTmpl = { ...viralTemplateOverrides, referenceImageUrl: originalTmpl.referenceImageUrl };
+                               const updatedTemplates = settings.viralTemplates?.map((t: ViralTemplate) => t.id === tmplId ? newTmpl : t) || [];
+                               const updatedSettings = { ...settings, viralTemplates: updatedTemplates };
+                               try {
+                                 await saveSiteSettings(updatedSettings);
+                                 alert('Layout saved to template successfully!');
+                                 // Let AppContext refetch with refreshData or we can let the UI trigger it
+                                 if (typeof refreshData === 'function') {
+                                   refreshData();
+                                 }
+                               } catch (err: any) {
+                                 console.error("Error saving template:", err);
+                                 alert('Failed to save template: ' + err.message);
+                               }
+                             }}
+                             className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200 uppercase font-bold flex items-center justify-center gap-1"
+                           >
+                             <Save size={14} className="mr-1" /> Save Layout to Template
+                           </button>
+                         )}
+                         <button 
+                           onClick={() => {
+                              if (!isAdjustingLayout && !viralTemplateOverrides) {
+                                 const tmplId = viralPost!.theme!.replace('custom_', '');
+                                 const tmpl = settings?.viralTemplates?.find((t: ViralTemplate) => t.id === tmplId);
+                                 if (tmpl) setViralTemplateOverrides(tmpl);
+                              }
+                              setIsAdjustingLayout(!isAdjustingLayout);
+                           }}
+                           className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 uppercase font-bold"
+                         >
+                           {isAdjustingLayout ? 'View Final Result' : 'Adjust Layout'}
+                         </button>
+                       </div>
                      )}
                   </h3>
                   
