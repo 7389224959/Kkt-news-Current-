@@ -102,6 +102,58 @@ export interface SiteSettings {
   };
   tickerSpeed?: number;
   reelTemplates?: ReelTemplate[];
+  viralTemplates?: ViralTemplate[];
+}
+
+export interface ViralTemplate {
+  id: string;
+  name: string;
+  referenceImageUrl: string;
+  templateImageUrl?: string;
+  coordinates: {
+    headline_box: string;
+    headline_line_1_box?: string;
+    headline_line_2_box?: string;
+    subheadline_box: string;
+    summary_box: string;
+    breaking_tag_box: string;
+    image_box?: string;
+  };
+  usedElements: {
+    hasHeadline: boolean;
+    hasSubheadline: boolean;
+    hasSummary: boolean;
+    hasBreakingTag: boolean;
+    hasImage?: boolean;
+  };
+  style_rules: {
+    headlineColor: string;
+    subheadlineColor: string;
+    summaryColor: string;
+    breakingTagColor: string;
+    breakingTagBg: string;
+    headlineBg?: string;
+    subheadlineBg?: string;
+    summaryBg?: string;
+    headlineFont?: string;
+    subheadlineFont?: string;
+    summaryFont?: string;
+    highlightColor?: string;
+    headlineHighlightColor?: string;
+    subheadlineHighlightColor?: string;
+    summaryHighlightColor?: string;
+    headlineFontSizeMult?: number;
+    subheadlineFontSizeMult?: number;
+    summaryFontSizeMult?: number;
+  };
+  limits?: {
+    headlineMaxChars?: number;
+    headline2MaxChars?: number;
+    subheadlineMaxChars?: number;
+    summaryMaxChars?: number;
+  };
+  isActive: boolean;
+  createdAt: string;
 }
 
 export interface ViralPost {
@@ -109,6 +161,7 @@ export interface ViralPost {
   headline_line_1: string;
   headline_line_2: string;
   subheadline: string;
+  summary?: string;
   branding: string;
   caption: string;
   hashtags: string[];

@@ -1228,9 +1228,10 @@ Output STRICT JSON formatting:
 {
   "theme": "<selected_theme_id>",
   "breaking_tag": "BREAKING NEWS / सावधान! / सोचने वाली बात! / etc.",
-  "headline_line_1": "<first impactful line>",
-  "headline_line_2": "<second emotional/highlighted line>",
-  "subheadline": "<optional short explanation>",
+  "headline_line_1": "<first impactful line. Enclose important keywords in *asterisks* for highlights, e.g. *बड़ा ऐलान*>",
+  "headline_line_2": "<second emotional/highlighted line. Enclose keywords in *asterisks*>",
+  "subheadline": "<optional short explanation. Enclose important keywords in *asterisks* for highlights>",
+  "summary": "<REQUIRED: 1-2 sentence news summary or key bullet points. Enclose important keywords in *asterisks* for highlights>",
   "branding": "KKT NEWS",
   "caption": "<The final news post caption following the STYLE GUIDELINES and BRANDING & LINKS rules above. This string must include the article url!>",
   "hashtags": ["#KhabarKalTak", "#tag1", "#tag2"],
@@ -1515,6 +1516,106 @@ Please return the updated Data and Styles in JSON format matching this schema. N
     return JSON.parse(response.text || '{}');
   } catch (error) {
     console.error("Failed to edit reel script with AI", error);
+    throw error;
+  }
+};
+
+export const analyzeViralTemplate = async (imageUrlOrBase64: string) => {
+  const ai = getAiClient();
+  if (!ai) throw new Error("API Key missing");
+
+  const prompt = `You are a computer vision expert analyzing a viral news post image to convert it into a reusable template.
+Identify the bounding boxes of the textual elements and the main news photograph.
+1. "image_box": The main news photograph or illustration.
+2. "Headline": The main big bold text.
+3. "Subheadline": The secondary explanation text.
+4. "Summary": Bullet points or a paragraph.
+5. "Breaking Tag": A small alert box like "BREAKING" or "ALERT".
+
+For each element, estimate its bounding box in percentage terms:
+X, Y: top-left corner (0-100)
+W, H: width and height (0-100)
+Format the box as a string: "X%, Y%, W%, H%"
+
+Additionally, for the text elements (Headline, Subheadline, Summary), determine the solid background color behind the text. If the text is overlaid directly on a photograph with no solid background, return "transparent". If it's on a solid background, return the hex color (e.g., "#FFFFFF", "#000000", "#FF0000"). This is crucial so we can paint over the old text with this background color to "clean" the template.
+
+Also estimate font sizes as a multiplier (1.0 is default). A huge headline might be 1.5 - 2.0, while small text might be 0.8.
+
+Return a JSON object with this exact structure (if an element is not present, mark the boolean as false and leave the box empty).
+
+{
+  "hasImage": true,
+  "image_box": "0%, 0%, 100%, 50%",
+  "hasHeadline": true,
+  "headline_box": "10%, 55%, 80%, 15%",
+  "hasSubheadline": true,
+  "subheadline_box": "10%, 75%, 80%, 10%",
+  "hasSummary": false,
+  "summary_box": "",
+  "hasBreakingTag": true,
+  "breaking_tag_box": "10%, 45%, 30%, 8%",
+  "style_rules": {
+    "headlineColor": "#000000",
+    "subheadlineColor": "#333333",
+    "summaryColor": "#666666",
+    "breakingTagColor": "#FFFFFF",
+    "breakingTagBg": "#DC2626",
+    "headlineBg": "#FFFFFF",
+    "subheadlineBg": "#EEEEEE",
+    "summaryBg": "transparent",
+    "headlineFontSizeMult": 1.2,
+    "subheadlineFontSizeMult": 1.0,
+    "summaryFontSizeMult": 0.9
+  }
+}
+`;
+
+  try {
+    let base64Data = '';
+    let mimeType = 'image/jpeg';
+
+    if (imageUrlOrBase64.startsWith('http')) {
+      const resp = await fetch(imageUrlOrBase64);
+      const blob = await resp.blob();
+      mimeType = blob.type;
+      
+      base64Data = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const res = reader.result as string;
+          resolve(res.split(',')[1] || res);
+        };
+        reader.readAsDataURL(blob);
+      });
+    } else {
+      base64Data = imageUrlOrBase64.split(',')[1] || imageUrlOrBase64;
+      mimeType = imageUrlOrBase64.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+    }
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType,
+              },
+            },
+            { text: prompt },
+          ],
+        },
+      ],
+      config: {
+        responseMimeType: "application/json",
+      },
+    });
+
+    return JSON.parse(response.text || '{}');
+  } catch (error) {
+    console.error("Error analyzing viral template:", error);
     throw error;
   }
 };

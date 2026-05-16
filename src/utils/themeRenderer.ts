@@ -7,20 +7,147 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
   
   // Helper for text wrapping
   const wrapText = (text: string, maxWidth: number) => {
-    const words = text.split(' ');
+    if (!text) return [];
+    const originalLines = text.split('\n');
     const lines: string[] = [];
-    let currentLine = words[0] || '';
-    for (let i = 1; i < words.length; i++) {
-      const word = words[i];
-      if (ctx.measureText(currentLine + " " + word).width < maxWidth) {
-        currentLine += " " + word;
-      } else {
-        lines.push(currentLine);
-        currentLine = word;
+    
+    for (const originalLine of originalLines) {
+      if (originalLine.trim() === '') {
+        lines.push('');
+        continue;
       }
+      // Remove asterisks for measuring properly
+      const cleanLine = originalLine.replace(/\*/g, '');
+      const words = cleanLine.split(' ');
+      let currentLine = words[0] || '';
+      for (let i = 1; i < words.length; i++) {
+        const word = words[i];
+        if (ctx.measureText(currentLine + " " + word).width < maxWidth) {
+          currentLine += " " + word;
+        } else {
+          lines.push(currentLine);
+          currentLine = word;
+        }
+      }
+      lines.push(currentLine);
     }
-    lines.push(currentLine);
     return lines;
+  };
+
+   const drawRichTextBounded = (
+     text: string, 
+     boxX: number, 
+     boxY: number, 
+     boxW: number, 
+     boxH: number, 
+     defaultColor: string, 
+     highlightColor: string, 
+     fontSizeIn: number, 
+     fontFamily: string,
+     fontSizeMult: number = 1.0,
+     textAlign: 'left' | 'center' = 'center'
+  ) => {
+      let fontSize = fontSizeIn * fontSizeMult;
+      const paragraphs = text.split('\n');
+      
+      // Auto-shrink font logic
+      let attempt = 0;
+      let finalTotalLines = 0;
+      while (attempt < 50 && fontSize > 10) {
+         ctx.font = `bold ${Math.floor(fontSize)}px ${fontFamily}`;
+         let totalLines = 0;
+         let needsShrink = false;
+         for (const para of paragraphs) {
+             const cleanPara = para.replace(/\*/g, '');
+             const words = cleanPara.split(' ');
+             let curW = 0;
+             let localLines = 1;
+             for (let i=0; i<words.length; i++) {
+                 const w = words[i];
+                 const isLast = i === words.length - 1;
+                 const ww = ctx.measureText(w + (isLast ? '' : ' ')).width;
+                 if (ww > boxW) needsShrink = true; // shrink if single word overflows
+                 if (curW + ww > boxW && curW > 0) {
+                     localLines++;
+                     curW = ww;
+                 } else {
+                     curW += ww;
+                 }
+             }
+             totalLines += localLines;
+         }
+         finalTotalLines = totalLines;
+         if (totalLines * (fontSize * 1.3) > boxH || needsShrink) {
+             fontSize -= 2;
+             attempt++;
+         } else {
+             break;
+         }
+      }
+
+      ctx.font = `bold ${Math.floor(fontSize)}px ${fontFamily}`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      const lineHeight = fontSize * 1.3;
+      
+      const totalTextHeight = finalTotalLines * lineHeight;
+      let currentY = boxY + Math.max(0, (boxH - totalTextHeight) / 2);
+
+      for (const para of paragraphs) {
+          if (para.trim() === '') {
+             currentY += lineHeight;
+             continue;
+          }
+          const words = para.split(' ');
+          let isHl = false;
+          let currentLineParts: {text: string, h: boolean, width: number}[] = [];
+          let currentLineWidth = 0;
+
+          const flushLine = () => {
+              if (currentLineParts.length === 0) return;
+              
+              let cx = boxX;
+              if (textAlign === 'center') {
+                  cx = boxX + (boxW - currentLineWidth) / 2;
+              }
+              
+              for (const part of currentLineParts) {
+                 ctx.lineWidth = Math.min(6, Math.max(3, fontSize * 0.12));
+                 ctx.strokeStyle = 'black'; // Thick black outline for very high contrast
+                 ctx.lineJoin = 'round';
+                 ctx.strokeText(part.text, cx, currentY);
+                 ctx.fillStyle = part.h ? highlightColor : defaultColor;
+                 ctx.fillText(part.text, cx, currentY);
+                 cx += part.width;
+              }
+              currentY += lineHeight;
+              currentLineParts = [];
+              currentLineWidth = 0;
+          };
+
+          for (let i=0; i<words.length; i++) {
+              let w = words[i];
+              let togglesBefore = 0;
+              let togglesAfter = 0;
+              while (w.startsWith('*')) { togglesBefore++; w = w.slice(1); }
+              while (w.endsWith('*')) { togglesAfter++; w = w.slice(0, w.length-1); }
+              
+              if (togglesBefore % 2 === 1) isHl = !isHl;
+              const wordHl = isHl;
+              if (togglesAfter % 2 === 1) isHl = !isHl;
+
+              const isLast = i === words.length - 1;
+              const wText = w + (isLast ? '' : ' ');
+              const wWidth = ctx.measureText(wText).width;
+              
+              if (currentLineWidth + wWidth > boxW && currentLineParts.length > 0) {
+                  flushLine();
+              }
+              currentLineParts.push({text: wText, h: wordHl, width: wWidth});
+              currentLineWidth += wWidth;
+          }
+          flushLine();
+      }
   };
 
   const drawBranding = (logoTheme: 'dark' | 'light' = 'dark') => {
@@ -139,6 +266,160 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       return currentY - tagH;
   };
   
+  // Custom Template Logic starts here
+  if (data.customTemplate) {
+    const tmpl = data.customTemplate;
+    const coordinates = tmpl.coordinates || {
+        headline_box: 'hidden',
+        subheadline_box: 'hidden',
+        summary_box: 'hidden',
+        breaking_tag_box: 'hidden'
+    };
+    const style_rules = tmpl.style_rules || {
+        headlineColor: '#FFFFFF',
+        subheadlineColor: '#FCD34D',
+        summaryColor: '#E5E7EB',
+        breakingTagColor: '#FFFFFF',
+        breakingTagBg: '#DC2626'
+    };
+    
+    // Parse boxes function
+    const parseBox = (boxStr?: string) => {
+      if (!boxStr || boxStr === 'hidden') return null;
+      const parts = boxStr.split('%').map(p => parseFloat(p.replace(/,/g, '').trim()));
+      if (parts.length >= 4 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2]) && !isNaN(parts[3])) {
+        return {
+          x: (parts[0] / 100) * width,
+          y: (parts[1] / 100) * height,
+          w: (parts[2] / 100) * width,
+          h: (parts[3] / 100) * height
+        };
+      }
+      return null;
+    };
+
+    // Draw reference image background if it's there?
+    // Wait, the reference image should be the base64 background, we don't need to draw it here, 
+    // it's already drawn before renderThemeOverlay is called.
+    
+    // Headline
+    const hlBox1 = parseBox(coordinates.headline_line_1_box);
+    const hlBox2 = parseBox(coordinates.headline_line_2_box);
+    const hlBox = parseBox(coordinates.headline_box);
+
+    const highlightColor = style_rules.headlineHighlightColor || style_rules.highlightColor || '#FF3B30';
+
+    if (hlBox1 || hlBox2) {
+      if (hlBox1 && data.headline_line_1) {
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.shadowColor = 'black'; 
+        ctx.shadowBlur = 8;
+        drawRichTextBounded(
+           data.headline_line_1, 
+           hlBox1.x, hlBox1.y, hlBox1.w, hlBox1.h,
+           style_rules.headlineColor || '#FFFFFF',
+           highlightColor,
+           hlBox1.h * 0.4,
+           style_rules.headlineFont || hindiFontStack,
+           style_rules.headlineFontSizeMult || 1.0
+        );
+        ctx.shadowBlur = 0;
+      }
+      if (hlBox2 && data.headline_line_2) {
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.shadowColor = 'black'; 
+        ctx.shadowBlur = 8;
+        drawRichTextBounded(
+           data.headline_line_2, 
+           hlBox2.x, hlBox2.y, hlBox2.w, hlBox2.h,
+           style_rules.headlineColor || '#FFFFFF',
+           highlightColor,
+           hlBox2.h * 0.4,
+           style_rules.headlineFont || hindiFontStack,
+           style_rules.headlineFontSizeMult || 1.0
+        );
+        ctx.shadowBlur = 0;
+      }
+    } else if (hlBox) {
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      const hlText = [data.headline_line_1, data.headline_line_2].filter(Boolean).join('\n');
+      if (hlText) {
+        ctx.shadowColor = 'black'; 
+        ctx.shadowBlur = 8;
+        drawRichTextBounded(
+           hlText, 
+           hlBox.x, hlBox.y, hlBox.w, hlBox.h,
+           style_rules.headlineColor || '#FFFFFF',
+           highlightColor,
+           hlBox.h * 0.4,
+           style_rules.headlineFont || hindiFontStack,
+           style_rules.headlineFontSizeMult || 1.0
+        );
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    // Subheadline
+    const subBox = parseBox(coordinates.subheadline_box);
+    if (subBox && data.subheadline) {
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.shadowColor = 'black';
+      ctx.shadowBlur = 5;
+      drawRichTextBounded(
+         data.subheadline, 
+         subBox.x, subBox.y, subBox.w, subBox.h,
+         style_rules.subheadlineColor || '#FCD34D',
+         style_rules.subheadlineHighlightColor || style_rules.highlightColor || '#FF3B30',
+         subBox.h * 0.3,
+         style_rules.subheadlineFont || hindiFontStack,
+         style_rules.subheadlineFontSizeMult || 1.0
+      );
+      ctx.shadowBlur = 0;
+    }
+
+    // Summary
+    const sumBox = parseBox(coordinates.summary_box);
+    if (sumBox && data.summary) {
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.shadowColor = 'black';
+      ctx.shadowBlur = 4;
+      drawRichTextBounded(
+         data.summary, 
+         sumBox.x, sumBox.y, sumBox.w, sumBox.h,
+         style_rules.summaryColor || '#E5E7EB',
+         style_rules.summaryHighlightColor || style_rules.highlightColor || '#FF3B30',
+         sumBox.h * 0.25,
+         style_rules.summaryFont || hindiFontStack,
+         style_rules.summaryFontSizeMult || 1.0
+      );
+      ctx.shadowBlur = 0;
+    }
+
+    // Breaking Tag
+    const tagBox = parseBox(coordinates.breaking_tag_box);
+    if (tagBox && data.breaking_tag) {
+      ctx.fillStyle = style_rules.breakingTagBg || '#DC2626';
+      ctx.beginPath();
+      ctx.roundRect(tagBox.x, tagBox.y, tagBox.w, tagBox.h, 6);
+      ctx.fill();
+      
+      ctx.fillStyle = style_rules.breakingTagColor || '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const fontSize = tagBox.h * 0.5;
+      const fontFam = style_rules.summaryFont || hindiFontStack;
+      ctx.font = `bold ${fontSize}px ${fontFam}`;
+      ctx.fillText(data.breaking_tag.toUpperCase(), tagBox.x + tagBox.w/2, tagBox.y + tagBox.h/2);
+    }
+    
+    return;
+  }
+
   // Theme logic starts here
   let currentY = height - Math.max(30, height * 0.05);
   const theme = data.theme || 'breaking_red';

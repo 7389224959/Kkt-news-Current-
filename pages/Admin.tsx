@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Article, Category, BreakingNews, SiteSettings, TrendingKeyword, ViralPost } from '../types';
+import { Article, Category, BreakingNews, SiteSettings, TrendingKeyword, ViralPost, ViralTemplate } from '../types';
 import { useApp } from '../context/AppContext';
 import { getCategoryLabel, generateSlug } from '../newsUtils';
 import { DEFAULT_SETTINGS } from '../constants';
@@ -29,6 +29,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import NewsImage from '../components/NewsImage';
 import ReelTemplatesAdmin from '../components/ReelTemplatesAdmin';
+import ViralTemplatesAdmin from '../components/ViralTemplatesAdmin';
+import ViralTemplateEditor from '../components/ViralTemplateEditor';
 import ReelWizard from '../components/ReelWizard';
 
 const Admin: React.FC = () => {
@@ -37,6 +39,7 @@ const Admin: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates'>('articles');
+  const [viralTemplateTab, setViralTemplateTab] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
   // --- Data State ---
@@ -141,9 +144,12 @@ const Admin: React.FC = () => {
   const [viralImageGenModel, setViralImageGenModel] = useState<'gemini' | 'cloudflare'>('gemini');
   const [viralGeneratedImage, setViralGeneratedImage] = useState<string | null>(null);
   const [rawViralGeneratedImage, setRawViralGeneratedImage] = useState<string | null>(null);
+  const [viralTemplateOverrides, setViralTemplateOverrides] = useState<any>(null);
+  const [isAdjustingLayout, setIsAdjustingLayout] = useState(false);
   const [isPostingToFacebook, setIsPostingToFacebook] = useState(false);
   const [viralCustomPrompt, setViralCustomPrompt] = useState('');
   const [viralRegeneratePrompt, setViralRegeneratePrompt] = useState('');
+  const [viralSelectedTheme, setViralSelectedTheme] = useState<string>('breaking_red');
   const [scheduledTime, setScheduledTime] = useState<string>('');
   const [fbPreviewLink, setFbPreviewLink] = useState<string | null>(null);
   const [fbPreviewPostId, setFbPreviewPostId] = useState<string | null>(null);
@@ -252,19 +258,32 @@ const Admin: React.FC = () => {
   useEffect(() => {
     if (rawViralGeneratedImage && viralPost) {
       const updateImage = async () => {
+        let customTemplate = undefined;
+        if (viralPost.theme && viralPost.theme.startsWith('custom_')) {
+          const tmplId = viralPost.theme.replace('custom_', '');
+          customTemplate = settings?.viralTemplates?.find((t: ViralTemplate) => t.id === tmplId);
+        }
+
+        // Apply any overrides from drag-and-drop editor
+        if (customTemplate && viralTemplateOverrides) {
+           customTemplate = { ...customTemplate, ...viralTemplateOverrides };
+        }
+
         const newImage = await overlayTextOnImage(rawViralGeneratedImage, {
           breaking_tag: viralPost.breaking_tag,
           headline_line_1: viralPost.headline_line_1,
           headline_line_2: viralPost.headline_line_2,
           subheadline: viralPost.subheadline,
+          summary: viralPost.summary,
           branding: viralPost.branding,
-          theme: viralPost.theme
+          theme: viralPost.theme,
+          customTemplate
         });
         setViralGeneratedImage(newImage);
       };
       updateImage();
     }
-  }, [viralPost?.breaking_tag, viralPost?.headline_line_1, viralPost?.headline_line_2, viralPost?.subheadline, viralPost?.branding, viralPost?.theme, rawViralGeneratedImage]);
+  }, [viralPost?.breaking_tag, viralPost?.headline_line_1, viralPost?.headline_line_2, viralPost?.subheadline, viralPost?.summary, viralPost?.branding, viralPost?.theme, rawViralGeneratedImage, settings?.viralTemplates, viralTemplateOverrides]);
 
   const refreshData = async () => {
     setIsLoading(true);
@@ -552,11 +571,79 @@ const Admin: React.FC = () => {
         }
       } catch(e){}
 
+      let finalInstructions = viralCustomPrompt;
+      if (viralSelectedTheme.startsWith('custom_')) {
+         const tmplId = viralSelectedTheme.replace('custom_', '');
+         const tmpl = settings?.viralTemplates?.find((t: ViralTemplate) => t.id === tmplId);
+         if (tmpl) {
+            setViralTemplateOverrides(tmpl);
+            finalInstructions += `\n\nTEMPLATE REQUIREMENTS:\nYou must use theme ID: "${viralSelectedTheme}".\n`;
+            
+            const hasSub = tmpl.coordinates?.subheadline_box && tmpl.coordinates.subheadline_box !== 'hidden';
+            const hasSum = tmpl.coordinates?.summary_box && tmpl.coordinates.summary_box !== 'hidden';
+            const hasBreak = tmpl.coordinates?.breaking_tag_box && tmpl.coordinates.breaking_tag_box !== 'hidden';
+            const hasHead1 = tmpl.coordinates?.headline_line_1_box && tmpl.coordinates.headline_line_1_box !== 'hidden';
+            const hasHead2 = tmpl.coordinates?.headline_line_2_box && tmpl.coordinates.headline_line_2_box !== 'hidden';
+            const hasHeadL = tmpl.coordinates?.headline_box && tmpl.coordinates.headline_box !== 'hidden';
+
+            const parseBoxToChars = (boxString: string, mult: number) => {
+               if(!boxString) return 0;
+               const parts = boxString.split(',').map(s => parseFloat(s.replace('%','')));
+               if(parts.length===4) {
+                 const w = parts[2];
+                 const h = parts[3];
+                 return Math.floor((w * h) / mult);
+               }
+               return 0;
+            };
+
+            if (!hasSub) {
+               finalInstructions += "- DO NOT GENERATE a subheadline, it is hidden in this template.\n";
+            } else {
+               const maxChars = tmpl.limits?.subheadlineMaxChars || Math.floor(parseBoxToChars(tmpl.coordinates.subheadline_box, 15));
+               if(maxChars > 0) finalInstructions += `- SUBHEADLINE MAX LENGTH: extremely strict limit of ~${maxChars} ALPHABETS/CHARACTERS.\n`;
+            }
+
+            if (!hasSum) {
+               finalInstructions += "- DO NOT GENERATE a summary, it is hidden in this template.\n";
+            } else {
+               const maxChars = tmpl.limits?.summaryMaxChars || parseBoxToChars(tmpl.coordinates.summary_box, 20);
+               finalInstructions += `- IMPORTANT: You MUST GENERATE a 'summary' containing key bullet points or a short news summary for this template.\n`;
+               if(maxChars > 0) finalInstructions += `- SUMMARY MAX LENGTH: strictly keep it under ~${Math.max(60, maxChars)} characters so it fits the screen box.\n`;
+            }
+
+            if (!hasBreak) finalInstructions += "- DO NOT GENERATE a breaking_tag, it is hidden in this template.\n";
+
+            if (!hasHead1 && !hasHead2 && !hasHeadL) {
+               finalInstructions += "- DO NOT GENERATE a headline (line 1 or 2), it is hidden in this template.\n";
+            } else {
+               if (hasHead1 || hasHeadL) {
+                   const limit1 = tmpl.limits?.headlineMaxChars || Math.floor(parseBoxToChars(tmpl.coordinates.headline_line_1_box || tmpl.coordinates.headline_box || '', 8));
+                   if(limit1 > 0) finalInstructions += `- HEADLINE LINE 1 MAX LENGTH: strictly keep it under ~${Math.max(10, limit1)} ALPHABETS/CHARACTERS.\n`;
+               } else {
+                   finalInstructions += "- DO NOT GENERATE headline_line_1.\n";
+               }
+               
+               if (hasHead2) {
+                   const limit2 = tmpl.limits?.headline2MaxChars || Math.floor(parseBoxToChars(tmpl.coordinates.headline_line_2_box || '', 8));
+                   if(limit2 > 0) finalInstructions += `- HEADLINE LINE 2 MAX LENGTH: strictly keep it under ~${Math.max(10, limit2)} ALPHABETS/CHARACTERS.\n`;
+               } else if (!hasHeadL) {
+                   finalInstructions += "- DO NOT GENERATE headline_line_2.\n";
+               }
+            }
+         }
+      } else {
+         finalInstructions += `\n\nTEMPLATE REQUIREMENTS:\nYou must use theme ID: "${viralSelectedTheme}".\n`;
+      }
+
       const post = await generateViralPost({
         article: articleToUse!,
         cachedSeoInfo,
-        customInstructions: viralCustomPrompt || undefined
+        customInstructions: finalInstructions || undefined
       });
+      if (viralSelectedTheme) {
+        post.theme = viralSelectedTheme;
+      }
       setViralPost(post);
       
       // Generate image
@@ -590,13 +677,81 @@ const Admin: React.FC = () => {
         }
       } catch(e){}
 
+      let finalInstructions = viralCustomPrompt;
+      if (viralSelectedTheme.startsWith('custom_')) {
+         const tmplId = viralSelectedTheme.replace('custom_', '');
+         const tmpl = settings?.viralTemplates?.find((t: ViralTemplate) => t.id === tmplId);
+         if (tmpl) {
+            setViralTemplateOverrides(tmpl);
+            finalInstructions += `\n\nTEMPLATE REQUIREMENTS:\nYou must use theme ID: "${viralSelectedTheme}".\n`;
+            
+            const hasSub = tmpl.coordinates?.subheadline_box && tmpl.coordinates.subheadline_box !== 'hidden';
+            const hasSum = tmpl.coordinates?.summary_box && tmpl.coordinates.summary_box !== 'hidden';
+            const hasBreak = tmpl.coordinates?.breaking_tag_box && tmpl.coordinates.breaking_tag_box !== 'hidden';
+            const hasHead1 = tmpl.coordinates?.headline_line_1_box && tmpl.coordinates.headline_line_1_box !== 'hidden';
+            const hasHead2 = tmpl.coordinates?.headline_line_2_box && tmpl.coordinates.headline_line_2_box !== 'hidden';
+            const hasHeadL = tmpl.coordinates?.headline_box && tmpl.coordinates.headline_box !== 'hidden';
+
+            const parseBoxToChars = (boxString: string, mult: number) => {
+               if(!boxString) return 0;
+               const parts = boxString.split(',').map(s => parseFloat(s.replace('%','')));
+               if(parts.length===4) {
+                 const w = parts[2];
+                 const h = parts[3];
+                 return Math.floor((w * h) / mult); // rough logic
+               }
+               return 0;
+            };
+
+            if (!hasSub) {
+               finalInstructions += "- DO NOT GENERATE a subheadline, it is hidden in this template.\n";
+            } else {
+               const maxChars = tmpl.limits?.subheadlineMaxChars || Math.floor(parseBoxToChars(tmpl.coordinates.subheadline_box, 15));
+               if(maxChars > 0) finalInstructions += `- SUBHEADLINE MAX LENGTH: extremely strict limit of ~${maxChars} ALPHABETS/CHARACTERS.\n`;
+            }
+
+            if (!hasSum) {
+               finalInstructions += "- DO NOT GENERATE a summary, it is hidden in this template.\n";
+            } else {
+               const maxChars = tmpl.limits?.summaryMaxChars || parseBoxToChars(tmpl.coordinates.summary_box, 20);
+               finalInstructions += `- IMPORTANT: You MUST GENERATE a 'summary' containing key bullet points or a short news summary for this template.\n`;
+               if(maxChars > 0) finalInstructions += `- SUMMARY MAX LENGTH: strictly keep it under ~${Math.max(60, maxChars)} characters so it fits the screen box.\n`;
+            }
+
+            if (!hasBreak) finalInstructions += "- DO NOT GENERATE a breaking_tag, it is hidden in this template.\n";
+
+            if (!hasHead1 && !hasHead2 && !hasHeadL) {
+               finalInstructions += "- DO NOT GENERATE a headline (line 1 or 2), it is hidden in this template.\n";
+            } else {
+               if (hasHead1 || hasHeadL) {
+                   const limit1 = tmpl.limits?.headlineMaxChars || Math.floor(parseBoxToChars(tmpl.coordinates.headline_line_1_box || tmpl.coordinates.headline_box || '', 8));
+                   if(limit1 > 0) finalInstructions += `- HEADLINE LINE 1 MAX LENGTH: strictly keep it under ~${Math.max(10, limit1)} ALPHABETS/CHARACTERS.\n`;
+               } else {
+                   finalInstructions += "- DO NOT GENERATE headline_line_1.\n";
+               }
+               
+               if (hasHead2) {
+                   const limit2 = tmpl.limits?.headline2MaxChars || Math.floor(parseBoxToChars(tmpl.coordinates.headline_line_2_box || '', 8));
+                   if(limit2 > 0) finalInstructions += `- HEADLINE LINE 2 MAX LENGTH: strictly keep it under ~${Math.max(10, limit2)} ALPHABETS/CHARACTERS.\n`;
+               } else if (!hasHeadL) {
+                   finalInstructions += "- DO NOT GENERATE headline_line_2.\n";
+               }
+            }
+         }
+      } else {
+         finalInstructions += `\n\nTEMPLATE REQUIREMENTS:\nYou must use theme ID: "${viralSelectedTheme}".\n`;
+      }
+
       const post = await generateViralPost({
          article: articleToUse,
          cachedSeoInfo,
-         customInstructions: viralCustomPrompt || undefined,
+         customInstructions: finalInstructions || undefined,
          previousPost: viralPost,
          feedback: viralRegeneratePrompt || undefined
       });
+      if (viralSelectedTheme) {
+        post.theme = viralSelectedTheme;
+      }
       setViralPost(post);
       
       // Generate image
@@ -1765,20 +1920,55 @@ const Admin: React.FC = () => {
 
         {/* --- TAB: TEMPLATES --- */}
         {activeTab === 'templates' && (
-          <ReelTemplatesAdmin 
-             settings={settings}
-             onSaveSettings={async (updatedSettings) => {
-               try {
-                 const result = await saveSiteSettings(updatedSettings);
-                 setSiteSettings(updatedSettings);
-                 if (result.strippedColumns && result.strippedColumns.length > 0) {
-                   alert(`Warning: The following fields were NOT saved due to missing columns in Supabase: ${result.strippedColumns.join(', ')}`);
-                 }
-               } catch (error: any) {
-                 throw error; // Rethrow so ReelTemplatesAdmin can catch it and display it
-               }
-             }}
-          />
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setViralTemplateTab(false)}
+                className={`px-4 py-2 font-bold rounded-lg transition-colors border ${!viralTemplateTab ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+              >
+                Reel Templates (Video)
+              </button>
+              <button 
+                onClick={() => setViralTemplateTab(true)}
+                className={`px-4 py-2 font-bold rounded-lg transition-colors border ${viralTemplateTab ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+              >
+                Viral Auto Post Templates (Image)
+              </button>
+            </div>
+
+            {!viralTemplateTab ? (
+              <ReelTemplatesAdmin 
+                 settings={settings!}
+                 onSaveSettings={async (updatedSettings: SiteSettings) => {
+                   try {
+                     const result = await saveSiteSettings(updatedSettings);
+                     setSiteSettings(updatedSettings);
+                     if (result.strippedColumns && result.strippedColumns.length > 0) {
+                       alert(`Warning: The following fields were NOT saved due to missing columns in Supabase: ${result.strippedColumns.join(', ')}`);
+                     }
+                   } catch (error: any) {
+                     throw error; // Rethrow so ReelTemplatesAdmin can catch it and display it
+                   }
+                 }}
+              />
+            ) : (
+              <ViralTemplatesAdmin 
+                 settings={settings!}
+                 articles={articles}
+                 onSaveSettings={async (updatedSettings: SiteSettings) => {
+                   try {
+                     const result = await saveSiteSettings(updatedSettings);
+                     setSiteSettings(updatedSettings);
+                     if (result.strippedColumns && result.strippedColumns.length > 0) {
+                       alert(`Warning: The following fields were NOT saved due to missing columns in Supabase: ${result.strippedColumns.join(', ')}`);
+                     }
+                   } catch (error: any) {
+                     throw error; 
+                   }
+                 }}
+              />
+            )}
+          </div>
         )}
       </>
     )}
@@ -1882,6 +2072,37 @@ const Admin: React.FC = () => {
                     </div>
                   )}
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Theme / Format</label>
+                  <select 
+                    value={viralSelectedTheme} 
+                    onChange={e => setViralSelectedTheme(e.target.value)}
+                    className="w-full p-2 border rounded-lg"
+                  >
+                    <optgroup label="Default Themes">
+                      <option value="breaking_red">1. Default Breaking News</option>
+                      <option value="question_hook">2. Question Hook</option>
+                      <option value="shock_yellow">3. Shocking News</option>
+                      <option value="story_dark">4. Narrative Hook</option>
+                      <option value="fact_light">5. Informational Bullet Points</option>
+                      <option value="warning_alert">6. Cautionary Alert</option>
+                      <option value="step_by_step">7. Sequential Story Step</option>
+                      <option value="video_reel">8. Video Style Hook</option>
+                      <option value="minimal_white">9. Clean Minimal Text</option>
+                      <option value="opinion_poll">10. Opinion Poll</option>
+                    </optgroup>
+                    {(settings?.viralTemplates || []).filter((t: ViralTemplate) => t.isActive).length > 0 && (
+                      <optgroup label="Custom Templates">
+                        {(settings?.viralTemplates || []).filter((t: ViralTemplate) => t.isActive).map((tmpl: ViralTemplate) => (
+                          <option key={tmpl.id} value={`custom_${tmpl.id}`}>
+                            {tmpl.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1940,26 +2161,6 @@ const Admin: React.FC = () => {
                 {/* Edit Form */}
                 <div className="space-y-4">
                   <h3 className="font-bold text-lg border-b pb-2">Edit Content</h3>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Theme / Format</label>
-                    <select 
-                      value={viralPost.theme || 'breaking_red'} 
-                      onChange={e => setViralPost({...viralPost, theme: e.target.value})}
-                      className="w-full p-2 border rounded-lg"
-                    >
-                      <option value="breaking_red">1. Default Breaking News</option>
-                      <option value="question_hook">2. Question Hook</option>
-                      <option value="shock_yellow">3. Shocking News</option>
-                      <option value="story_dark">4. Narrative Hook</option>
-                      <option value="fact_light">5. Informational Bullet Points</option>
-                      <option value="warning_alert">6. Cautionary Alert</option>
-                      <option value="step_by_step">7. Sequential Story Step</option>
-                      <option value="video_reel">8. Video Style Hook</option>
-                      <option value="minimal_white">9. Clean Minimal Text</option>
-                      <option value="opinion_poll">10. Opinion Poll</option>
-                    </select>
-                  </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Breaking Tag</label>
@@ -2002,6 +2203,16 @@ const Admin: React.FC = () => {
                   </div>
 
                   <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Summary (Short News)</label>
+                    <textarea 
+                      value={viralPost.summary || ''} 
+                      onChange={e => setViralPost({...viralPost, summary: e.target.value})}
+                      className="w-full p-2 border rounded-lg"
+                      rows={3}
+                    />
+                  </div>
+
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Branding</label>
                     <input 
                       type="text" 
@@ -2034,10 +2245,33 @@ const Admin: React.FC = () => {
 
                 {/* Preview & Actions */}
                 <div className="space-y-6">
-                  <h3 className="font-bold text-lg border-b pb-2">Preview & Post</h3>
+                  <h3 className="font-bold text-lg border-b pb-2 flex justify-between items-center">
+                     Preview & Post
+                     {viralPost?.theme && viralPost.theme.startsWith('custom_') && (
+                       <button 
+                         onClick={() => {
+                            if (!isAdjustingLayout && !viralTemplateOverrides) {
+                               const tmplId = viralPost!.theme!.replace('custom_', '');
+                               const tmpl = settings?.viralTemplates?.find((t: ViralTemplate) => t.id === tmplId);
+                               if (tmpl) setViralTemplateOverrides(tmpl);
+                            }
+                            setIsAdjustingLayout(!isAdjustingLayout);
+                         }}
+                         className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 uppercase font-bold"
+                       >
+                         {isAdjustingLayout ? 'View Final Result' : 'Adjust Layout'}
+                       </button>
+                     )}
+                  </h3>
                   
                   <div className="border rounded-lg overflow-hidden shadow-sm">
-                    {viralGeneratedImage ? (
+                    {isAdjustingLayout && viralTemplateOverrides ? (
+                      <ViralTemplateEditor 
+                        template={{...viralTemplateOverrides, referenceImageUrl: rawViralGeneratedImage || ''}} 
+                        onChange={(updated) => setViralTemplateOverrides(updated)} 
+                        previewData={viralPost || undefined}
+                      />
+                    ) : viralGeneratedImage ? (
                       <img src={viralGeneratedImage} alt="Generated Viral" className="w-full aspect-[4/5] object-cover" />
                     ) : (
                       <div className="w-full aspect-[4/5] bg-gray-100 flex items-center justify-center text-gray-400">
