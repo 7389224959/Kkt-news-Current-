@@ -82,7 +82,9 @@ export async function generateNewsCollage(
   
   let heroNoBgBlob;
   try {
-    heroNoBgBlob = await removeBackground(heroBlob);
+    heroNoBgBlob = await removeBackground(heroBlob, {
+      publicPath: "https://unpkg.com/@imgly/background-removal-node@1.4.5/dist/"
+    });
   } catch (err: any) {
     console.error('removeBackground threw:', err);
     throw new Error(`removeBackground failed: ${err.message}. Original CT: ${heroContentType}, Blob Type: ${heroBlob.type}`);
