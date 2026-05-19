@@ -1,6 +1,4 @@
 import sharp from 'sharp';
-import { removeBackground } from '@imgly/background-removal-node';
-
 /**
  * Downloads an image and returns a buffer
  */
@@ -81,29 +79,30 @@ export async function generateNewsCollage(
     console.log('Hero image is already transparent, skipping background removal.');
     heroNoBgBuffer = heroBuffer;
   } else {
-    // Convert hero to JPEG first to avoid "Unsupported format" errors for GIFs, etc.
-    console.log('Converting hero to JPEG for background removal...');
-    const heroJpegBuffer = await sharp(heroBuffer).jpeg().toBuffer();
-
-    // 2. Remove Background from Hero
-    console.log('Removing background from hero image...');
-    // Note: removeBackground accepts a Blob or path, we pass an ArrayBuffer / Uint8Array in node
-    const heroBlob = new Blob([new Uint8Array(heroJpegBuffer as any)], { type: 'image/jpeg' });
-    console.log('Blob type is:', heroBlob.type, 'Original type was:', heroContentType);
+    // Vercel serverless has memory limits that cause @imgly/background-removal-node to crash (OOM/segfault).
+    // So we apply a masking / soft-edge overlay using sharp instead as a fallback.
+    console.log('Applying a soft edge rounded mask to the hero image since precise background removal is disabled on Vercel server.');
     
-    let heroNoBgBlob;
+    // Create a PNG with rounded corners and a slight fade instead of true background removal
+    const hMeta = await sharp(heroBuffer).metadata();
+    const w = hMeta.width || 800;
+    const h = hMeta.height || 800;
+    
+    const rx = Math.floor(w * 0.1);
+    const ry = Math.floor(h * 0.1);
+
+    const maskSvg = `<svg width="${w}" height="${h}"><rect x="0" y="0" width="${w}" height="${h}" rx="${rx}" ry="${ry}" fill="white"/></svg>`;
+
     try {
-      heroNoBgBlob = await removeBackground(heroBlob, {
-        publicPath: "https://unpkg.com/@imgly/background-removal-node@1.4.5/dist/"
-      });
+      heroNoBgBuffer = await sharp(heroBuffer)
+        .ensureAlpha()
+        .composite([{ input: Buffer.from(maskSvg), blend: 'dest-in' }])
+        .png()
+        .toBuffer();
     } catch (err: any) {
-      console.error('removeBackground threw:', err);
-      // Fallback: If Vercel times out or fails, just use the original image without crashing
-      // We log the error but still return a collage (it will just be boxy).
-      console.warn("Falling back to original image due to background removal failure.");
-      heroNoBgBlob = new Blob([new Uint8Array(heroBuffer)], { type: heroContentType });
+      console.warn("Failed to apply mask, falling back to original:", err.message);
+      heroNoBgBuffer = heroBuffer;
     }
-    heroNoBgBuffer = Buffer.from(await heroNoBgBlob.arrayBuffer());
   }
 
   const O_WIDTH = 1920;
@@ -147,7 +146,7 @@ export async function generateNewsCollage(
   let heroWidth = O_WIDTH;
   let targetHeroHeight = Math.floor(O_HEIGHT * 0.70);
   try {
-    let heroImageSharp = sharp(heroNoBgBuffer).trim();
+    let heroImageSharp = sharp(heroNoBgBuffer);
     heroResized = await heroImageSharp.resize({ 
       width: Math.floor(O_WIDTH * 0.8), // up to 80% width max
       height: targetHeroHeight, 

@@ -7,14 +7,12 @@
     "dev": "tsx server.ts",
     "start": "node server.ts",
     "build": "tsc && vite build",
-    "postinstall": "rm -rf node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime_providers_cuda.so node_modules/onnxruntime-node/bin/napi-v3/darwin node_modules/onnxruntime-node/bin/napi-v3/win32 node_modules/onnxruntime-node/bin/napi-v3/linux/arm64 && node scripts/clean-imgly.js",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "^1.40.0",
     "@imgly/background-removal": "^1.7.0",
-    "@imgly/background-removal-node": "^1.4.5",
     "@mozilla/readability": "^0.6.0",
     "@openrouter/sdk": "^0.12.24",
     "@supabase/supabase-js": "^2.99.1",
