@@ -888,7 +888,11 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
             }
             
             let host = typeof window !== 'undefined' ? window.location.origin : '';
-            if (!host) host = `http://localhost:${process.env.PORT || 3000}`;
+            if (!host) {
+              if (process.env.VERCEL_URL) host = `https://${process.env.VERCEL_URL}`;
+              else if (process.env.URL) host = process.env.URL; // Netlify
+              else host = `http://localhost:${process.env.PORT || 3000}`;
+            }
             
             // Strictly NO AI generated random faces for support units, ONLY real Wikipedia photos
             const supportImageUrls: string[] = [];
@@ -942,7 +946,9 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
               const collageRes = await collageReq.json();
               if (collageRes.error) {
                 console.error("Vercel Collage Error:", collageRes.error, collageRes.stack);
-                // Fail silently without interrupting UI
+                if (typeof window !== 'undefined') {
+                  alert("Collage API Error:\n" + collageRes.error + "\n\nStack:\n" + (collageRes.stack || '').substring(0, 200));
+                }
                 imageUrl = finalHeroImageUrl || contextImageUrl;
               } else if (collageRes.collageUrl) {
                 imageUrl = collageRes.collageUrl;
@@ -958,6 +964,9 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
             } else {
               const errText = await collageReq.text();
               console.warn("Collage generation failed on API side:", errText);
+              if (typeof window !== 'undefined') {
+                alert(`Vercel API failed with status ${collageReq.status}: \n` + errText.substring(0, 300));
+              }
               // Fallback to real image or AI context image instead of blanking out
               imageUrl = finalHeroImageUrl || contextImageUrl;
             }

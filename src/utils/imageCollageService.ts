@@ -1,4 +1,6 @@
 import sharp from 'sharp';
+sharp.cache(false); // Fix for Vercel/serverless OOM crashes
+
 /**
  * Downloads an image and returns a buffer
  */
@@ -54,8 +56,8 @@ export async function generateNewsCollage(
   supportImageUrls?: string[],
   isHeroTransparent: boolean = false
 ): Promise<Buffer> {
-  const O_WIDTH = 1920;
-  const O_HEIGHT = 1080;
+  const O_WIDTH = 1200;
+  const O_HEIGHT = 630;
 
   console.log('Downloading collage source images...');
   
@@ -177,14 +179,9 @@ export async function generateNewsCollage(
   // Compose all layers
   console.log('Compositing images (new 70/30 flow)...');
   try {
-    const compositeBuffer = await sharp(bgImage)
+    return await sharp(bgImage)
       .composite(composites)
-      .toBuffer();
-      
-    // Resize for Facebook export (1200x630)
-    return await sharp(compositeBuffer)
-      .resize(1200, 630, { fit: 'cover' })
-      .jpeg({ quality: 90 })
+      .jpeg({ quality: 85 })
       .toBuffer();
   } catch (err: any) {
     throw new Error(`Failed to composite images: ${err.message}`);
@@ -197,7 +194,13 @@ export async function generateNewsCollage(
  */
 export async function extractPrimaryImageFromUrl(url: string): Promise<string | null> {
   try {
-    const fetchRes = await fetch(`http://localhost:${process.env.PORT || 3000}/api/extract-article?url=${encodeURIComponent(url)}`);
+    let host = typeof window !== 'undefined' ? window.location.origin : '';
+    if (!host) {
+      if (process.env.VERCEL_URL) host = `https://${process.env.VERCEL_URL}`;
+      else if (process.env.URL) host = process.env.URL;
+      else host = `http://localhost:${process.env.PORT || 3000}`;
+    }
+    const fetchRes = await fetch(`${host}/api/extract-article?url=${encodeURIComponent(url)}`);
     if (fetchRes.ok) {
       const data = await fetchRes.json();
       if (data.image) {
