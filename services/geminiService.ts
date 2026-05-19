@@ -53,11 +53,11 @@ export const getStockImageUrl = (keywords: string, category?: Category): string 
     .slice(0, 6)
     .join(' ');
 
-  const prompt = `Authentic news context background for: ${cleanKeywords}. Style: ${categoryContext}, photojournalism, high depth of field blur, subtle center spotlight gradient, NO neon, NO gaming visuals, NO artificial studio lighting, NO fake futuristic scenes, NO text, extremely realistic raw news background`;
+  const prompt = `Premium Indian editorial news background for: ${cleanKeywords}. Include realistic Indian atmosphere, cinematic lighting, warm tones, subtle Indian flag or government architecture when relevant, ultra detailed, photorealistic, sharp focus, 8k. Do not generate any people, faces, portraits, or human figures.`;
   const randomSeed = Math.floor(Math.random() * 100000);
   
   // Use pollinations.ai to dynamically generate relevant background images
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1080&height=1080&nologo=true&seed=${randomSeed}`;
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1080&height=1080&nologo=true&seed=${randomSeed}&model=flux`;
 };
 
 import { compressImage } from '../src/utils/imageUtils';
@@ -406,6 +406,8 @@ async function extractArticleLinks(url: string): Promise<{title: string, link: s
   }
 }
 
+import { getWikipediaImage } from './wikipediaService';
+
 export const checkDailyNewsStatus = async (rssSources: { url: string, category: string }[]) => {
   if (!rssSources || rssSources.length === 0) {
     return [];
@@ -414,7 +416,7 @@ export const checkDailyNewsStatus = async (rssSources: { url: string, category: 
   let existingSourceUrls: string[] = [];
   let existingTitles: string[] = [];
   try {
-    const { data: recentArticles } = await getArticles(1, 30); // Check past 30 articles
+    const { data: recentArticles } = await getArticles(1, 20); // Check past 20 articles
     existingSourceUrls = recentArticles.map(a => a.sourceUrl || a.source).filter(Boolean) as string[];
     existingTitles = recentArticles.map(a => a.title);
   } catch (e) {
@@ -462,7 +464,7 @@ export const checkDailyNewsStatus = async (rssSources: { url: string, category: 
               if (etWords.includes(w)) overlap++;
             }
             const ratio = overlap / Math.min(itemWords.length, etWords.length);
-            if (ratio >= 0.45) {
+            if (ratio >= 0.35) { // Stricter threshold for check status
               isDuplicateTitle = true;
               break;
             }
@@ -508,7 +510,7 @@ export const fetchDailyNews = async (
   let existingSourceUrls: string[] = [];
   let existingTitles: string[] = [];
   try {
-    const { data: recentArticles } = await getArticles(1, 30);
+    const { data: recentArticles } = await getArticles(1, 20);
     existingSourceUrls = recentArticles.map(a => a.sourceUrl || a.source).filter(Boolean) as string[];
     existingTitles = recentArticles.map(a => a.title);
   } catch (e) {
@@ -522,7 +524,6 @@ export const fetchDailyNews = async (
   // Shuffle rssSources to pick random category/source instead of always the first one
   const shuffledSources = [...rssSources].sort(() => 0.5 - Math.random());
   
-  const getWords = (str: string) => str.toLowerCase().replace(/[.,:;'"()!?\-।]/g, '').split(/\s+/).filter(w => w.length > 2);
   const cleanUrl = (url: string) => {
     try {
       const u = new URL(url);
@@ -533,39 +534,19 @@ export const fetchDailyNews = async (
   };
   const normalizedExistingUrls = existingSourceUrls.map(cleanUrl);
 
-  const extractedArticlesData = [];
+  const candidateItems = [];
 
+  // Gather up to 5 potential articles across the shuffled sources
   for (const source of shuffledSources) {
     try {
       const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.url)}&api_key=`);
+      if (!res.ok) continue;
       const data = await res.json();
       const items = data.items || [];
 
-      let targetItem = null;
       for (const item of items) {
-        // Strict duplicate check using URL
         const itemUrl = cleanUrl(item.link);
         const isDuplicateUrl = normalizedExistingUrls.includes(itemUrl);
-        
-        let isDuplicateTitle = false;
-        if (existingTitles.some(et => et.includes(item.title.substring(0, 15)))) {
-          isDuplicateTitle = true;
-        } else {
-          const itemWords = getWords(item.title);
-          for (const et of existingTitles) {
-            const etWords = getWords(et);
-            if (itemWords.length === 0 || etWords.length === 0) continue;
-            let overlap = 0;
-            for (const w of itemWords) {
-              if (etWords.includes(w)) overlap++;
-            }
-            const ratio = overlap / Math.min(itemWords.length, etWords.length);
-            if (ratio >= 0.45) {
-              isDuplicateTitle = true;
-              break;
-            }
-          }
-        }
         
         let hoursDiff = 0;
         if (item.pubDate) {
@@ -575,74 +556,92 @@ export const fetchDailyNews = async (
           }
         }
         
-        // Ensure not duplicate and published within last 24 hours
-        if (!isDuplicateUrl && !isDuplicateTitle && hoursDiff <= 24) {
-          targetItem = item;
-          break;
+        // If not explicitly a URL duplicate, and within 48 hours, add as candidate
+        // We relax the hours condition slightly so AI has candidates to choose from
+        if (!isDuplicateUrl && hoursDiff <= 48) {
+          candidateItems.push({
+            category: source.category,
+            title: item.title,
+            link: item.link,
+            pubDate: item.pubDate,
+            description: item.description
+          });
         }
-      }
-
-      if (targetItem) {
-        // Try to extract full article text using our backend
-        let fullText = "";
-        let sourceImageUrl = "";
-        try {
-          const extractRes = await fetch(`/api/extract-article?url=${encodeURIComponent(targetItem.link)}`);
-          if (extractRes.ok) {
-            const extractData = await extractRes.json();
-            fullText = extractData.content;
-            if (extractData.image) {
-              sourceImageUrl = extractData.image;
-            }
-          }
-        } catch (err) {
-          console.warn("Failed to extract full text, reading RSS summary instead:", err);
-        }
-
-        extractedArticlesData.push({
-          category: source.category,
-          title: targetItem.title,
-          link: targetItem.link,
-          sourceImageUrl,
-          content: fullText || targetItem.description || "Article content not available. Please deduce from title.",
-          pubDate: targetItem.pubDate
-        });
         
-        // We only want to fetch and publish one article at a time
-        break;
+        if (candidateItems.length >= 5) break;
       }
     } catch (e) {
       console.error(`Failed to fetch RSS for ${source.url}:`, e);
     }
+    
+    if (candidateItems.length >= 5) {
+       break;
+    }
   }
 
-  if (extractedArticlesData.length === 0) {
-    throw new Error("No fresh news found (no news published within the last 24 hours that hasn't been posted yet).");
+  if (candidateItems.length === 0) {
+    throw new Error("No fresh news found (all recent RSS items seem to have matching URLs or are older).");
+  }
+
+  const extractedArticlesData = [];
+  for (const item of candidateItems) {
+    let fullText = "";
+    let sourceImageUrl = "";
+    try {
+      const extractRes = await fetch(`/api/extract-article?url=${encodeURIComponent(item.link)}`);
+      if (extractRes.ok) {
+        const extractData = await extractRes.json();
+        fullText = extractData.content;
+        if (extractData.image) {
+          sourceImageUrl = extractData.image;
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to extract full text, reading RSS summary instead:", err);
+    }
+
+    extractedArticlesData.push({
+      ...item,
+      sourceImageUrl,
+      content: fullText || item.description || "Article content not available. Please deduce from title."
+    });
   }
 
   const promptContext = extractedArticlesData.map((data, index) => `
-    ARTICLE ${index + 1}:
+    CANDIDATE ${index + 1}:
     - Category: ${data.category}
     - Original Title: ${data.title}
     - Source Link: ${data.link}
     - Source Image URL: ${data.sourceImageUrl || 'none'}
     - Published Date: ${data.pubDate}
-    - Extracted Content: ${data.content.substring(0, 3000)} // Truncated to prevent context limit
+    - Extracted Content: ${data.content.substring(0, 3000)}
   `).join('\n\n');
+
+  const recentTitlesList = existingTitles.slice(0, 20).map(t => `- ${t}`).join('\n');
 
   try {
     const prompt = `
       You are a professional Indian news journalist writing for a fast-growing Hindi news website.
-      Write 100% SEO-optimized, fact-based, human-like Hindi news articles (450–650 words each) based ONLY on the following extracted source articles:
 
       Current Date & Time: ${today} ${currentTime}
+
+      CRITICAL CONTEXT - AVOID THESE TOPICS:
+      We want to avoid publishing news on the exact same topics we recently covered. 
+      Here are the headlines of our most recently published articles:
+      ${recentTitlesList}
       
-      SOURCE ARTICLES TO REWRITE:
+      YOUR TASK:
+      1. Review the CANDIDATE ARTICLES below.
+      2. Choose EXACTLY ONE candidate article that discusses a COMPLETELY DIFFERENT topic than the ones listed above.
+      3. If all candidates are somewhat similar, pick the one that introduces the most significantly novel development or is the freshest breaking news.
+      4. Write a 100% SEO-optimized, fact-based, human-like Hindi news article (450–650 words) based ONLY on your chosen candidate.
+      
+      CANDIDATE ARTICLES:
       ${promptContext}
 
       For a Hindi news website 'Khabar Kal Tak'.
 
-      Follow these strict rules for EACH article:
+      Follow these strict rules for the article:
       1. Headline
       Create a powerful, clickable Hindi headline (8–12 words)
       Include main keyword
@@ -652,13 +651,12 @@ export const fetchDailyNews = async (
       Answer: क्या, कब, कहां, किसने
       4. Main Content & Unique Angle (CRITICAL)
       Use 3–5 SEO subheadings (Use Markdown ## for subheadings, NO HTML tags)
-      Include real facts, numbers, and latest updates FROM THE SOURCE TEXT ONLY.
-      MUST be rewritten from a completely new angle to ensure extreme freshness and genuineness.
+      Include real facts, numbers, and latest updates FROM THE CHOSEN CANDIDATE TEXT ONLY.
       Do not sound like a standard news feed; inject deep journalistic analysis.
       5. Human Touch, Values & Emotion (IMPORTANT)
       Write in a deeply human manner. 
       Incorporate the values of common people (आम जनता की भावनाएं) into your writing.
-      Ensure the narrative conveys REQUIRED EMOTIONS (e.g., outrage, hope, sadness, pride, depending on the topic).
+      Ensure the narrative conveys REQUIRED EMOTIONS (e.g., outrage, hope, sadness, pride).
       6. User Value Section
       Add a section like:
       👉 “आम लोगों पर इसका क्या असर पड़ेगा?”
@@ -667,37 +665,37 @@ export const fetchDailyNews = async (
       2–3 lines summarizing impact
       8. SEO Rules & Formatting (CRITICAL)
       Article length: Structure the length based ONLY on available facts from the source. Do not force stretch the article.
-      Use focus keyword 4–6 times naturally
       Keep paragraphs very short (2–3 lines maximum)
-      Leave empty lines between paragraphs for readability.
-      Use Markdown formatting (like **bold**, ## Headings). DO NOT output any HTML tags (like <h2>, <p>, <br>).
+      Use Markdown formatting (like **bold**, ## Headings). DO NOT output any HTML tags.
       Use simple Hindi (mix of Hindi + easy English words)
       9. Tone
-      Human-like, not robotic
-      Avoid repetition
+      Human-like, not robotic.
       Deeply engaging, informative, and highly emotional.
 
       STRICT REQUIREMENTS:
-      1. **ONLY USE PROVIDED SOURCES**: 
-         - DO NOT invent, hallucinate, or search for external facts. 
-         - ONLY rely on the "SOURCE ARTICLES TO REWRITE" provided above.
+      1. **ONLY USE PROVIDED CANDIDATE TEXT**: 
+         - DO NOT invent or search for external facts. 
       2. **SOURCE LINKS**:
-         - You MUST provide the exact Source Link provided in the text above for each article. This will be shown to the admin for verification.
+         - You MUST provide the exact Source Link for the candidate you chose.
 
-      Output a JSON array of objects. Do not include any markdown formatting or code blocks outside the JSON.
+      Output a JSON array CONTAINING EXACTLY ONE OBJECT. Do not include any markdown formatting or code blocks outside the JSON.
       
       JSON Structure:
       [
         {
           "title": "HEADLINE (Hindi)",
           "excerpt": "SUMMARY (Hindi)",
-          "content": "A single string containing the full article including Intro, Main Content, Data, User Value, Conclusion formatted nicely in HTML/Markdown WITHOUT SEO elements",
+          "content": "A single string containing the full article including Intro, Main Content, Data, User Value, Conclusion formatted nicely in Markdown WITHOUT SEO elements",
           "category": "State News" | "Politics" | "Crime" | "National" | "Sports" | "Entertainment" | "Lifestyle",
           "author": "Professional Journalist",
-          "sourceUrl": "MUST be the EXACT source link provided in the source text.",
-          "sourceImageUrl": "MUST be the exactly the same as the Source Image URL provided in the source text if it exists, otherwise empty.",
-          "imagePrompt": "Specific description for AI image generation. MUST include keywords to make the scene, characters, and environment look highly realistic, original, and authentically Indian.",
-          "tags": ["Tag 1", "Tag 2", ...],
+          "sourceUrl": "MUST be the EXACT source link provided in the chosen candidate.",
+          "sourceImageUrl": "MUST be the exactly the same as the Source Image URL provided in the chosen candidate (if available).",
+          "imageGenerationPlan": {
+            "backgroundContext": "Keywords for a premium Indian editorial background. CRITICAL: Do NOT include any people, faces, crowds, or human figures!",
+            "primarySubject": "Name of main subject/person for hero cutout (if applicable), e.g. 'Narendra Modi', 'Amit Shah'. MUST be a well-known entity on Wikipedia.",
+            "supportSubjects": ["Name of support figure 1", "Name of support figure 2"]
+          },
+          "tags": ["Tag 1", "Tag 2"],
           "seoTitle": "A 60 character SEO optimized title",
           "metaDescription": "A 120-150 character meta description",
           "facebookCaption": "A 2-line viral Facebook caption"
@@ -788,9 +786,11 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
 
     } else {
       // Use Gemini
+      const promptWithFormatInstruction = prompt + "\n\nCRITICAL: Respond ONLY with valid JSON array, starting with [ and ending with ]. Do NOT wrap it in ```json\n...\n``` blocks. Do NOT include any conversational text before or after the JSON. Ensure there is no punctuation (like . or ।) outside of the double quotes. Valid JSON ONLY. Do NOT use double quotes inside your string values (use single quotes for quotes within text).";
+
       const response = await ai!.models.generateContent({
-        model: 'gemini-3.1-flash-lite-preview',
-        contents: prompt,
+        model: 'gemini-2.5-flash',
+        contents: promptWithFormatInstruction,
         config: {
           responseMimeType: "application/json",
           temperature: 0.7,
@@ -851,27 +851,39 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
       // Try to generate high-quality AI collage or fallback to standard logic
       if (imageStrategy === 'auto') {
         try {
-          if ((a as any).sourceImageUrl && (a as any).sourceImageUrl !== 'none') {
-            console.log("Found source image, creating collage via API...");
-            const contextImageUrl = getStockImageUrl(a.imagePrompt || a.title, category);
+          const dp = (a as any).imageGenerationPlan || {};
+          let heroImage = (a as any).sourceImageUrl && (a as any).sourceImageUrl !== 'none' ? (a as any).sourceImageUrl : null;
+          
+          if (!heroImage && dp.primarySubject && dp.primarySubject.trim().length > 0) {
+            heroImage = await getWikipediaImage(dp.primarySubject);
+            if (heroImage) console.log(`Found Wikipedia hero image for ${dp.primarySubject}: ${heroImage}`);
+          }
+
+          // If no heroImage found at all, skip collage and fallback to standard AI background ONLY below
+          if (heroImage) {
+            console.log("Found source/primary image, creating collage via API...");
+            
+            const bgContext = dp.backgroundContext || a.title;
+            const contextImageUrl = getStockImageUrl(bgContext, category);
             
             let host = typeof window !== 'undefined' ? window.location.origin : '';
             if (!host) host = `http://localhost:${process.env.PORT || 3000}`;
             
-            // Build dynamic entity images
+            // Strictly NO AI generated random faces for support units, ONLY real Wikipedia photos
             const supportImageUrls: string[] = [];
-            if (a.imagePrompt || a.title) {
-               const cleanEntity = String(a.imagePrompt || a.title).replace(/[^\p{L}\p{N}\s]/gu, '').split(' ').slice(0, 4).join(' ');
-               // Use ultra HD real photo generation for support inserts
-               const entityUrl = `https://image.pollinations.ai/prompt/High%20quality%20real%20news%20photo%20of%20${encodeURIComponent(cleanEntity)}?width=400&height=300&nologo=true&seed=${Math.floor(Math.random()*1000)}`;
-               supportImageUrls.push(entityUrl);
+            const supportSubjects = Array.isArray(dp.supportSubjects) ? dp.supportSubjects : [];
+            for (const subject of supportSubjects) {
+               if (!subject) continue;
+               const wikiImg = await getWikipediaImage(subject);
+               if (wikiImg) supportImageUrls.push(wikiImg);
             }
+
 
             const collageReq = await fetch(`${host}/api/generate-collage`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                heroImageUrl: (a as any).sourceImageUrl,
+                heroImageUrl: heroImage,
                 contextImageUrl,
                 category: a.category,
                 supportImageUrls
@@ -902,7 +914,7 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
                    "Accept": "application/json"
                  },
                  body: JSON.stringify({
-                   prompt: "Highly realistic regional Indian news press photo, natural lighting, no cinematic lighting, no neon: " + (a.imagePrompt || a.title)
+                   prompt: "Highly realistic regional Indian news press photo, natural lighting, NO PEOPLE, NO FACES: " + (a.imagePrompt || a.title)
                  })
                });
                if (nimReq.ok) {
@@ -919,7 +931,7 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
           }
           if (!imageUrl && imageGenModel === 'cloudflare') {
             try {
-              const cfPrompt = `Realistic Indian news photo, press photography style. Subject: ${a.imagePrompt || a.title}. Authentic Indian context, genuine Indian environment, natural lighting, real mundane location, NO neon, NO cinematic lighting, NO artificial glow, 4:5 aspect ratio. NO TEXT, NO WATERMARKS.`;
+              const cfPrompt = `Realistic Indian news photo, press photography style. Subject: ${a.imagePrompt || a.title}. NO PEOPLE, NO FACES, NO HUMAN FIGURES. Authentic Indian context, natural lighting, real mundane location, NO TEXT, NO WATERMARKS.`;
               const cfReq = await fetch('/api/cloudflare-image', {
                 method: "POST",
                 headers: {

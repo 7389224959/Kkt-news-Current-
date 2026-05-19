@@ -4,17 +4,26 @@ import { removeBackground } from '@imgly/background-removal-node';
 /**
  * Downloads an image and returns a buffer
  */
-async function downloadImage(url: string): Promise<{buffer: Buffer, contentType: string}> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch image: ${url} - Status ${res.status}`);
-  
-  const contentType = res.headers.get('content-type') || '';
-  if (contentType.includes('text/html')) {
-    throw new Error(`Failed to fetch image: ${url} - Returned HTML instead of image`);
+async function downloadImage(url: string, retries = 3): Promise<{buffer: Buffer, contentType: string}> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Failed to fetch image: ${url} - Status ${res.status}`);
+      
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('text/html') || contentType.includes('application/json')) {
+        throw new Error(`Failed to fetch image: ${url} - Returned text/json instead of image`);
+      }
+      
+      const arrayBuffer = await res.arrayBuffer();
+      return { buffer: Buffer.from(arrayBuffer), contentType };
+    } catch (err: any) {
+      if (i === retries - 1) throw err;
+      console.warn(`Retry ${i + 1}/${retries} downloading ${url}. Error: ${err.message}`);
+      await new Promise(r => setTimeout(r, 2000 + i * 2000)); // wait 2s, 4s, etc.
+    }
   }
-  
-  const arrayBuffer = await res.arrayBuffer();
-  return { buffer: Buffer.from(arrayBuffer), contentType };
+  throw new Error("unreachable");
 }
 
 /**
@@ -36,6 +45,8 @@ export async function generateNewsCollage(
 ): Promise<Buffer> {
   // 1. Download images
   console.log('Downloading collage source images...');
+  
+  // Download sequentially to avoid API rate limits (like queue full on pollinations)
   const heroDownloaded = await downloadImage(heroImageUrl);
   const contextDownloaded = await downloadImage(contextImageUrl);
   const enhancerDownloaded = enhancerImageUrl ? await downloadImage(enhancerImageUrl) : null;
@@ -43,14 +54,14 @@ export async function generateNewsCollage(
   const supportBuffers: {base64: string, isPortrait: boolean}[] = [];
   if (supportImageUrls && supportImageUrls.length > 0) {
     for (const url of supportImageUrls) {
-      try {
+       try {
          const downloaded = await downloadImage(url);
          // Format as standard insert
-         const processed = await sharp(downloaded.buffer).resize(400, 300, { fit: 'cover' }).jpeg({quality: 90}).toBuffer();
+         const processed = await sharp(downloaded.buffer).resize(400, 400, { fit: 'cover' }).jpeg({quality: 90}).toBuffer();
          supportBuffers.push({ base64: processed.toString('base64'), isPortrait: false });
-      } catch (e) {
-         console.error('Failed to download support image', url);
-      }
+       } catch (e: any) {
+         console.error('Failed to download support image', url, e.message);
+       }
     }
   }
 
@@ -86,8 +97,8 @@ export async function generateNewsCollage(
   try {
     resizedContext = await sharp(contextBuffer)
       .resize(O_WIDTH, O_HEIGHT, { fit: 'cover' })
-      .modulate({ brightness: 0.6 }) // Darken slightly to make hero pop
-      .blur(category.toLowerCase() === 'crime' ? 8 : 6) // strong depth blur
+      .modulate({ brightness: 0.85 }) // Cinematic premium look
+      .blur(4) // slight blur as requested
       .toBuffer();
   } catch (err: any) {
     throw new Error(`Failed to process context image: ${err.message}`);
@@ -121,13 +132,13 @@ export async function generateNewsCollage(
   let heroWidth = O_WIDTH;
   let targetHeroHeight = Math.floor(O_HEIGHT * 0.70);
   try {
-    let heroImageSharp = sharp(heroNoBgBuffer);
+    let heroImageSharp = sharp(heroNoBgBuffer).trim();
     heroResized = await heroImageSharp.resize({ 
       width: Math.floor(O_WIDTH * 0.8), // up to 80% width max
       height: targetHeroHeight, 
       fit: 'inside',
-      withoutEnlargement: true // Prevent stretching low quality images!
-    }).toBuffer();
+      withoutEnlargement: false
+    }).normalize().sharpen().png().toBuffer();
     
     const heroResizedMeta = await sharp(heroResized).metadata();
     heroWidth = heroResizedMeta.width || O_WIDTH;
@@ -144,15 +155,35 @@ export async function generateNewsCollage(
   
   let supportImagesSvg = '';
   if (supportBuffers.length > 0) {
-    // Layout support images floating dynamically on sides
+    // Layout support images in corners dynamically
+    const radius = 150;
+    const size = radius * 2;
+    const marginX = 80;
+    const marginY = 80;
+    
     supportBuffers.forEach((sb, index) => {
-       const x = index === 0 ? 80 : Math.max(80, O_WIDTH - 480);
-       const y = 80 + index * 100;
+       let cx = marginX + radius;
+       let cy = marginY + radius;
+       
+       if (index === 1) {
+         cx = O_WIDTH - marginX - radius; 
+         cy = marginY + radius;
+       } else if (index === 2) {
+         cx = marginX + radius;
+         cy = Math.max(marginY + radius, O_HEIGHT - marginY - radius - 200);
+       } else if (index === 3) {
+         cx = O_WIDTH - marginX - radius;
+         cy = Math.max(marginY + radius, O_HEIGHT - marginY - radius - 200);
+       }
        
        supportImagesSvg += `
-        <g filter="url(#hero-shadow)">
-          <rect x="${x - 5}" y="${y - 5}" width="410" height="310" rx="15" fill="#ffffff" />
-          <image href="data:image/jpeg;base64,${sb.base64}" x="${x}" y="${y}" width="400" height="300" clip-path="inset(0% round 10px)" />
+        <g filter="url(#circle-shadow)">
+          <circle cx="${cx}" cy="${cy}" r="${radius}" fill="white" />
+          <clipPath id="circle-clip-${index}">
+            <circle cx="${cx}" cy="${cy}" r="${radius}" />
+          </clipPath>
+          <image href="data:image/jpeg;base64,${sb.base64}" x="${cx - radius}" y="${cy - radius}" width="${size}" height="${size}" clip-path="url(#circle-clip-${index})" />
+          <circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="#FFD700" stroke-width="6" />
         </g>
        `;
     });
@@ -161,8 +192,19 @@ export async function generateNewsCollage(
   const combinedOverlaySvg = `
     <svg width="${O_WIDTH}" height="${O_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <filter id="hero-shadow">
-          <feDropShadow dx="0" dy="15" stdDeviation="25" flood-color="#000" flood-opacity="0.8"/>
+        <filter id="hero-outline-shadow">
+          <feMorphology in="SourceAlpha" operator="dilate" radius="8" result="DILATED" />
+          <feFlood flood-color="white" result="WHITE" />
+          <feComposite in="WHITE" in2="DILATED" operator="in" result="OUTLINE" />
+          <feDropShadow dx="0" dy="15" stdDeviation="25" flood-color="#000" flood-opacity="0.8" result="SHADOW" />
+          <feMerge>
+            <feMergeNode in="SHADOW" />
+            <feMergeNode in="OUTLINE" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <filter id="circle-shadow">
+          <feDropShadow dx="0" dy="10" stdDeviation="15" flood-color="#000" flood-opacity="0.6" />
         </filter>
         <radialGradient id="vignette" cx="50%" cy="45%" r="70%" fx="50%" fy="45%">
           <stop offset="30%" stop-color="#000" stop-opacity="0" />
@@ -175,15 +217,15 @@ export async function generateNewsCollage(
         </linearGradient>
       </defs>
       
-      <!-- Support Entity Images Layer -->
-      ${supportImagesSvg}
-
-      <!-- Hero Layer with Shadow -->
-      <image href="data:image/png;base64,${heroBase64}" x="${heroLeft}" y="${heroTop}" width="${heroWidth}" height="${targetHeroHeight}" filter="url(#hero-shadow)" />
-      
       <!-- Center Spotlight Vignette Layer -->
       <rect x="0" y="0" width="${O_WIDTH}" height="${O_HEIGHT}" fill="url(#vignette)" />
 
+      <!-- Support Entity Images Layer -->
+      ${supportImagesSvg}
+
+      <!-- Hero Layer with Shadow and Outline -->
+      <image href="data:image/png;base64,${heroBase64}" x="${heroLeft}" y="${heroTop}" width="${heroWidth}" height="${targetHeroHeight}" filter="url(#hero-outline-shadow)" />
+      
       <!-- Bottom Gradient for Text Readability -->
       <rect x="0" y="0" width="${O_WIDTH}" height="${O_HEIGHT}" fill="url(#bottom-gradient)" />
     </svg>
@@ -199,9 +241,14 @@ export async function generateNewsCollage(
   // Compose all layers
   console.log('Compositing images...');
   try {
-    return await sharp(resizedContext)
+    const compositeBuffer = await sharp(resizedContext)
       .composite(composites)
-      .jpeg({ quality: 90 })
+      .toBuffer();
+      
+    // Resize for Facebook export (1200x630)
+    return await sharp(compositeBuffer)
+      .resize(1200, 630, { fit: 'cover' })
+      .png({ compressionLevel: 2, quality: 100 })
       .toBuffer();
   } catch (err: any) {
     throw new Error(`Failed to composite images: ${err.message}`);
