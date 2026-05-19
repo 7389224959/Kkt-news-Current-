@@ -691,9 +691,7 @@ export const fetchDailyNews = async (
           "sourceUrl": "MUST be the EXACT source link provided in the chosen candidate.",
           "sourceImageUrl": "MUST be the exactly the same as the Source Image URL provided in the chosen candidate (if available).",
           "imageGenerationPlan": {
-            "backgroundContext": "Keywords for a premium Indian editorial background. CRITICAL: Do NOT include any people, faces, crowds, or human figures!",
-            "primarySubject": "Name of main subject/person for hero cutout (if applicable), e.g. 'Narendra Modi', 'Amit Shah'. MUST be a well-known entity on Wikipedia.",
-            "supportSubjects": ["Name of support figure 1", "Name of support figure 2"]
+            "primarySubject": "Name of main subject/person for hero cutout (if applicable), e.g. 'Narendra Modi', 'Amit Shah'. MUST be a well-known entity on Wikipedia."
           },
           "tags": ["Tag 1", "Tag 2"],
           "seoTitle": "A 60 character SEO optimized title",
@@ -866,27 +864,6 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
             const bgContext = dp.backgroundContext || a.title;
             let contextImageUrl = getStockImageUrl(bgContext, category);
             
-            // Generate a real AI image for the left side (context)
-            try {
-               console.log("Generating AI context background image for collage...");
-               const aiImageBase64 = await generateViralImage(bgContext, undefined, imageGenModel);
-               
-               let base64Data = aiImageBase64;
-               if (!base64Data.startsWith('data:')) {
-                 base64Data = `data:image/jpeg;base64,${aiImageBase64}`;
-               }
-               
-               const { uploadImage } = await import('./supabase');
-               const uploadedUrl = await uploadImage(base64Data);
-               if (uploadedUrl) {
-                 contextImageUrl = uploadedUrl;
-               } else {
-                 contextImageUrl = base64Data;
-               }
-            } catch (aiErr) {
-               console.warn("Failed to generate AI context background, falling back to stock:", aiErr);
-            }
-            
             let host = typeof window !== 'undefined' ? window.location.origin : '';
             if (!host) {
               if (process.env.VERCEL_URL) host = `https://${process.env.VERCEL_URL}`;
@@ -894,14 +871,7 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
               else host = `http://localhost:${process.env.PORT || 3000}`;
             }
             
-            // Strictly NO AI generated random faces for support units, ONLY real Wikipedia photos
             const supportImageUrls: string[] = [];
-            const supportSubjects = Array.isArray(dp.supportSubjects) ? dp.supportSubjects : [];
-            for (const subject of supportSubjects) {
-               if (!subject) continue;
-               const wikiImg = await getWikipediaImage(subject);
-               if (wikiImg) supportImageUrls.push(wikiImg);
-            }
 
 
             let isHeroTransparent = false;
@@ -972,62 +942,6 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
             }
           }
           
-          if (!imageUrl && aiModel === 'openrouter') {
-             const nimApiKey = (import.meta as any).env?.VITE_NVIDIA_NIM_API_KEY || (typeof process !== 'undefined' ? process.env.NVIDIA_NIM_API_KEY : '');
-             if (!nimApiKey) {
-               console.warn("VITE_NVIDIA_NIM_API_KEY missing, falling back to Gemini for image or stock.");
-             } else {
-               const nimReq = await fetch("https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell", {
-                 method: "POST",
-                 headers: {
-                   "Authorization": `Bearer ${nimApiKey.trim()}`,
-                   "Content-Type": "application/json",
-                   "Accept": "application/json"
-                 },
-                 body: JSON.stringify({
-                   prompt: "Highly realistic regional Indian news press photo, natural lighting, NO PEOPLE, NO FACES: " + (a.imagePrompt || a.title)
-                 })
-               });
-               if (nimReq.ok) {
-                 const nimRes = await nimReq.json();
-                 if (nimRes.artifacts && nimRes.artifacts[0] && nimRes.artifacts[0].base64) {
-                   const b64 = `data:image/jpeg;base64,${nimRes.artifacts[0].base64}`;
-                   imageUrl = await uploadImage(b64);
-                 }
-               } else {
-                 const errStr = await nimReq.text();
-                 console.error("Nvidia NIM error:", errStr);
-               }
-             }
-          }
-          if (!imageUrl && imageGenModel === 'cloudflare') {
-            try {
-              const cfPrompt = `Realistic Indian news photo, press photography style. Subject: ${a.imagePrompt || a.title}. NO PEOPLE, NO FACES, NO HUMAN FIGURES. Authentic Indian context, natural lighting, real mundane location, NO TEXT, NO WATERMARKS.`;
-              const cfReq = await fetch('/api/cloudflare-image', {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                  prompt: cfPrompt,
-                  model: "@cf/black-forest-labs/flux-1-schnell"
-                })
-              });
-              if (cfReq.ok) {
-                const resData = await cfReq.json();
-                if (resData.base64) {
-                  const b64 = `data:image/jpeg;base64,${resData.base64}`;
-                  imageUrl = await uploadImage(b64);
-                }
-              } else {
-                const errStr = await cfReq.text();
-                console.error("Cloudflare AI API route error:", errStr);
-              }
-             } catch (e) {
-               console.error("Failed to fetch from /api/cloudflare-image:", e);
-             }
-          }
-
           if (!imageUrl && imageGenModel === 'gemini') {
             const base64Image = await generateAiImage(a.imagePrompt || a.title);
             // Upload to Supabase Storage

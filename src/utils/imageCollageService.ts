@@ -66,7 +66,7 @@ export async function generateNewsCollage(
 
   console.log('Downloading collage source images...');
   
-  const [contextDownloaded, heroDownloaded, ...supportDownloadedBuffers] = await Promise.all([
+  const [contextDownloaded, heroDownloaded] = await Promise.all([
     downloadImage(contextImageUrl).catch(e => {
       console.error("Context image failed:", e.message);
       throw e; // We need context
@@ -74,11 +74,7 @@ export async function generateNewsCollage(
     heroImageUrl ? downloadImage(heroImageUrl).catch(e => {
       console.warn("Failed to download hero image.", e.message);
       return null;
-    }) : Promise.resolve(null),
-    ...(supportImageUrls || []).slice(0, 3).map(url => downloadImage(url).catch(e => {
-      console.warn("Skipping support image:", url, e.message);
-      return null;
-    }))
+    }) : Promise.resolve(null)
   ]);
   
   // Right side 70% real image (Hero)
@@ -116,51 +112,7 @@ export async function generateNewsCollage(
     }
   }
   
-  // Support Images on the left side
-  if (supportDownloadedBuffers.length > 0) {
-    const radius = 120;
-    const size = radius * 2;
-    const marginX = 50;
-    const marginY = 50;
-
-    const circleCutout = Buffer.from(
-      `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="#fff"/></svg>`
-    );
-
-    let supportIndex = 0;
-    for (const sBuf of supportDownloadedBuffers) {
-       if (!sBuf) continue;
-       try {
-         const circleImage = await sharp(sBuf.buffer)
-           .resize(size, size, { fit: 'cover' })
-           .composite([{ input: circleCutout, blend: 'dest-in' }])
-           .png()
-           .toBuffer();
-
-         const top = O_HEIGHT - size - marginY - (supportIndex * (size + 30));
-         const left = marginX;
-
-         composites.push({
-           input: circleImage,
-           top,
-           left,
-           blend: 'over'
-         });
-         
-         const borderSvg = Buffer.from(
-           `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="none" stroke="#FFD700" stroke-width="4"/></svg>`
-         );
-         composites.push({
-           input: borderSvg,
-           top, left, blend: 'over'
-         });
-         
-         supportIndex++;
-       } catch (e) {
-         console.warn("Skipping support image processing", e);
-       }
-    }
-  }
+  // Support Images removed.
 
   // Dark gradients for text readability (bottom and left edge)
   const overlaySvg = `
