@@ -3,6 +3,14 @@ import sharp from 'sharp';
  * Downloads an image and returns a buffer
  */
 async function downloadImage(url: string, retries = 3): Promise<{buffer: Buffer, contentType: string}> {
+  if (url.startsWith('data:')) {
+    const matches = url.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      throw new Error('Invalid base64 string');
+    }
+    return { buffer: Buffer.from(matches[2], 'base64'), contentType: matches[1] };
+  }
+
   for (let i = 0; i < retries; i++) {
     try {
       const res = await fetch(url, {
@@ -46,234 +54,158 @@ export async function generateNewsCollage(
   supportImageUrls?: string[],
   isHeroTransparent: boolean = false
 ): Promise<Buffer> {
-  // 1. Download images
-  console.log('Downloading collage source images...');
-  
-  // Download sequentially to avoid API rate limits (like queue full on pollinations)
-  const heroDownloaded = await downloadImage(heroImageUrl);
-  const contextDownloaded = await downloadImage(contextImageUrl);
-  const enhancerDownloaded = enhancerImageUrl ? await downloadImage(enhancerImageUrl) : null;
-  
-  const supportBuffers: {base64: string, isPortrait: boolean}[] = [];
-  if (supportImageUrls && supportImageUrls.length > 0) {
-    for (const url of supportImageUrls) {
-       try {
-         const downloaded = await downloadImage(url);
-         // Format as standard insert
-         const processed = await sharp(downloaded.buffer).resize(400, 400, { fit: 'cover' }).jpeg({quality: 90}).toBuffer();
-         supportBuffers.push({ base64: processed.toString('base64'), isPortrait: false });
-       } catch (e: any) {
-         console.error('Failed to download support image', url, e.message);
-       }
-    }
-  }
-
-  const heroBuffer = heroDownloaded.buffer;
-  const heroContentType = heroDownloaded.contentType || 'image/jpeg';
-  let contextBuffer = contextDownloaded.buffer;
-  let enhancerBuffer = enhancerDownloaded ? enhancerDownloaded.buffer : null;
-
-  let heroNoBgBuffer: Buffer;
-  
-  if (isHeroTransparent) {
-    console.log('Hero image is already transparent, skipping background removal.');
-    heroNoBgBuffer = heroBuffer;
-  } else {
-    // Vercel serverless has memory limits that cause @imgly/background-removal-node to crash (OOM/segfault).
-    // So we apply a masking / soft-edge overlay using sharp instead as a fallback.
-    console.log('Applying a soft edge rounded mask to the hero image since precise background removal is disabled on Vercel server.');
-    
-    // Create a PNG with rounded corners and a slight fade instead of true background removal
-    const hMeta = await sharp(heroBuffer).metadata();
-    const w = hMeta.width || 800;
-    const h = hMeta.height || 800;
-    
-    const rx = Math.floor(w * 0.1);
-    const ry = Math.floor(h * 0.1);
-
-    const maskSvg = `<svg width="${w}" height="${h}"><rect x="0" y="0" width="${w}" height="${h}" rx="${rx}" ry="${ry}" fill="white"/></svg>`;
-
-    try {
-      heroNoBgBuffer = await sharp(heroBuffer)
-        .ensureAlpha()
-        .composite([{ input: Buffer.from(maskSvg), blend: 'dest-in' }])
-        .png()
-        .toBuffer();
-    } catch (err: any) {
-      console.warn("Failed to apply mask, falling back to original:", err.message);
-      heroNoBgBuffer = heroBuffer;
-    }
-  }
-
   const O_WIDTH = 1920;
   const O_HEIGHT = 1080;
 
-  // 3. Process context image (background)
-  let resizedContext;
-  try {
-    resizedContext = await sharp(contextBuffer)
-      .resize(O_WIDTH, O_HEIGHT, { fit: 'cover' })
-      .modulate({ brightness: 0.85 }) // Cinematic premium look
-      .blur(4) // slight blur as requested
-      .toBuffer();
-  } catch (err: any) {
-    throw new Error(`Failed to process context image: ${err.message}`);
-  }
+  console.log('Downloading collage source images...');
+  
+  const heroDownloaded = await downloadImage(heroImageUrl);
+  const contextDownloaded = await downloadImage(contextImageUrl);
+  
+  // Right side 70% real image (Hero)
+  const heroWidth = Math.floor(O_WIDTH * 0.7);
+  // Left side 30% AI image (Context)
+  const contextWidth = O_WIDTH - heroWidth; // 30%
+  
+  // Actually we will make the AI image fill the whole background
+  // and the Hero image fill the right 70%, with a gradient fade mask on its left edge.
+  
+  const bgImage = await sharp(contextDownloaded.buffer)
+    .resize(O_WIDTH, O_HEIGHT, { fit: 'cover' })
+    .modulate({ brightness: 0.8 })
+    .toBuffer();
 
   const composites: sharp.OverlayOptions[] = [];
-
-  // 4. Enhance image (AI enhancer for mood) if available
-  if (enhancerBuffer) {
-    try {
-       // Direct composite with 'overlay' blend mode (which naturally integrates colors without needing extreme opacity reductions that Vercel's sharp might struggle to parse in SVGs)
-       const resizedEnhancer = await sharp(enhancerBuffer)
-         .resize(O_WIDTH, O_HEIGHT, { fit: 'cover' })
-         .toBuffer();
-
-       // To simulate opacity natively without SVG <image>, we can compose a tiny bit of the enhancer, 
-       // but it's safest to simply use a 'soft-light' blend directly.
-       composites.push({
-         input: resizedEnhancer,
-         blend: 'soft-light'
-       });
-    } catch (err: any) {
-       console.warn(`Failed to process enhancer image: ${err.message}`);
-    }
-  }
-
-  // 5. Build Hero layer (dominates 50-70% of vertical space, placed at bottom-center typically)
-  let heroResized;
-  let heroWidth = O_WIDTH;
-  let targetHeroHeight = Math.floor(O_HEIGHT * 0.70);
-  try {
-    let heroImageSharp = sharp(heroNoBgBuffer);
-    heroResized = await heroImageSharp.resize({ 
-      width: Math.floor(O_WIDTH * 0.8), // up to 80% width max
-      height: targetHeroHeight, 
-      fit: 'inside',
-      withoutEnlargement: false
-    }).normalize().sharpen().png().toBuffer();
-    
-    const heroResizedMeta = await sharp(heroResized).metadata();
-    heroWidth = heroResizedMeta.width || O_WIDTH;
-    targetHeroHeight = heroResizedMeta.height || targetHeroHeight;
-  } catch (err: any) {
-    throw new Error(`Failed to process hero image: ${err.message}. Buffer size: ${heroNoBgBuffer.length}`);
-  }
   
-  // Placement: Bottom Center
-  const heroLeft = Math.max(0, Math.floor((O_WIDTH - heroWidth) / 2));
-  const heroTop = Math.max(0, O_HEIGHT - targetHeroHeight);
-
-  const heroBase64 = heroResized.toString('base64');
-  
-  // VIGNETTE OVERLAY
-  const vignetteSvg = `
-    <svg width="${O_WIDTH}" height="${O_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+  // Hard edge split or short gradient mask for the Hero Image
+  // 30% / 70% split
+  const gradientMask = `
+    <svg width="${heroWidth}" height="${O_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient id="vig" cx="50%" cy="45%" r="70%" fx="50%" fy="45%">
-          <stop offset="30%" stop-color="#000" stop-opacity="0" />
-          <stop offset="70%" stop-color="#000" stop-opacity="0.4" />
-          <stop offset="100%" stop-color="#000" stop-opacity="0.85" />
-        </radialGradient>
+        <!-- Very rapid fade to make a clean transition but not a harsh line -->
+        <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="black" stop-opacity="0" />
+          <stop offset="10%" stop-color="white" stop-opacity="1" />
+          <stop offset="100%" stop-color="white" stop-opacity="1" />
+        </linearGradient>
       </defs>
-      <rect x="0" y="0" width="${O_WIDTH}" height="${O_HEIGHT}" fill="url(#vig)" />
+      <rect x="0" y="0" width="${heroWidth}" height="${O_HEIGHT}" fill="url(#fade)" />
     </svg>
   `;
-  composites.push({ input: Buffer.from(vignetteSvg), top: 0, left: 0, blend: 'over' });
 
-  // SUPPORT IMAGES
-  // Create circular clips natively and add them
-  if (supportBuffers.length > 0) {
-    const radius = 150;
+  try {
+    const heroCover = await sharp(heroDownloaded.buffer)
+       .resize(heroWidth, O_HEIGHT, { fit: 'cover' })
+       .ensureAlpha()
+       .composite([{ input: Buffer.from(gradientMask), blend: 'dest-in' }])
+       .png()
+       .toBuffer();
+
+    composites.push({
+      input: heroCover,
+      top: 0,
+      left: O_WIDTH - heroWidth,
+      blend: 'over'
+    });
+  } catch (err: any) {
+    console.warn("Failed to apply mask to hero, placing directly:", err.message);
+    const heroCover = await sharp(heroDownloaded.buffer)
+       .resize(heroWidth, O_HEIGHT, { fit: 'cover' })
+       .png()
+       .toBuffer();
+       
+    composites.push({
+      input: heroCover,
+      top: 0,
+      left: O_WIDTH - heroWidth,
+      blend: 'over'
+    });
+  }
+  
+  // Support Images on the left side
+  if (supportImageUrls && supportImageUrls.length > 0) {
+    const radius = 120;
     const size = radius * 2;
-    const marginX = 80;
-    const marginY = 80;
-    
-    // We'll create a single mask for all support images
+    const marginX = 50;
+    const marginY = 50;
+
     const circleCutout = Buffer.from(
       `<svg width="${size}" height="${size}"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="#fff"/></svg>`
     );
 
-    for (let index = 0; index < supportBuffers.length; index++) {
-       let cx = marginX + radius;
-       let cy = marginY + radius;
-       
-       if (index === 1) {
-         cx = O_WIDTH - marginX - radius; 
-         cy = marginY + radius;
-       } else if (index === 2) {
-         cx = marginX + radius;
-         cy = Math.max(marginY + radius, O_HEIGHT - marginY - radius - 200);
-       } else if (index === 3) {
-         cx = O_WIDTH - marginX - radius;
-         cy = Math.max(marginY + radius, O_HEIGHT - marginY - radius - 200);
-       }
-
+    for (let index = 0; index < Math.min(supportImageUrls.length, 3); index++) {
        try {
-         // Create a composite of the raw image cut out as a circle, with a stroke
-         const circleImage = await sharp(Buffer.from(supportBuffers[index].base64, 'base64'))
+         const sBuf = await downloadImage(supportImageUrls[index]);
+         const circleImage = await sharp(sBuf.buffer)
            .resize(size, size, { fit: 'cover' })
            .composite([{ input: circleCutout, blend: 'dest-in' }])
            .png()
            .toBuffer();
 
+         const top = O_HEIGHT - size - marginY - (index * (size + 30));
+         const left = marginX;
+
          composites.push({
            input: circleImage,
-           top: cy - radius,
-           left: cx - radius,
+           top,
+           left,
            blend: 'over'
          });
          
-         // Add golden border overlay
          const borderSvg = Buffer.from(
-           `<svg width="${size}" height="${size}"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="none" stroke="#FFD700" stroke-width="6"/></svg>`
+           `<svg width="${size}" height="${size}"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="none" stroke="#FFD700" stroke-width="4"/></svg>`
          );
          composites.push({
            input: borderSvg,
-           top: cy - radius,
-           left: cx - radius,
-           blend: 'over'
+           top, left, blend: 'over'
          });
        } catch (e) {
-         console.warn("Skipping support image render format issue", e);
+         console.warn("Skipping support image", e);
        }
     }
   }
 
-  // HERO IMAGE
-  composites.push({
-    input: heroResized,
-    top: heroTop,
-    left: heroLeft,
-    blend: 'over'
-  });
-
-  // BOTTOM GRADIENT
-  const bottomGradientSvg = `
+  // Dark gradients for text readability (bottom and left edge)
+  // Instead of a massive screen-covering shadow, use a subtle lower thirds and a red accent line
+  const overlaySvg = `
     <svg width="${O_WIDTH}" height="${O_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="60%" stop-color="#000" stop-opacity="0" />
+        <!-- Soft bottom gradient, mostly below 50% height -->
+        <linearGradient id="text-bg-bottom" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="40%" stop-color="#000" stop-opacity="0" />
+          <stop offset="70%" stop-color="#000" stop-opacity="0.8" />
           <stop offset="100%" stop-color="#000" stop-opacity="0.95" />
         </linearGradient>
+        
+        <!-- Gentle left shadow just for edge framing -->
+        <linearGradient id="text-bg-left" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#000" stop-opacity="0.8" />
+          <stop offset="15%" stop-color="#000" stop-opacity="0.2" />
+          <stop offset="30%" stop-color="#000" stop-opacity="0" />
+        </linearGradient>
       </defs>
-      <rect x="0" y="0" width="${O_WIDTH}" height="${O_HEIGHT}" fill="url(#bg)" />
+      
+      <!-- The shadows -->
+      <rect x="0" y="0" width="${O_WIDTH}" height="${O_HEIGHT}" fill="url(#text-bg-left)" />
+      <rect x="0" y="0" width="${O_WIDTH}" height="${O_HEIGHT}" fill="url(#text-bg-bottom)" />
+      
+      <!-- A slick dividing line between AI and Real Image -->
+      <line x1="${O_WIDTH - heroWidth}" y1="0" x2="${O_WIDTH - heroWidth}" y2="${O_HEIGHT}" stroke="#E60000" stroke-width="8" opacity="0.9"/>
     </svg>
   `;
-  composites.push({ input: Buffer.from(bottomGradientSvg), top: 0, left: 0, blend: 'over' });
+  composites.push({ input: Buffer.from(overlaySvg), top: 0, left: 0, blend: 'over' });
 
   // Compose all layers
-  console.log('Compositing images...');
+  console.log('Compositing images (new 70/30 flow)...');
   try {
-    const compositeBuffer = await sharp(resizedContext)
+    const compositeBuffer = await sharp(bgImage)
       .composite(composites)
       .toBuffer();
       
     // Resize for Facebook export (1200x630)
     return await sharp(compositeBuffer)
       .resize(1200, 630, { fit: 'cover' })
-      .png({ compressionLevel: 2, quality: 100 })
+      .jpeg({ quality: 90 })
       .toBuffer();
   } catch (err: any) {
     throw new Error(`Failed to composite images: ${err.message}`);

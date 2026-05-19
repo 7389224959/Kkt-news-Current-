@@ -864,7 +864,20 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
             console.log("Found source/primary image, creating collage via API...");
             
             const bgContext = dp.backgroundContext || a.title;
-            const contextImageUrl = getStockImageUrl(bgContext, category);
+            let contextImageUrl = getStockImageUrl(bgContext, category);
+            
+            // Generate a real AI image for the left side (context)
+            try {
+               console.log("Generating AI context background image for collage...");
+               const aiImageBase64 = await generateViralImage(bgContext, undefined, imageGenModel);
+               if (aiImageBase64.startsWith('data:')) {
+                 contextImageUrl = aiImageBase64;
+               } else {
+                 contextImageUrl = `data:image/jpeg;base64,${aiImageBase64}`;
+               }
+            } catch (aiErr) {
+               console.warn("Failed to generate AI context background, falling back to stock:", aiErr);
+            }
             
             let host = typeof window !== 'undefined' ? window.location.origin : '';
             if (!host) host = `http://localhost:${process.env.PORT || 3000}`;
