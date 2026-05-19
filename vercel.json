@@ -6,9 +6,6 @@
     },
     "api/generate-collage.js": {
       "excludeFiles": "node_modules/{ffmpeg-static/**,onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime_providers_cuda.so*,onnxruntime-node/bin/napi-v3/darwin/**,onnxruntime-node/bin/napi-v3/win32/**,onnxruntime-node/bin/napi-v3/linux/arm64/**}"
-    },
-    "api/**/*.js": {
-      "excludeFiles": "node_modules/{onnxruntime-node/**,ffmpeg-static/**}"
     }
   },
   "rewrites": [
