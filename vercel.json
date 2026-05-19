@@ -2,6 +2,14 @@
   "functions": {
     "api/render-reel.js": {
       "includeFiles": "node_modules/ffmpeg-static/ffmpeg"
+    },
+    "api/**/*.js": {
+      "excludeFiles": [
+        "node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime_providers_cuda.so*",
+        "node_modules/onnxruntime-node/bin/napi-v3/darwin/**",
+        "node_modules/onnxruntime-node/bin/napi-v3/win32/**",
+        "node_modules/onnxruntime-node/bin/napi-v3/linux/arm64/**"
+      ]
     }
   },
   "rewrites": [
