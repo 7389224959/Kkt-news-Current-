@@ -1,10 +1,11 @@
 import sharp from 'sharp';
 sharp.cache(false); // Fix for Vercel/serverless OOM crashes
+sharp.concurrency(1); // Limit sharp concurrency to prevent Vercel crashes
 
 /**
  * Downloads an image and returns a buffer
  */
-async function downloadImage(url: string, retries = 3): Promise<{buffer: Buffer, contentType: string}> {
+async function downloadImage(url: string, retries = 1): Promise<{buffer: Buffer, contentType: string}> {
   if (url.startsWith('data:')) {
     const matches = url.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
     if (!matches || matches.length !== 3) {
@@ -13,13 +14,18 @@ async function downloadImage(url: string, retries = 3): Promise<{buffer: Buffer,
     return { buffer: Buffer.from(matches[2], 'base64'), contentType: matches[1] };
   }
 
-  for (let i = 0; i < retries; i++) {
+  for (let i = 0; i <= retries; i++) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout for each image fetch
       const res = await fetch(url, {
         headers: {
           'User-Agent': 'KKTNewsBot/1.0 (vishal9425545374@gmail.com)'
-        }
+        },
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
+      
       if (!res.ok) throw new Error(`Failed to fetch image: ${url} - Status ${res.status}`);
       
       const contentType = res.headers.get('content-type') || '';
@@ -30,9 +36,8 @@ async function downloadImage(url: string, retries = 3): Promise<{buffer: Buffer,
       const arrayBuffer = await res.arrayBuffer();
       return { buffer: Buffer.from(arrayBuffer), contentType };
     } catch (err: any) {
-      if (i === retries - 1) throw err;
+      if (i === retries) throw err;
       console.warn(`Retry ${i + 1}/${retries} downloading ${url}. Error: ${err.message}`);
-      await new Promise(r => setTimeout(r, 2000 + i * 2000)); // wait 2s, 4s, etc.
     }
   }
   throw new Error("unreachable");
@@ -61,16 +66,20 @@ export async function generateNewsCollage(
 
   console.log('Downloading collage source images...');
   
-  const contextDownloaded = await downloadImage(contextImageUrl);
-  let heroDownloaded: any = null;
-  
-  if (heroImageUrl) {
-    try {
-      heroDownloaded = await downloadImage(heroImageUrl);
-    } catch (e) {
-      console.warn("Failed to download hero image, proceeding without it.");
-    }
-  }
+  const [contextDownloaded, heroDownloaded, ...supportDownloadedBuffers] = await Promise.all([
+    downloadImage(contextImageUrl).catch(e => {
+      console.error("Context image failed:", e.message);
+      throw e; // We need context
+    }),
+    heroImageUrl ? downloadImage(heroImageUrl).catch(e => {
+      console.warn("Failed to download hero image.", e.message);
+      return null;
+    }) : Promise.resolve(null),
+    ...(supportImageUrls || []).slice(0, 3).map(url => downloadImage(url).catch(e => {
+      console.warn("Skipping support image:", url, e.message);
+      return null;
+    }))
+  ]);
   
   // Right side 70% real image (Hero)
   const heroWidth = Math.floor(O_WIDTH * 0.7);
@@ -108,26 +117,27 @@ export async function generateNewsCollage(
   }
   
   // Support Images on the left side
-  if (supportImageUrls && supportImageUrls.length > 0) {
+  if (supportDownloadedBuffers.length > 0) {
     const radius = 120;
     const size = radius * 2;
     const marginX = 50;
     const marginY = 50;
 
     const circleCutout = Buffer.from(
-      `<svg width="${size}" height="${size}"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="#fff"/></svg>`
+      `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="#fff"/></svg>`
     );
 
-    const supportPromises = supportImageUrls.slice(0, 3).map(async (url, index) => {
+    let supportIndex = 0;
+    for (const sBuf of supportDownloadedBuffers) {
+       if (!sBuf) continue;
        try {
-         const sBuf = await downloadImage(url);
          const circleImage = await sharp(sBuf.buffer)
            .resize(size, size, { fit: 'cover' })
            .composite([{ input: circleCutout, blend: 'dest-in' }])
            .png()
            .toBuffer();
 
-         const top = O_HEIGHT - size - marginY - (index * (size + 30));
+         const top = O_HEIGHT - size - marginY - (supportIndex * (size + 30));
          const left = marginX;
 
          composites.push({
@@ -138,17 +148,18 @@ export async function generateNewsCollage(
          });
          
          const borderSvg = Buffer.from(
-           `<svg width="${size}" height="${size}"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="none" stroke="#FFD700" stroke-width="4"/></svg>`
+           `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="none" stroke="#FFD700" stroke-width="4"/></svg>`
          );
          composites.push({
            input: borderSvg,
            top, left, blend: 'over'
          });
+         
+         supportIndex++;
        } catch (e) {
-         console.warn("Skipping support image", e);
+         console.warn("Skipping support image processing", e);
        }
-    });
-    await Promise.all(supportPromises);
+    }
   }
 
   // Dark gradients for text readability (bottom and left edge)
