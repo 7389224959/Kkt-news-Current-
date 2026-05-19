@@ -1,6 +1,8 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+// Force Vite HMR Cache refresh
 import { Category } from '../types';
+
 import { sortArticlesByDate } from '../services/articleService';
 import NewsCard from '../components/NewsCard';
 import NewsImage from '../components/NewsImage';

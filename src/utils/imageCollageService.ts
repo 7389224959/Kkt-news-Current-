@@ -45,7 +45,8 @@ export async function generateNewsCollage(
   contextImageUrl: string,
   enhancerImageUrl?: string,
   category: string = 'politics',
-  supportImageUrls?: string[]
+  supportImageUrls?: string[],
+  isHeroTransparent: boolean = false
 ): Promise<Buffer> {
   // 1. Download images
   console.log('Downloading collage source images...');
@@ -74,26 +75,36 @@ export async function generateNewsCollage(
   let contextBuffer = contextDownloaded.buffer;
   let enhancerBuffer = enhancerDownloaded ? enhancerDownloaded.buffer : null;
 
-  // Convert hero to JPEG first to avoid "Unsupported format" errors for GIFs, etc.
-  console.log('Converting hero to JPEG for background removal...');
-  const heroJpegBuffer = await sharp(heroBuffer).jpeg().toBuffer();
-
-  // 2. Remove Background from Hero
-  console.log('Removing background from hero image...');
-  // Note: removeBackground accepts a Blob or path, we pass an ArrayBuffer / Uint8Array in node
-  const heroBlob = new Blob([new Uint8Array(heroJpegBuffer as any)], { type: 'image/jpeg' });
-  console.log('Blob type is:', heroBlob.type, 'Original type was:', heroContentType);
+  let heroNoBgBuffer: Buffer;
   
-  let heroNoBgBlob;
-  try {
-    heroNoBgBlob = await removeBackground(heroBlob, {
-      publicPath: "https://unpkg.com/@imgly/background-removal-node@1.4.5/dist/"
-    });
-  } catch (err: any) {
-    console.error('removeBackground threw:', err);
-    throw new Error(`removeBackground failed: ${err.message}. Original CT: ${heroContentType}, Blob Type: ${heroBlob.type}`);
+  if (isHeroTransparent) {
+    console.log('Hero image is already transparent, skipping background removal.');
+    heroNoBgBuffer = heroBuffer;
+  } else {
+    // Convert hero to JPEG first to avoid "Unsupported format" errors for GIFs, etc.
+    console.log('Converting hero to JPEG for background removal...');
+    const heroJpegBuffer = await sharp(heroBuffer).jpeg().toBuffer();
+
+    // 2. Remove Background from Hero
+    console.log('Removing background from hero image...');
+    // Note: removeBackground accepts a Blob or path, we pass an ArrayBuffer / Uint8Array in node
+    const heroBlob = new Blob([new Uint8Array(heroJpegBuffer as any)], { type: 'image/jpeg' });
+    console.log('Blob type is:', heroBlob.type, 'Original type was:', heroContentType);
+    
+    let heroNoBgBlob;
+    try {
+      heroNoBgBlob = await removeBackground(heroBlob, {
+        publicPath: "https://unpkg.com/@imgly/background-removal-node@1.4.5/dist/"
+      });
+    } catch (err: any) {
+      console.error('removeBackground threw:', err);
+      // Fallback: If Vercel times out or fails, just use the original image without crashing
+      // We log the error but still return a collage (it will just be boxy).
+      console.warn("Falling back to original image due to background removal failure.");
+      heroNoBgBlob = new Blob([new Uint8Array(heroBuffer)], { type: heroContentType });
+    }
+    heroNoBgBuffer = Buffer.from(await heroNoBgBlob.arrayBuffer());
   }
-  const heroNoBgBuffer = Buffer.from(await heroNoBgBlob.arrayBuffer());
 
   const O_WIDTH = 1920;
   const O_HEIGHT = 1080;

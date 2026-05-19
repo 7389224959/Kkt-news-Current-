@@ -21,7 +21,7 @@ try {
  * @param file The file to upload (File object or base64 string)
  * @returns The public URL of the uploaded image
  */
-export const uploadImage = async (file: File | string): Promise<string> => {
+export const uploadImage = async (file: File | Blob | string): Promise<string> => {
   if (!supabase) {
     throw new Error('Supabase client is not initialized. Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
   }

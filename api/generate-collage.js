@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+export const maxDuration = 60;
+
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
 const supabaseKey = process.env.VITE_SUPABASE_PUB_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
@@ -14,7 +16,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { heroImageUrl, contextImageUrl, enhancerImageUrl, category, supportImageUrls } = req.body;
+    const { heroImageUrl, contextImageUrl, enhancerImageUrl, category, supportImageUrls, isHeroTransparent } = req.body;
 
     if (!heroImageUrl || !contextImageUrl) {
       return res.status(400).json({ error: 'heroImageUrl and contextImageUrl are required' });
@@ -23,7 +25,7 @@ export default async function handler(req, res) {
     console.log('Generating Collage...');
     
     // 1. Generate collage buffer
-    const collageBuffer = await generateNewsCollage(heroImageUrl, contextImageUrl, enhancerImageUrl, category, supportImageUrls);
+    const collageBuffer = await generateNewsCollage(heroImageUrl, contextImageUrl, enhancerImageUrl, category, supportImageUrls, !!isHeroTransparent);
     
     // 2. Upload to Supabase
     if (!supabase) {

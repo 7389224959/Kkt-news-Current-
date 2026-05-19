@@ -879,14 +879,41 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
             }
 
 
+            let isHeroTransparent = false;
+            let finalHeroImageUrl = heroImage;
+
+            if (typeof window !== 'undefined') {
+              try {
+                console.log("Removing background in browser...");
+                const { removeBackground } = await import('@imgly/background-removal');
+                // Download image manually to avoid CORS issues if possible, or let imgly handle it
+                // Imgly handles URLs pretty well but might run into CORS. We can use a proxy if needed
+                // Actually Wikipedia images are CORS enabled for GET!
+                const blob = await removeBackground(heroImage, {
+                  publicPath: "https://unpkg.com/@imgly/background-removal@1.4.5/dist/"
+                });
+                
+                const { uploadImage } = await import('./supabase');
+                const uploadedUrl = await uploadImage(blob);
+                if (uploadedUrl) {
+                   finalHeroImageUrl = uploadedUrl;
+                   isHeroTransparent = true;
+                   console.log("Browser BG removal successful. Uploaded to:", finalHeroImageUrl);
+                }
+              } catch (bgErr) {
+                 console.warn("Browser BG removal failed, falling back to server default processing:", bgErr);
+              }
+            }
+
             const collageReq = await fetch(`${host}/api/generate-collage`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                heroImageUrl: heroImage,
+                heroImageUrl: finalHeroImageUrl,
                 contextImageUrl,
                 category: a.category,
-                supportImageUrls
+                supportImageUrls,
+                isHeroTransparent
               })
             });
             
