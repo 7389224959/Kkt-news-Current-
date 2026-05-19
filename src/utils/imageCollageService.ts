@@ -123,22 +123,20 @@ export async function generateNewsCollage(
 
   const composites: sharp.OverlayOptions[] = [];
 
-  // 4. Enhance image (AI enhancer for mood) if available - strictly limited to 15% opacity to preserve realism
+  // 4. Enhance image (AI enhancer for mood) if available
   if (enhancerBuffer) {
     try {
-      const resizedEnhancer = await sharp(enhancerBuffer)
-        .resize(O_WIDTH, O_HEIGHT, { fit: 'cover' })
-        .jpeg({ quality: 80 })
-        .toBuffer();
+       // Direct composite with 'overlay' blend mode (which naturally integrates colors without needing extreme opacity reductions that Vercel's sharp might struggle to parse in SVGs)
+       const resizedEnhancer = await sharp(enhancerBuffer)
+         .resize(O_WIDTH, O_HEIGHT, { fit: 'cover' })
+         .toBuffer();
 
-      const svgOverlay = `<svg width="${O_WIDTH}" height="${O_HEIGHT}">
-        <image href="data:image/jpeg;base64,${resizedEnhancer.toString('base64')}" width="${O_WIDTH}" height="${O_HEIGHT}" opacity="0.15" />
-      </svg>`;
-
-      composites.push({
-        input: Buffer.from(svgOverlay),
-        blend: category.toLowerCase() === 'crime' ? 'multiply' : 'soft-light'
-      });
+       // To simulate opacity natively without SVG <image>, we can compose a tiny bit of the enhancer, 
+       // but it's safest to simply use a 'soft-light' blend directly.
+       composites.push({
+         input: resizedEnhancer,
+         blend: 'soft-light'
+       });
     } catch (err: any) {
        console.warn(`Failed to process enhancer image: ${err.message}`);
     }
