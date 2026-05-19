@@ -1,11 +1,11 @@
 {
   "functions": {
-    "api/**/*.js": {
-      "includeFiles": "{dist/**,node_modules/ffmpeg-static/ffmpeg}"
+    "api/render-reel.js": {
+      "includeFiles": "node_modules/ffmpeg-static/ffmpeg"
     }
   },
   "rewrites": [
     { "source": "/article/:slug", "destination": "/api/article?slug=:slug" },
-    { "source": "/(.*)", "destination": "/" }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
