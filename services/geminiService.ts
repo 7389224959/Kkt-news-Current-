@@ -940,9 +940,22 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
             
             if (collageReq.ok) {
               const collageRes = await collageReq.json();
-              if (collageRes.collageUrl) {
+              if (collageRes.error) {
+                console.error("Vercel Collage Error:", collageRes.error, collageRes.stack);
+                if (typeof window !== 'undefined') {
+                  alert("Collage API Error:\n" + collageRes.error + "\n\nStack:\n" + (collageRes.stack || '').substring(0, 200));
+                }
+                imageUrl = finalHeroImageUrl || contextImageUrl;
+              } else if (collageRes.collageUrl) {
                 imageUrl = collageRes.collageUrl;
                 (a as any).featuredCollageImage = imageUrl;
+              } else if (collageRes.base64) {
+                const { uploadImage } = await import('./supabase');
+                const uploadedUrl = await uploadImage(collageRes.base64);
+                if (uploadedUrl) {
+                  imageUrl = uploadedUrl;
+                  (a as any).featuredCollageImage = imageUrl;
+                }
               }
             } else {
               console.warn("Collage generation failed:", await collageReq.text());

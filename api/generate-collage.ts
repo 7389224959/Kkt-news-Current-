@@ -27,34 +27,15 @@ export default async function handler(req: any, res: any) {
     // 1. Generate collage buffer
     const collageBuffer = await generateNewsCollage(heroImageUrl, contextImageUrl, enhancerImageUrl, category, supportImageUrls, !!isHeroTransparent);
     
-    // 2. Upload to Supabase
-    if (!supabase) {
-      throw new Error("Supabase is not configured. Cannot upload collage.");
-    }
-    
-    const fileName = `collage_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
-    
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('news-images')
-      .upload(fileName, collageBuffer, {
-        contentType: 'image/jpeg',
-        upsert: false
-      });
+    // 2. Return as base64 string instead of relying on server-side Supabase upload
+    // By returning base64, we allow the client (which definitely has Supabase configured) to upload it
+    const base64Image = collageBuffer.toString('base64');
+    const base64Url = `data:image/jpeg;base64,${base64Image}`;
 
-    if (uploadError) {
-      console.error("Supabase Upload Error:", uploadError);
-      throw uploadError;
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from('news-images')
-      .getPublicUrl(fileName);
-
-    const uploadedUrl = publicUrlData.publicUrl;
-
-    return res.status(200).json({ collageUrl: uploadedUrl });
+    return res.status(200).json({ base64: base64Url });
   } catch (error: any) {
     console.error('Error generating collage:', error);
-    return res.status(500).json({ error: error.message || 'Failed to generate collage', stack: error.stack });
+    // Return 200 with error property so frontend catches it and can display it in production
+    return res.status(200).json({ error: error.message || 'Failed to generate collage', stack: error.stack });
   }
 }
