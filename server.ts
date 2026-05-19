@@ -39,6 +39,9 @@ async function startServer() {
       let filePath = path.join(process.cwd(), 'api', `${apiPath}.js`);
       
       if (!fs.existsSync(filePath)) {
+        filePath = path.join(process.cwd(), 'api', `${apiPath}.ts`);
+      }
+      if (!fs.existsSync(filePath)) {
         filePath = path.join(process.cwd(), 'api', apiPath, 'index.js');
       }
       

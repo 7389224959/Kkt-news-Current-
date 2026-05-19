@@ -1,4 +1,4 @@
-import { generateNewsCollage } from '../src/utils/imageCollageService.ts';
+import { generateNewsCollage } from '../src/utils/imageCollageService';
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 
@@ -10,7 +10,7 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
 const supabaseKey = process.env.VITE_SUPABASE_PUB_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-export default async function handler(req, res) {
+export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     const uploadedUrl = publicUrlData.publicUrl;
 
     return res.status(200).json({ collageUrl: uploadedUrl });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error generating collage:', error);
     return res.status(500).json({ error: error.message || 'Failed to generate collage', stack: error.stack });
   }

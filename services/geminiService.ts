@@ -946,6 +946,8 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
               }
             } else {
               console.warn("Collage generation failed:", await collageReq.text());
+              // Fallback to real image or AI context image instead of blanking out
+              imageUrl = finalHeroImageUrl || contextImageUrl;
             }
           }
           
