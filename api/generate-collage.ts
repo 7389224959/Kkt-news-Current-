@@ -18,8 +18,8 @@ export default async function handler(req: any, res: any) {
   try {
     const { heroImageUrl, contextImageUrl, enhancerImageUrl, category, supportImageUrls, isHeroTransparent } = req.body;
 
-    if (!heroImageUrl || !contextImageUrl) {
-      return res.status(400).json({ error: 'heroImageUrl and contextImageUrl are required' });
+    if (!contextImageUrl) {
+      return res.status(400).json({ error: 'contextImageUrl is required' });
     }
 
     console.log('Generating Collage...');

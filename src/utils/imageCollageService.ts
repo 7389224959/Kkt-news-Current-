@@ -47,7 +47,7 @@ async function downloadImage(url: string, retries = 3): Promise<{buffer: Buffer,
  *  - 1080x1080 Output
  */
 export async function generateNewsCollage(
-  heroImageUrl: string,
+  heroImageUrl: string | null | undefined,
   contextImageUrl: string,
   enhancerImageUrl?: string,
   category: string = 'politics',
@@ -59,10 +59,16 @@ export async function generateNewsCollage(
 
   console.log('Downloading collage source images...');
   
-  const [heroDownloaded, contextDownloaded] = await Promise.all([
-    downloadImage(heroImageUrl),
-    downloadImage(contextImageUrl)
-  ]);
+  const contextDownloaded = await downloadImage(contextImageUrl);
+  let heroDownloaded: any = null;
+  
+  if (heroImageUrl) {
+    try {
+      heroDownloaded = await downloadImage(heroImageUrl);
+    } catch (e) {
+      console.warn("Failed to download hero image, proceeding without it.");
+    }
+  }
   
   // Right side 70% real image (Hero)
   const heroWidth = Math.floor(O_WIDTH * 0.7);
@@ -81,20 +87,22 @@ export async function generateNewsCollage(
   
   // Hard edge split or short gradient mask for the Hero Image
   // 30% / 70% split
-  try {
-    const heroCover = await sharp(heroDownloaded.buffer)
-       .resize(heroWidth, O_HEIGHT, { fit: 'cover' })
-       .png()
-       .toBuffer();
+  if (heroDownloaded) {
+    try {
+      const heroCover = await sharp(heroDownloaded.buffer)
+         .resize(heroWidth, O_HEIGHT, { fit: 'cover' })
+         .png()
+         .toBuffer();
 
-    composites.push({
-      input: heroCover,
-      top: 0,
-      left: O_WIDTH - heroWidth,
-      blend: 'over'
-    });
-  } catch (err: any) {
-    console.warn("Failed to process hero image:", err.message);
+      composites.push({
+        input: heroCover,
+        top: 0,
+        left: O_WIDTH - heroWidth,
+        blend: 'over'
+      });
+    } catch (err: any) {
+      console.warn("Failed to process hero image:", err.message);
+    }
   }
   
   // Support Images on the left side

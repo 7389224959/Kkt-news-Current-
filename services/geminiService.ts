@@ -958,7 +958,11 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
                 }
               }
             } else {
-              console.warn("Collage generation failed:", await collageReq.text());
+              const errText = await collageReq.text();
+              console.warn("Collage generation failed:", errText);
+              if (typeof window !== 'undefined') {
+                alert(`Vercel API failed with status ${collageReq.status}: \n` + errText.substring(0, 300));
+              }
               // Fallback to real image or AI context image instead of blanking out
               imageUrl = finalHeroImageUrl || contextImageUrl;
             }
