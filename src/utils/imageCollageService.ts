@@ -7,7 +7,11 @@ import { removeBackground } from '@imgly/background-removal-node';
 async function downloadImage(url: string, retries = 3): Promise<{buffer: Buffer, contentType: string}> {
   for (let i = 0; i < retries; i++) {
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'KKTNewsBot/1.0 (vishal9425545374@gmail.com)'
+        }
+      });
       if (!res.ok) throw new Error(`Failed to fetch image: ${url} - Status ${res.status}`);
       
       const contentType = res.headers.get('content-type') || '';
