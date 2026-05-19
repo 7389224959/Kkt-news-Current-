@@ -870,10 +870,18 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
             try {
                console.log("Generating AI context background image for collage...");
                const aiImageBase64 = await generateViralImage(bgContext, undefined, imageGenModel);
-               if (aiImageBase64.startsWith('data:')) {
-                 contextImageUrl = aiImageBase64;
+               
+               let base64Data = aiImageBase64;
+               if (!base64Data.startsWith('data:')) {
+                 base64Data = `data:image/jpeg;base64,${aiImageBase64}`;
+               }
+               
+               const { uploadImage } = await import('./supabase');
+               const uploadedUrl = await uploadImage(base64Data);
+               if (uploadedUrl) {
+                 contextImageUrl = uploadedUrl;
                } else {
-                 contextImageUrl = `data:image/jpeg;base64,${aiImageBase64}`;
+                 contextImageUrl = base64Data;
                }
             } catch (aiErr) {
                console.warn("Failed to generate AI context background, falling back to stock:", aiErr);
