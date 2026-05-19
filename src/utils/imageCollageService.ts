@@ -81,25 +81,9 @@ export async function generateNewsCollage(
   
   // Hard edge split or short gradient mask for the Hero Image
   // 30% / 70% split
-  const gradientMask = `
-    <svg width="${heroWidth}" height="${O_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <!-- Very rapid fade to make a clean transition but not a harsh line -->
-        <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="black" stop-opacity="0" />
-          <stop offset="10%" stop-color="white" stop-opacity="1" />
-          <stop offset="100%" stop-color="white" stop-opacity="1" />
-        </linearGradient>
-      </defs>
-      <rect x="0" y="0" width="${heroWidth}" height="${O_HEIGHT}" fill="url(#fade)" />
-    </svg>
-  `;
-
   try {
     const heroCover = await sharp(heroDownloaded.buffer)
        .resize(heroWidth, O_HEIGHT, { fit: 'cover' })
-       .ensureAlpha()
-       .composite([{ input: Buffer.from(gradientMask), blend: 'dest-in' }])
        .png()
        .toBuffer();
 
@@ -110,18 +94,7 @@ export async function generateNewsCollage(
       blend: 'over'
     });
   } catch (err: any) {
-    console.warn("Failed to apply mask to hero, placing directly:", err.message);
-    const heroCover = await sharp(heroDownloaded.buffer)
-       .resize(heroWidth, O_HEIGHT, { fit: 'cover' })
-       .png()
-       .toBuffer();
-       
-    composites.push({
-      input: heroCover,
-      top: 0,
-      left: O_WIDTH - heroWidth,
-      blend: 'over'
-    });
+    console.warn("Failed to process hero image:", err.message);
   }
   
   // Support Images on the left side
@@ -169,7 +142,6 @@ export async function generateNewsCollage(
   }
 
   // Dark gradients for text readability (bottom and left edge)
-  // Instead of a massive screen-covering shadow, use a subtle lower thirds and a red accent line
   const overlaySvg = `
     <svg width="${O_WIDTH}" height="${O_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -182,9 +154,8 @@ export async function generateNewsCollage(
         
         <!-- Gentle left shadow just for edge framing -->
         <linearGradient id="text-bg-left" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="#000" stop-opacity="0.8" />
-          <stop offset="15%" stop-color="#000" stop-opacity="0.2" />
-          <stop offset="30%" stop-color="#000" stop-opacity="0" />
+          <stop offset="0%" stop-color="#000" stop-opacity="0.5" />
+          <stop offset="25%" stop-color="#000" stop-opacity="0" />
         </linearGradient>
       </defs>
       
