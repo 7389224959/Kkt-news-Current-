@@ -31,6 +31,7 @@ import NewsImage from '../components/NewsImage';
 import ReelTemplatesAdmin from '../components/ReelTemplatesAdmin';
 import ViralTemplatesAdmin from '../components/ViralTemplatesAdmin';
 import ViralTemplateEditor from '../components/ViralTemplateEditor';
+import AIImproveTemplate from '../components/AIImproveTemplate';
 import ReelWizard from '../components/ReelWizard';
 
 const Admin: React.FC = () => {
@@ -646,9 +647,11 @@ const Admin: React.FC = () => {
       }
       setViralPost(post);
       
-      // Generate image
-      const imageBase64 = await generateViralImage(post.image_prompt, viralReferenceImage || undefined, viralImageGenModel);
-      setRawViralGeneratedImage(imageBase64);
+      // Auto Viral Post Flow: Do NOT regenerate image. Reuse featuredCollageImage OR original image
+      let reuseImageUrl = articleToUse!.featuredCollageImage || articleToUse!.image || articleToUse!.imageUrl;
+      
+      // We will still store it in rawViralGeneratedImage for the frontend layout engine
+      setRawViralGeneratedImage(reuseImageUrl || '');
     } catch (error) {
       console.error("Error generating viral post:", error);
       alert("Failed to generate viral post. Please try again.");
@@ -800,10 +803,29 @@ const Admin: React.FC = () => {
     setFbPreviewLink(null);
     setFbPreviewPostId(null);
     try {
-      const imageUrl = await uploadImage(viralGeneratedImage);
+      // 1. Generate text overlay via backend API
+      let host = typeof window !== 'undefined' ? window.location.origin : '';
+      if (!host) host = `http://localhost:3000`; // fallback
+
+      const overlayReq = await fetch(`${host}/api/generate-viral-overlay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: rawViralGeneratedImage,
+          emotionTag: viralPost.breaking_tag,
+          headline: viralPost.headline_line_1,
+          highlightText: viralPost.summary || viralPost.subheadline
+        })
+      });
+
+      if (!overlayReq.ok) {
+        throw new Error("Failed to generate overlay via backend: " + await overlayReq.text());
+      }
       
+      const { overlaidImageUrl } = await overlayReq.json();
+
       // Pass published = false
-      const result = await postToFacebook(viralPost.caption, imageUrl, unixScheduledTime, false);
+      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, unixScheduledTime, false);
       
       if (result.success && result.id) {
         // Construct preview link. If it's a page post, we can usually preview it via page link or direct post link.
@@ -2313,6 +2335,32 @@ const Admin: React.FC = () => {
                       <p className="text-xs text-blue-600">{(viralPost.hashtags || []).join(' ')}</p>
                     </div>
                   </div>
+
+                  {/* AI Improve Template Feature */}
+                  {viralPost?.theme && viralPost.theme.startsWith('custom_') && viralGeneratedImage && (
+                      <AIImproveTemplate 
+                        previewImageUrl={viralGeneratedImage}
+                        template={viralTemplateOverrides || settings?.viralTemplates?.find((t: ViralTemplate) => t.id === viralPost.theme!.replace('custom_', '')) || {id: '', name: '', coordinates: {headline_box: '', subheadline_box: '', summary_box: '', breaking_tag_box: ''}, usedElements: {hasHeadline: true, hasSubheadline: false, hasSummary: false, hasBreakingTag: false}, style_rules: {headlineColor: '', subheadlineColor: '', summaryColor: '', breakingTagColor: '', breakingTagBg: ''}, isActive: true, createdAt: '', referenceImageUrl: ''}}
+                        newsCategory="Viral News"
+                        onApproveFixes={async (updatedTemplate) => {
+                          setViralTemplateOverrides(updatedTemplate);
+                          if (settings) {
+                             const tmplId = updatedTemplate.id;
+                             const updatedTemplates = settings.viralTemplates?.map((t: ViralTemplate) => t.id === tmplId ? updatedTemplate : t) || [];
+                             const updatedSettings = { ...settings, viralTemplates: updatedTemplates };
+                             try {
+                               const { saveSiteSettings } = await import('../services/articleService');
+                               await saveSiteSettings(updatedSettings);
+                               alert('Template improved successfully');
+                               if (typeof refreshGlobalData === 'function') refreshGlobalData();
+                             } catch (err) {
+                               console.error(err);
+                               alert('Failed to save improved template');
+                             }
+                          }
+                        }}
+                      />
+                  )}
 
                   <div className="flex flex-col gap-4">
                     <div>

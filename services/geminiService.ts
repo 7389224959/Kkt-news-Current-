@@ -3,6 +3,7 @@ import { OpenRouter } from "@openrouter/sdk";
 import { Article, Category, ViralPost } from "../types";
 import { generateSlug } from "../newsUtils";
 import { supabase } from "./supabase";
+import { jsonrepair } from 'jsonrepair';
 
 const getAiClient = () => {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -29,29 +30,34 @@ export const getStockImageUrl = (keywords: string, category?: Category): string 
   if (typeof keywords !== 'string') {
     keywords = String(keywords || '');
   }
+  
+  // Create a safe English representation for the background generation to prevent weird AI generations
+  const safeCategory = String(category || 'news').toLowerCase().replace(/[^a-z]/g, '');
+
+  const contextMap: Record<string, string> = {
+    'politics': 'real political rally parliament crowd event photo',
+    'national': 'real government announcement event photo',
+    'state': 'real regional town hall breaking event photo',
+    'crime': 'real police intervention raid scene blur',
+    'international': 'real international summit global event background',
+    'sports': 'real sports stadium event background',
+    'entertainment': 'real red carpet press conference event',
+    'lifestyle': 'real lifestyle authentic daily life scene'
+  };
+  const categoryContext = contextMap[safeCategory] || 'real breaking news event photo';
+
   const cleanKeywords = keywords
-    .replace(/[^\w\s,]/gi, '')
+    .replace(/[^\p{L}\p{M}\p{N}\s,]/gu, '')
     .split(/[\s,]+/)
     .filter(Boolean)
-    .join(',');
+    .slice(0, 6)
+    .join(' ');
 
-  // Fallback images based on category if keywords are weak
-  const fallbacks: Record<string, string> = {
-    [Category.POLITICS]: 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&w=800&q=80',
-    [Category.STATE]: 'https://images.unsplash.com/photo-1572910358198-2730d5ee395a?auto=format&fit=crop&w=800&q=80',
-    [Category.CRIME]: 'https://images.unsplash.com/photo-1589994160839-163cd2b5ca94?auto=format&fit=crop&w=800&q=80',
-    [Category.SPORTS]: 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?auto=format&fit=crop&w=800&q=80',
-    [Category.BOLLYWOOD]: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=800&q=80',
-    [Category.LIFESTYLE]: 'https://images.unsplash.com/photo-1511988617509-a57c8a288659?auto=format&fit=crop&w=800&q=80',
-    [Category.VIRAL]: 'https://images.unsplash.com/photo-1516251193007-45ef944ab0c6?auto=format&fit=crop&w=800&q=80',
-    [Category.WAR_ROOM]: 'https://images.unsplash.com/photo-1501862700950-18382cd41497?auto=format&fit=crop&w=800&q=80',
-    'default': 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=800&q=80'
-  };
-
-  // Use LoremFlickr for keyword-based images (more reliable than deprecated Unsplash source)
-  // We append a random string to avoid caching
-  const randomSeed = Math.floor(Math.random() * 1000);
-  return `https://loremflickr.com/800/450/${cleanKeywords || 'news'}?lock=${randomSeed}`;
+  const prompt = `Authentic news context background for: ${cleanKeywords}. Style: ${categoryContext}, photojournalism, high depth of field blur, subtle center spotlight gradient, NO neon, NO gaming visuals, NO artificial studio lighting, NO fake futuristic scenes, NO text, extremely realistic raw news background`;
+  const randomSeed = Math.floor(Math.random() * 100000);
+  
+  // Use pollinations.ai to dynamically generate relevant background images
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1080&height=1080&nologo=true&seed=${randomSeed}`;
 };
 
 import { compressImage } from '../src/utils/imageUtils';
@@ -64,7 +70,7 @@ export const generateAiImage = async (prompt: string, specificInstructions?: str
   if (!ai) throw new Error("API Key missing");
 
   try {
-    const basePrompt = `A professional news-style high-quality photo for a news article about: ${prompt}. The image MUST reflect an authentic Indian context. Ensure all people look beautifully and realistically like native Indians with accurate facial features, skin tones, and regional attire. The environment, streets, architecture, and background must clearly look like a real location in India. Cinematic lighting, photorealistic, documentary journalism style, 16:9 aspect ratio. No text, no labels, no watermarks, no overlays, no writing. IMPORTANT: If a reference image is provided, you MUST match the face of the person exactly.`;
+    const basePrompt = `A highly realistic regional television news style photo about: ${prompt}. The image MUST reflect an authentic Indian context. Ensure all people look realistically like native Indians with natural skin tones and regional attire. The environment must look like a real, mundane location in India. Use normal, natural daylight or typical indoor house lighting. NO cinematic lighting, NO neon, NO gaming visuals, NO futuristic scenes, NO glowing accents. Maintain documentary journalism authenticity. No text, no labels, no watermarks, no overlays. IMPORTANT: If a reference image is provided, you MUST match the face of the person exactly.`;
     
     const finalPrompt = specificInstructions 
       ? `${basePrompt} ADDITIONAL ADMIN SPECIFICATIONS to strictly follow: ${specificInstructions}` 
@@ -297,9 +303,10 @@ export const draftNewsReport = async (options: DraftNewsOptions): Promise<NewsDr
     });
 
     const rawText = response.text || "{}";
-    const cleanedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+    let cleanedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
     
     try {
+      cleanedText = jsonrepair(cleanedText);
       const draft = JSON.parse(cleanedText);
       let formattedContent = draft.content || '';
       if (typeof formattedContent === 'string') {
@@ -578,11 +585,15 @@ export const fetchDailyNews = async (
       if (targetItem) {
         // Try to extract full article text using our backend
         let fullText = "";
+        let sourceImageUrl = "";
         try {
           const extractRes = await fetch(`/api/extract-article?url=${encodeURIComponent(targetItem.link)}`);
           if (extractRes.ok) {
             const extractData = await extractRes.json();
             fullText = extractData.content;
+            if (extractData.image) {
+              sourceImageUrl = extractData.image;
+            }
           }
         } catch (err) {
           console.warn("Failed to extract full text, reading RSS summary instead:", err);
@@ -592,6 +603,7 @@ export const fetchDailyNews = async (
           category: source.category,
           title: targetItem.title,
           link: targetItem.link,
+          sourceImageUrl,
           content: fullText || targetItem.description || "Article content not available. Please deduce from title.",
           pubDate: targetItem.pubDate
         });
@@ -613,6 +625,7 @@ export const fetchDailyNews = async (
     - Category: ${data.category}
     - Original Title: ${data.title}
     - Source Link: ${data.link}
+    - Source Image URL: ${data.sourceImageUrl || 'none'}
     - Published Date: ${data.pubDate}
     - Extracted Content: ${data.content.substring(0, 3000)} // Truncated to prevent context limit
   `).join('\n\n');
@@ -682,6 +695,7 @@ export const fetchDailyNews = async (
           "category": "State News" | "Politics" | "Crime" | "National" | "Sports" | "Entertainment" | "Lifestyle",
           "author": "Professional Journalist",
           "sourceUrl": "MUST be the EXACT source link provided in the source text.",
+          "sourceImageUrl": "MUST be the exactly the same as the Source Image URL provided in the source text if it exists, otherwise empty.",
           "imagePrompt": "Specific description for AI image generation. MUST include keywords to make the scene, characters, and environment look highly realistic, original, and authentically Indian.",
           "tags": ["Tag 1", "Tag 2", ...],
           "seoTitle": "A 60 character SEO optimized title",
@@ -811,6 +825,7 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
     
     let rawArticles;
     try {
+      cleanedText = jsonrepair(cleanedText);
       rawArticles = JSON.parse(cleanedText);
     } catch (parseError) {
       console.error("JSON Parse Error:", parseError, "Cleaned text was:", cleanedText.substring(0, 500) + "...");
@@ -833,10 +848,48 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
       
       console.log(`Processing article: ${a.title}`);
       
-      // Try to generate high-quality AI image for each article
+      // Try to generate high-quality AI collage or fallback to standard logic
       if (imageStrategy === 'auto') {
         try {
-          if (aiModel === 'openrouter') {
+          if ((a as any).sourceImageUrl && (a as any).sourceImageUrl !== 'none') {
+            console.log("Found source image, creating collage via API...");
+            const contextImageUrl = getStockImageUrl(a.imagePrompt || a.title, category);
+            
+            let host = typeof window !== 'undefined' ? window.location.origin : '';
+            if (!host) host = `http://localhost:${process.env.PORT || 3000}`;
+            
+            // Build dynamic entity images
+            const supportImageUrls: string[] = [];
+            if (a.imagePrompt || a.title) {
+               const cleanEntity = String(a.imagePrompt || a.title).replace(/[^\p{L}\p{N}\s]/gu, '').split(' ').slice(0, 4).join(' ');
+               // Use ultra HD real photo generation for support inserts
+               const entityUrl = `https://image.pollinations.ai/prompt/High%20quality%20real%20news%20photo%20of%20${encodeURIComponent(cleanEntity)}?width=400&height=300&nologo=true&seed=${Math.floor(Math.random()*1000)}`;
+               supportImageUrls.push(entityUrl);
+            }
+
+            const collageReq = await fetch(`${host}/api/generate-collage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                heroImageUrl: (a as any).sourceImageUrl,
+                contextImageUrl,
+                category: a.category,
+                supportImageUrls
+              })
+            });
+            
+            if (collageReq.ok) {
+              const collageRes = await collageReq.json();
+              if (collageRes.collageUrl) {
+                imageUrl = collageRes.collageUrl;
+                (a as any).featuredCollageImage = imageUrl;
+              }
+            } else {
+              console.warn("Collage generation failed:", await collageReq.text());
+            }
+          }
+          
+          if (!imageUrl && aiModel === 'openrouter') {
              const nimApiKey = (import.meta as any).env?.VITE_NVIDIA_NIM_API_KEY || (typeof process !== 'undefined' ? process.env.NVIDIA_NIM_API_KEY : '');
              if (!nimApiKey) {
                console.warn("VITE_NVIDIA_NIM_API_KEY missing, falling back to Gemini for image or stock.");
@@ -849,7 +902,7 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
                    "Accept": "application/json"
                  },
                  body: JSON.stringify({
-                   prompt: "A professional documentary news photo: " + (a.imagePrompt || a.title)
+                   prompt: "Highly realistic regional Indian news press photo, natural lighting, no cinematic lighting, no neon: " + (a.imagePrompt || a.title)
                  })
                });
                if (nimReq.ok) {
@@ -866,7 +919,7 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
           }
           if (!imageUrl && imageGenModel === 'cloudflare') {
             try {
-              const cfPrompt = `Realistic Indian photo, photorealistic, high quality. Subject: ${a.imagePrompt || a.title}. Authentic Indian context, native Indian people, genuine Indian environment, bold colors, 4:5 aspect ratio. NO TEXT, NO WATERMARKS.`;
+              const cfPrompt = `Realistic Indian news photo, press photography style. Subject: ${a.imagePrompt || a.title}. Authentic Indian context, genuine Indian environment, natural lighting, real mundane location, NO neon, NO cinematic lighting, NO artificial glow, 4:5 aspect ratio. NO TEXT, NO WATERMARKS.`;
               const cfReq = await fetch('/api/cloudflare-image', {
                 method: "POST",
                 headers: {
@@ -928,6 +981,7 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
         category: category,
         author: "Sankalp Jha", // Hardcoded as requested
         image: imageUrl,
+        featuredCollageImage: (a as any).featuredCollageImage || imageUrl,
         published_at: createdAt,
         created_at: createdAt,
         views: Math.floor(Math.random() * 8001) + 12000,
@@ -1079,13 +1133,18 @@ export const fetchTickerHeadlines = async (category: 'national' | 'state' | 'mix
     
     let rawHeadlines;
     try {
+      cleanedText = jsonrepair(cleanedText);
       rawHeadlines = JSON.parse(cleanedText);
     } catch (parseError) {
       console.error("JSON Parse Error in Ticker:", parseError, "Raw text:", rawText);
       // Fallback: try to find anything that looks like a JSON array
       const arrayMatch = rawText.match(/\[\s*".*?"\s*(?:,\s*".*?"\s*)*\]/s);
       if (arrayMatch) {
-        rawHeadlines = JSON.parse(arrayMatch[0]);
+        try {
+          rawHeadlines = JSON.parse(jsonrepair(arrayMatch[0]));
+        } catch (e) {
+          throw new Error("Failed to parse AI response as JSON headlines.");
+        }
       } else {
         throw new Error("Failed to parse AI response as JSON headlines.");
       }
@@ -1270,7 +1329,7 @@ export const generateViralImage = async (prompt: string, referenceImageBase64?: 
 
   try {
     if (imageGenModel === 'cloudflare') {
-      const cfPrompt = `Realistic Indian photo, photorealistic, high quality. Subject: ${prompt}. Authentic Indian context, native Indian people, genuine Indian environment, bold colors, 4:5 aspect ratio. NO TEXT, NO WATERMARKS.`;
+      const cfPrompt = `Realistic Indian news photo, press photography style. Subject: ${prompt}. Authentic Indian context, genuine Indian environment, natural lighting, real mundane location, NO neon, NO cinematic lighting, NO artificial glow, 4:5 aspect ratio. NO TEXT, NO WATERMARKS.`;
       
       const cfReq = await fetch('/api/cloudflare-image', {
         method: "POST",
@@ -1616,6 +1675,85 @@ Return a JSON object with this exact structure (if an element is not present, ma
     return JSON.parse(response.text || '{}');
   } catch (error) {
     console.error("Error analyzing viral template:", error);
+    throw error;
+  }
+};
+
+export const analyzeTemplateImprovement = async (
+  previewImageUrl: string,
+  templateConfigStr: string,
+  newsCategory: string,
+  appliedFixes: string[]
+): Promise<any> => {
+  const ai = getAiClient();
+  if (!ai) throw new Error("API Key missing");
+
+  // Since previewImageUrl might be a data URL, extract the base64 part
+  const base64Data = previewImageUrl.split(',')[1] || previewImageUrl;
+  const mimeType = previewImageUrl.match(/data:(.*?);base64/)?.[1] || 'image/png';
+
+  const prompt = `You are a Senior Creative Director of a Premium Hindi News Brand focused on virality + trustworthiness.
+Analyze the CURRENT generated auto viral post preview image along with its current template configuration JSON.
+News Category: ${newsCategory}
+
+Evaluate the layout based on:
+1. Readability: Check text visibility, spacing, crowding, text overlap, safe margins.
+2. Professional Look: Premium feel vs spam/sensational appearance, typography quality, color harmony.
+3. Virality: Attention-grabbing power, visual impact.
+4. Trust Factor: News authenticity appearance, credibility.
+5. Image Compatibility: Whether text works with image brightness, readability over background.
+
+Rules:
+- Do not manually edit image pixels. You can ONLY modify template settings like colors, background opacity, font size multipliers, and box coordinates (x%, y%, w%, h%).
+- Avoid repeating these previously applied fixes: ${JSON.stringify(appliedFixes)}
+- Max font size change (e.g. headlineFontSizeMult): ±15% from current.
+- Max size/position change (w/h/x/y in coordinates): ±20% from current.
+
+Current Template Config:
+\`\`\`json
+${templateConfigStr}
+\`\`\`
+
+Return a STRICT JSON response only (no markdown, no explanations) containing:
+{
+  "overallScore": 74,
+  "scores": { "readability": 81, "professionalLook": 58, "virality": 86, "trustFactor": 61 },
+  "issues": [ { "problem": "...", "severity": "high/medium/low", "reason": "..." } ],
+  "recommendedChanges": {
+    "headlineFontSizeMult": { "old": 1.2, "new": 1.1 },
+    "headline_box": { "old": "10%, 50%, 80%, 20%", "new": "10%, 55%, 80%, 15%" },
+    "headlineColor": { "old": "#FFFFFF", "new": "#EEEEEE" }
+  },
+  "predictedImprovement": { "before": 74, "after": 88 },
+  "newFixesKeys": ["reduced_headline_size", "adjusted_headline_pos"]
+}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType,
+              },
+            },
+            { text: prompt },
+          ],
+        },
+      ],
+      config: {
+        responseMimeType: "application/json",
+      },
+    });
+
+    const text = response.text || "{}";
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("Error analyzing template improvement:", error);
     throw error;
   }
 };

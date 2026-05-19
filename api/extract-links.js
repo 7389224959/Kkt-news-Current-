@@ -97,7 +97,7 @@ export default async function handler(req, res) {
                 html.includes('Please enable JS and disable any ad blocker') ||
                 html.includes('Enable JavaScript and cookies to continue') ||
                 html.includes('Just a moment...')) {
-              console.log(`Fetch with ${proxy} returned a captcha/bot protection page.`);
+              // console.log(`Fetch with ${proxy} returned a captcha/bot protection page.`);
               lastErrorText = 'Blocked by bot protection';
               continue;
             }
@@ -106,7 +106,7 @@ export default async function handler(req, res) {
           }
           
           lastErrorText = await response.text().catch(() => 'No error text');
-          console.log(`Fetch with ${proxy} failed: ${response.status}`);
+          // console.log(`Fetch with ${proxy} failed: ${response.status}`);
           
           if (response.status === 404 && proxy === 'none') {
             break;
@@ -119,7 +119,7 @@ export default async function handler(req, res) {
           } else if (error.cause) {
             errorMsg += ` (${error.cause.message || error.cause.code})`;
           }
-          console.log(`Fetch with ${proxy} threw error: ${errorMsg}`);
+          // console.log(`Fetch with ${proxy} threw error: ${errorMsg}`);
           lastErrorText = errorMsg;
         }
       }

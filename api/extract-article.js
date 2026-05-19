@@ -98,7 +98,7 @@ export default async function handler(req, res) {
                 html.includes('Please enable JS and disable any ad blocker') ||
                 html.includes('Enable JavaScript and cookies to continue') ||
                 html.includes('Just a moment...')) {
-              console.log(`Fetch with ${proxy} returned a captcha/bot protection page.`);
+              // console.log(`Fetch with ${proxy} returned a captcha/bot protection page.`);
               lastErrorText = 'Blocked by bot protection';
               continue;
             }
@@ -107,7 +107,7 @@ export default async function handler(req, res) {
           }
           
           lastErrorText = await response.text().catch(() => 'No error text');
-          console.log(`Fetch with ${proxy} failed: ${response.status}`);
+          // console.log(`Fetch with ${proxy} failed: ${response.status}`);
           
           if (response.status === 404 && proxy === 'none') {
             break;
@@ -120,7 +120,7 @@ export default async function handler(req, res) {
           } else if (error.cause) {
             errorMsg += ` (${error.cause.message || error.cause.code})`;
           }
-          console.log(`Fetch with ${proxy} threw error: ${errorMsg}`);
+          // console.log(`Fetch with ${proxy} threw error: ${errorMsg}`);
           lastErrorText = errorMsg;
         }
       }
@@ -147,6 +147,28 @@ export default async function handler(req, res) {
     }
     
     const doc = new JSDOM(html, { url });
+    
+    // Extract og:image or any primary metadata image
+    let imageUrl = '';
+    const ogImage = doc.window.document.querySelector('meta[property="og:image"]');
+    if (ogImage) {
+      imageUrl = ogImage.getAttribute('content');
+    } else {
+      const imgElements = doc.window.document.querySelectorAll('article img, main img');
+      if (imgElements.length > 0) {
+         imageUrl = imgElements[0].getAttribute('src') || '';
+      }
+    }
+    
+    // Ensure absolute URL
+    if (imageUrl && !imageUrl.startsWith('http')) {
+      try {
+        imageUrl = new URL(imageUrl, url).href;
+      } catch (e) {
+        // ignore
+      }
+    }
+
     const reader = new Readability(doc.window.document);
     const article = reader.parse();
     
@@ -158,7 +180,8 @@ export default async function handler(req, res) {
       title: article.title,
       content: article.textContent.replace(/\s+/g, ' ').trim(),
       length: article.length,
-      excerpt: article.excerpt
+      excerpt: article.excerpt,
+      image: imageUrl || ''
     });
   } catch (error) {
     console.error('Error extracting article:', error);

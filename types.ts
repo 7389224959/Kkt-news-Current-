@@ -22,6 +22,7 @@ export interface Article {
   category: Category;
   author?: string;
   image?: string; // User requested 'image'
+  featuredCollageImage?: string;
   source?: string; // User requested 'source'
   published_at?: string; // User requested 'published_at'
   created_at?: string;
@@ -154,6 +155,7 @@ export interface ViralTemplate {
   };
   isActive: boolean;
   createdAt: string;
+  appliedFixes?: string[];
 }
 
 export interface ViralPost {
