@@ -170,15 +170,35 @@ export async function generateNewsCollage(
 
   const heroBase64 = heroResized.toString('base64');
   
-  let supportImagesSvg = '';
+  // VIGNETTE OVERLAY
+  const vignetteSvg = `
+    <svg width="${O_WIDTH}" height="${O_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="vig" cx="50%" cy="45%" r="70%" fx="50%" fy="45%">
+          <stop offset="30%" stop-color="#000" stop-opacity="0" />
+          <stop offset="70%" stop-color="#000" stop-opacity="0.4" />
+          <stop offset="100%" stop-color="#000" stop-opacity="0.85" />
+        </radialGradient>
+      </defs>
+      <rect x="0" y="0" width="${O_WIDTH}" height="${O_HEIGHT}" fill="url(#vig)" />
+    </svg>
+  `;
+  composites.push({ input: Buffer.from(vignetteSvg), top: 0, left: 0, blend: 'over' });
+
+  // SUPPORT IMAGES
+  // Create circular clips natively and add them
   if (supportBuffers.length > 0) {
-    // Layout support images in corners dynamically
     const radius = 150;
     const size = radius * 2;
     const marginX = 80;
     const marginY = 80;
     
-    supportBuffers.forEach((sb, index) => {
+    // We'll create a single mask for all support images
+    const circleCutout = Buffer.from(
+      `<svg width="${size}" height="${size}"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="#fff"/></svg>`
+    );
+
+    for (let index = 0; index < supportBuffers.length; index++) {
        let cx = marginX + radius;
        let cy = marginY + radius;
        
@@ -192,68 +212,59 @@ export async function generateNewsCollage(
          cx = O_WIDTH - marginX - radius;
          cy = Math.max(marginY + radius, O_HEIGHT - marginY - radius - 200);
        }
-       
-       supportImagesSvg += `
-        <g filter="url(#circle-shadow)">
-          <circle cx="${cx}" cy="${cy}" r="${radius}" fill="white" />
-          <clipPath id="circle-clip-${index}">
-            <circle cx="${cx}" cy="${cy}" r="${radius}" />
-          </clipPath>
-          <image href="data:image/jpeg;base64,${sb.base64}" x="${cx - radius}" y="${cy - radius}" width="${size}" height="${size}" clip-path="url(#circle-clip-${index})" />
-          <circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="#FFD700" stroke-width="6" />
-        </g>
-       `;
-    });
+
+       try {
+         // Create a composite of the raw image cut out as a circle, with a stroke
+         const circleImage = await sharp(Buffer.from(supportBuffers[index].base64, 'base64'))
+           .resize(size, size, { fit: 'cover' })
+           .composite([{ input: circleCutout, blend: 'dest-in' }])
+           .png()
+           .toBuffer();
+
+         composites.push({
+           input: circleImage,
+           top: cy - radius,
+           left: cx - radius,
+           blend: 'over'
+         });
+         
+         // Add golden border overlay
+         const borderSvg = Buffer.from(
+           `<svg width="${size}" height="${size}"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="none" stroke="#FFD700" stroke-width="6"/></svg>`
+         );
+         composites.push({
+           input: borderSvg,
+           top: cy - radius,
+           left: cx - radius,
+           blend: 'over'
+         });
+       } catch (e) {
+         console.warn("Skipping support image render format issue", e);
+       }
+    }
   }
 
-  const combinedOverlaySvg = `
+  // HERO IMAGE
+  composites.push({
+    input: heroResized,
+    top: heroTop,
+    left: heroLeft,
+    blend: 'over'
+  });
+
+  // BOTTOM GRADIENT
+  const bottomGradientSvg = `
     <svg width="${O_WIDTH}" height="${O_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <filter id="hero-outline-shadow">
-          <feMorphology in="SourceAlpha" operator="dilate" radius="8" result="DILATED" />
-          <feFlood flood-color="white" result="WHITE" />
-          <feComposite in="WHITE" in2="DILATED" operator="in" result="OUTLINE" />
-          <feDropShadow dx="0" dy="15" stdDeviation="25" flood-color="#000" flood-opacity="0.8" result="SHADOW" />
-          <feMerge>
-            <feMergeNode in="SHADOW" />
-            <feMergeNode in="OUTLINE" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-        <filter id="circle-shadow">
-          <feDropShadow dx="0" dy="10" stdDeviation="15" flood-color="#000" flood-opacity="0.6" />
-        </filter>
-        <radialGradient id="vignette" cx="50%" cy="45%" r="70%" fx="50%" fy="45%">
-          <stop offset="30%" stop-color="#000" stop-opacity="0" />
-          <stop offset="70%" stop-color="#000" stop-opacity="0.4" />
-          <stop offset="100%" stop-color="#000" stop-opacity="0.85" />
-        </radialGradient>
-        <linearGradient id="bottom-gradient" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
           <stop offset="60%" stop-color="#000" stop-opacity="0" />
           <stop offset="100%" stop-color="#000" stop-opacity="0.95" />
         </linearGradient>
       </defs>
-      
-      <!-- Center Spotlight Vignette Layer -->
-      <rect x="0" y="0" width="${O_WIDTH}" height="${O_HEIGHT}" fill="url(#vignette)" />
-
-      <!-- Support Entity Images Layer -->
-      ${supportImagesSvg}
-
-      <!-- Hero Layer with Shadow and Outline -->
-      <image href="data:image/png;base64,${heroBase64}" x="${heroLeft}" y="${heroTop}" width="${heroWidth}" height="${targetHeroHeight}" filter="url(#hero-outline-shadow)" />
-      
-      <!-- Bottom Gradient for Text Readability -->
-      <rect x="0" y="0" width="${O_WIDTH}" height="${O_HEIGHT}" fill="url(#bottom-gradient)" />
+      <rect x="0" y="0" width="${O_WIDTH}" height="${O_HEIGHT}" fill="url(#bg)" />
     </svg>
   `;
-
-  composites.push({
-    input: Buffer.from(combinedOverlaySvg),
-    top: 0,
-    left: 0,
-    blend: 'over' as sharp.Blend
-  });
+  composites.push({ input: Buffer.from(bottomGradientSvg), top: 0, left: 0, blend: 'over' });
 
   // Compose all layers
   console.log('Compositing images...');
