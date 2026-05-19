@@ -59,8 +59,10 @@ export async function generateNewsCollage(
 
   console.log('Downloading collage source images...');
   
-  const heroDownloaded = await downloadImage(heroImageUrl);
-  const contextDownloaded = await downloadImage(contextImageUrl);
+  const [heroDownloaded, contextDownloaded] = await Promise.all([
+    downloadImage(heroImageUrl),
+    downloadImage(contextImageUrl)
+  ]);
   
   // Right side 70% real image (Hero)
   const heroWidth = Math.floor(O_WIDTH * 0.7);
@@ -133,9 +135,9 @@ export async function generateNewsCollage(
       `<svg width="${size}" height="${size}"><circle cx="${radius}" cy="${radius}" r="${radius}" fill="#fff"/></svg>`
     );
 
-    for (let index = 0; index < Math.min(supportImageUrls.length, 3); index++) {
+    const supportPromises = supportImageUrls.slice(0, 3).map(async (url, index) => {
        try {
-         const sBuf = await downloadImage(supportImageUrls[index]);
+         const sBuf = await downloadImage(url);
          const circleImage = await sharp(sBuf.buffer)
            .resize(size, size, { fit: 'cover' })
            .composite([{ input: circleCutout, blend: 'dest-in' }])
@@ -162,7 +164,8 @@ export async function generateNewsCollage(
        } catch (e) {
          console.warn("Skipping support image", e);
        }
-    }
+    });
+    await Promise.all(supportPromises);
   }
 
   // Dark gradients for text readability (bottom and left edge)
@@ -188,9 +191,6 @@ export async function generateNewsCollage(
       <!-- The shadows -->
       <rect x="0" y="0" width="${O_WIDTH}" height="${O_HEIGHT}" fill="url(#text-bg-left)" />
       <rect x="0" y="0" width="${O_WIDTH}" height="${O_HEIGHT}" fill="url(#text-bg-bottom)" />
-      
-      <!-- A slick dividing line between AI and Real Image -->
-      <line x1="${O_WIDTH - heroWidth}" y1="0" x2="${O_WIDTH - heroWidth}" y2="${O_HEIGHT}" stroke="#E60000" stroke-width="8" opacity="0.9"/>
     </svg>
   `;
   composites.push({ input: Buffer.from(overlaySvg), top: 0, left: 0, blend: 'over' });
