@@ -3,14 +3,12 @@
     "api/render-reel.js": {
       "includeFiles": "node_modules/ffmpeg-static/ffmpeg",
       "excludeFiles": [
-        "node_modules/onnxruntime-node/**",
-        "node_modules/@imgly/**"
+        "node_modules/onnxruntime-node/**"
       ]
     },
     "api/generate-collage.js": {
       "excludeFiles": [
         "node_modules/ffmpeg-static/**",
-        "node_modules/@imgly/background-removal-node/dist/**",
         "node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime_providers_cuda.so*",
         "node_modules/onnxruntime-node/bin/napi-v3/darwin/**",
         "node_modules/onnxruntime-node/bin/napi-v3/win32/**",
@@ -20,7 +18,6 @@
     "api/**/*.js": {
       "excludeFiles": [
         "node_modules/onnxruntime-node/**",
-        "node_modules/@imgly/**",
         "node_modules/ffmpeg-static/**"
       ]
     }
