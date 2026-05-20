@@ -803,26 +803,8 @@ const Admin: React.FC = () => {
     setFbPreviewLink(null);
     setFbPreviewPostId(null);
     try {
-      // 1. Generate text overlay via backend API
-      let host = typeof window !== 'undefined' ? window.location.origin : '';
-      if (!host) host = `http://localhost:3000`; // fallback
-
-      const overlayReq = await fetch(`${host}/api/generate-viral-overlay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageUrl: rawViralGeneratedImage,
-          emotionTag: viralPost.breaking_tag,
-          headline: viralPost.headline_line_1,
-          highlightText: viralPost.summary || viralPost.subheadline
-        })
-      });
-
-      if (!overlayReq.ok) {
-        throw new Error("Failed to generate overlay via backend: " + await overlayReq.text());
-      }
-      
-      const { overlaidImageUrl } = await overlayReq.json();
+      // 1. Upload the already-rendered frontend image directly to Supabase
+      const overlaidImageUrl = await uploadImage(viralGeneratedImage);
 
       // Pass published = false
       const result = await postToFacebook(viralPost.caption, overlaidImageUrl, unixScheduledTime, false);
