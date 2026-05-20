@@ -59,11 +59,11 @@ export async function createCollageOnFrontend(
   ctx.fillRect(0, 0, 1200, 630);
 
   // STEP 2 — FOREGROUND IMAGE
-  // Clean sharp image card on right or center-right
+  // Clean sharp image card centered
   const cardScale = Math.min(800 / img.width, 560 / img.height);
   const cardW = img.width * cardScale;
   const cardH = img.height * cardScale;
-  const cardX = 1200 - cardW - 40; // right-aligned with padding
+  const cardX = (1200 - cardW) / 2; // center-aligned
   const cardY = (630 - cardH) / 2;
 
   const cornerRadius = 24;
