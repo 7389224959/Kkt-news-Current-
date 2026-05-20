@@ -859,10 +859,11 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
 
           // If no heroImage found at all, skip collage and fallback to standard AI background ONLY below
           if (heroImage) {
-            console.log("Found source/primary image, creating collage via API...");
+            console.log("Found source/primary image, creating premium editorial collage layout...");
             
-            const bgContext = dp.backgroundContext || a.title;
-            let contextImageUrl = getStockImageUrl(bgContext, category);
+            // We no longer generate AI background (Pollinations etc.) 
+            // The frontend rendering engine uses the SAME image for both foreground and blurred background
+            const contextImageUrl = null;
             
             let host = typeof window !== 'undefined' ? window.location.origin : '';
             if (!host) {
@@ -871,39 +872,13 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
               else host = `http://localhost:${process.env.PORT || 3000}`;
             }
             
-            const supportImageUrls: string[] = [];
-
-
-            let isHeroTransparent = false;
+            // We no longer remove background because we want a sharp photo card for foreground
             let finalHeroImageUrl = heroImage;
-
-            if (typeof window !== 'undefined') {
-              try {
-                console.log("Removing background in browser...");
-                const { removeBackground } = await import('@imgly/background-removal');
-                // Download image manually to avoid CORS issues if possible, or let imgly handle it
-                // Imgly handles URLs pretty well but might run into CORS. We can use a proxy if needed
-                // Actually Wikipedia images are CORS enabled for GET!
-                const blob = await removeBackground(heroImage, {
-                  publicPath: "https://unpkg.com/@imgly/background-removal@1.4.5/dist/"
-                });
-                
-                const { uploadImage } = await import('./supabase');
-                const uploadedUrl = await uploadImage(blob);
-                if (uploadedUrl) {
-                   finalHeroImageUrl = uploadedUrl;
-                   isHeroTransparent = true;
-                   console.log("Browser BG removal successful. Uploaded to:", finalHeroImageUrl);
-                }
-              } catch (bgErr) {
-                 console.warn("Browser BG removal failed, falling back to server default processing:", bgErr);
-              }
-            }
-
+            
             try {
               if (typeof window !== 'undefined') {
                 const { createCollageOnFrontend } = await import('../src/utils/frontendCollage');
-                console.log("Generating collage entirely on frontend canvas...");
+                console.log("Generating premium collage entirely on frontend canvas...");
                 const base64Collage = await createCollageOnFrontend(finalHeroImageUrl, contextImageUrl, host);
                 
                 const { uploadImage } = await import('./supabase');
@@ -912,15 +887,15 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
                   imageUrl = uploadedUrl;
                   (a as any).featuredCollageImage = imageUrl;
                 } else {
-                  console.warn("Frontend Collage created but upload failed. Using raw contextUrl.");
-                  imageUrl = finalHeroImageUrl || contextImageUrl;
+                  console.warn("Frontend Collage created but upload failed. Using raw heroImage.");
+                  imageUrl = finalHeroImageUrl;
                 }
               } else {
                  throw new Error("Not in browser environment, cannot use canvas.");
               }
             } catch (err: any) {
                console.error("Frontend Collage generation failed:", err);
-               imageUrl = finalHeroImageUrl || contextImageUrl;
+               imageUrl = finalHeroImageUrl;
             }
           }
           
