@@ -564,7 +564,8 @@ export const fetchDailyNews = async (
             title: item.title,
             link: item.link,
             pubDate: item.pubDate,
-            description: item.description
+            description: item.description,
+            image: item.thumbnail || (item.enclosure && item.enclosure.link) || ""
           });
         }
         
@@ -586,7 +587,7 @@ export const fetchDailyNews = async (
   const extractedArticlesData = [];
   for (const item of candidateItems) {
     let fullText = "";
-    let sourceImageUrl = "";
+    let sourceImageUrl = item.image || "";
     try {
       const extractRes = await fetch(`/api/extract-article?url=${encodeURIComponent(item.link)}`);
       if (extractRes.ok) {

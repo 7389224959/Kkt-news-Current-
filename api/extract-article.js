@@ -138,11 +138,18 @@ export default async function handler(req, res) {
         title = titleMatch[1];
       }
       
+      let imageUrl = '';
+      const imgMatch = html.match(/!\[.*?\]\((.*?)\)/);
+      if (imgMatch) {
+        imageUrl = imgMatch[1];
+      }
+      
       return res.status(200).json({
         title: title,
         content: html,
         length: html.length,
-        excerpt: html.substring(0, 200) + "..."
+        excerpt: html.substring(0, 200) + "...",
+        image: imageUrl
       });
     }
     
