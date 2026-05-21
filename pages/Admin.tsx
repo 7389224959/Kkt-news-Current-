@@ -2142,6 +2142,8 @@ const Admin: React.FC = () => {
                     className="w-full p-2 border rounded-lg"
                   >
                     <optgroup label="Default Themes">
+                      <option value="kkt_premium_breaking">🔥 KKT Premium Breaking (HD)</option>
+                      <option value="kkt_exclusive">⭐ KKT Exclusive Report (HD)</option>
                       <option value="breaking_red">1. Default Breaking News</option>
                       <option value="question_hook">2. Question Hook</option>
                       <option value="shock_yellow">3. Shocking News</option>

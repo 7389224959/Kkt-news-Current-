@@ -1261,16 +1261,297 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
          ctx.shadowBlur = 0;
       }
   }
+  else if (theme === 'kkt_premium_breaking') {
+      const gradient = ctx.createLinearGradient(0, height * 0.3, 0, height);
+      gradient.addColorStop(0, 'rgba(0,0,0,0)');
+      gradient.addColorStop(0.5, 'rgba(0,0,0,0.8)');
+      gradient.addColorStop(1, 'rgba(0,0,0,1)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+
+      // Custom KKT Branding
+      ctx.fillStyle = '#DC2626';
+      ctx.fillRect(40, 40, width - 80, 10);
+      drawBranding('dark');
+
+      let currentY = height - 40; // start 40px from bottom margin
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+
+      if (data.subheadline) {
+         let fontSize = Math.max(28, height * 0.045);
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+         let lines = wrapText(data.subheadline, width * 0.78);
+         
+         while (lines.length * (fontSize * 1.5) > height * 0.2 && fontSize > 16) {
+             fontSize -= 2;
+             ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+             lines = wrapText(data.subheadline, width * 0.78);
+         }
+         
+         const textHeight = lines.length * (fontSize * 1.5);
+         const targetBoxH = textHeight + Math.max(30, fontSize);
+         currentY -= targetBoxH;
+         
+         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+         ctx.beginPath();
+         ctx.roundRect(width * 0.08, currentY, width * 0.84, targetBoxH, 12);
+         ctx.fill();
+
+         ctx.fillStyle = '#1E293B';
+         let sy = currentY + (targetBoxH - textHeight) / 2 + (fontSize * 0.1);
+         for (const l of lines) {
+            ctx.fillText(l, width * 0.11, sy);
+            sy += fontSize * 1.5;
+         }
+         currentY -= 20; // gap above subheadline
+      }
+
+      if (data.headline_line_2) {
+         let fontSize = Math.max(62, height * 0.09);
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+         let lines = wrapText(data.headline_line_2, width * 0.84);
+         
+         while (lines.length * (fontSize * 1.35) > height * 0.3 && fontSize > 32) {
+             fontSize -= 4;
+             ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+             lines = wrapText(data.headline_line_2, width * 0.84);
+         }
+         
+         const blockHeight = lines.length * (fontSize * 1.35);
+         currentY -= blockHeight;
+         
+         ctx.fillStyle = '#FCD34D';
+         let sy = currentY;
+         for (const l of lines) {
+           ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 15;
+           ctx.fillText(l, width * 0.08, sy);
+           sy += fontSize * 1.35;
+         }
+         ctx.shadowBlur = 0;
+         currentY -= 15;
+      }
+
+      if (data.headline_line_1) {
+         let fontSize = Math.max(48, height * 0.07);
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+         let lines = wrapText(data.headline_line_1, width * 0.84);
+         
+         while (lines.length * (fontSize * 1.35) > height * 0.25 && fontSize > 28) {
+             fontSize -= 4;
+             ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+             lines = wrapText(data.headline_line_1, width * 0.84);
+         }
+         
+         const blockHeight = lines.length * (fontSize * 1.35);
+         currentY -= blockHeight;
+
+         ctx.fillStyle = '#FFFFFF';
+         let sy = currentY;
+         for (const l of lines) {
+           ctx.shadowColor = 'black'; ctx.shadowBlur = 12;
+           ctx.fillText(l, width * 0.08, sy);
+           sy += fontSize * 1.35;
+         }
+         ctx.shadowBlur = 0;
+         currentY -= 25;
+      }
+
+      if (data.breaking_tag) {
+         ctx.fillStyle = '#DC2626';
+         ctx.font = `bold ${Math.max(34, height * 0.05)}px ${hindiFontStack}`;
+         const textWidth = ctx.measureText(data.breaking_tag.toUpperCase()).width;
+         const tagHeight = height * 0.07;
+         currentY -= tagHeight;
+
+         ctx.beginPath();
+         ctx.roundRect(width * 0.08, currentY, textWidth + 80, tagHeight, 8);
+         ctx.fill();
+         ctx.fillStyle = '#FFFFFF';
+         ctx.textAlign = 'center';
+         ctx.textBaseline = 'middle';
+         ctx.fillText(data.breaking_tag.toUpperCase(), width * 0.08 + (textWidth + 80)/2, currentY + tagHeight/2);
+      }
+  }
+  else if (theme === 'kkt_exclusive') {
+      const gradient = ctx.createLinearGradient(0, height * 0.4, 0, height);
+      gradient.addColorStop(0, 'rgba(0,0,0,0)');
+      gradient.addColorStop(0.3, 'rgba(15, 23, 42, 0.9)'); // Deep slate
+      gradient.addColorStop(1, 'rgba(15, 23, 42, 1)'); 
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+
+      drawBranding('light');
+
+      ctx.fillStyle = '#FCD34D'; // Gold bar at top
+      ctx.fillRect(0, 0, width, 16);
+
+      let currentY = height - 40;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+
+      if (data.subheadline) {
+         let fontSize = Math.max(32, height * 0.05);
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+         let lines = wrapText(data.subheadline, width * 0.9);
+         while (lines.length * (fontSize * 1.4) > height * 0.2 && fontSize > 16) {
+             fontSize -= 2;
+             ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+             lines = wrapText(data.subheadline, width * 0.9);
+         }
+
+         const blockHeight = lines.length * (fontSize * 1.4);
+         currentY -= blockHeight;
+
+         ctx.fillStyle = '#94A3B8'; // Slate 400
+         let sy = currentY;
+         for (const l of lines) {
+             ctx.fillText(l, width * 0.5, sy);
+             sy += fontSize * 1.4;
+         }
+         currentY -= 25;
+      }
+
+      if (data.headline_line_2) {
+         let fontSize = Math.max(52, height * 0.08);
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+         let lines = wrapText(data.headline_line_2, width * 0.9);
+         while (lines.length * (fontSize * 1.45) > height * 0.25 && fontSize > 28) {
+             fontSize -= 4;
+             ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+             lines = wrapText(data.headline_line_2, width * 0.9);
+         }
+         
+         const blockHeight = lines.length * (fontSize * 1.45);
+         currentY -= blockHeight;
+
+         let sy = currentY;
+         for (const l of lines) {
+           const lw = ctx.measureText(l).width;
+           ctx.fillStyle = '#DC2626'; // Red underline/highlight wrapper box
+           ctx.fillRect(width*0.5 - lw/2 - 20, sy - 10, lw + 40, fontSize + 20);
+           ctx.fillStyle = '#FFFFFF';
+           ctx.fillText(l, width * 0.5, sy);
+           sy += fontSize * 1.45;
+         }
+         currentY -= 20;
+      }
+
+      if (data.headline_line_1) {
+         let fontSize = Math.max(44, height * 0.065);
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+         let lines = wrapText(data.headline_line_1, width * 0.9);
+         while (lines.length * (fontSize * 1.35) > height * 0.25 && fontSize > 24) {
+             fontSize -= 4;
+             ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+             lines = wrapText(data.headline_line_1, width * 0.9);
+         }
+         
+         const blockHeight = lines.length * (fontSize * 1.35);
+         currentY -= blockHeight;
+
+         ctx.fillStyle = '#FFFFFF';
+         let sy = currentY;
+         for (const l of lines) {
+           ctx.shadowColor = 'black'; ctx.shadowBlur = 10;
+           ctx.fillText(l, width * 0.5, sy);
+           sy += fontSize * 1.35;
+         }
+         ctx.shadowBlur = 0;
+         currentY -= 30;
+      }
+
+      if (data.breaking_tag) {
+         ctx.fillStyle = '#FCD34D';
+         ctx.font = `bold ${Math.max(30, height * 0.045)}px ${hindiFontStack}`;
+         const textWidth = ctx.measureText(data.breaking_tag).width;
+         const tagHeight = height * 0.06;
+         currentY -= tagHeight;
+
+         ctx.fillRect(width/2 - textWidth/2 - 30, currentY, textWidth + 60, tagHeight);
+         ctx.fillStyle = '#0F172A';
+         ctx.textBaseline = 'middle';
+         ctx.fillText(data.breaking_tag.toUpperCase(), width/2, currentY + tagHeight/2);
+         ctx.textBaseline = 'top'; 
+      }
+  }
   else {
       // Default (breaking_red / breaking_classic)
-      const gradient = ctx.createLinearGradient(0, height * 0.2, 0, height);
+      const gradient = ctx.createLinearGradient(0, height * 0.3, 0, height);
       gradient.addColorStop(0, 'rgba(0,0,0,0)');
-      gradient.addColorStop(0.4, 'rgba(0,0,0,0.7)');
-      gradient.addColorStop(1, 'rgba(0,0,0,0.95)');
+      gradient.addColorStop(0.4, 'rgba(0,0,0,0.8)');
+      gradient.addColorStop(1, 'rgba(0,0,0,0.98)');
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, width, height);
 
       drawBranding('dark');
-      drawDefaultLines(height - 100);
+
+      let currentY = height - 60; // Start closer to the bottom
+      
+      if (data.subheadline) {
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        let subFontSize = Math.max(26, height * 0.04);
+        ctx.font = `normal ${subFontSize}px ${hindiFontStack}`;
+        
+        let subLines = wrapText(data.subheadline, maxTextWidth);
+        const maxSubH = height * 0.25; // max 25% height for subheadline
+        while (subLines.length * (subFontSize * 1.3) > maxSubH && subFontSize > 14) {
+           subFontSize -= 2;
+           ctx.font = `normal ${subFontSize}px ${hindiFontStack}`;
+           subLines = wrapText(data.subheadline, maxTextWidth);
+        }
+
+        ctx.fillStyle = '#E5E7EB';
+        for (let i = subLines.length - 1; i >= 0; i--) {
+          ctx.fillText(subLines[i], width / 2, currentY);
+          currentY -= subFontSize * 1.3;
+        }
+        currentY -= 15;
+      }
+
+      if (data.headline_line_2) {
+        let h2FontSize = Math.max(56, height * 0.085);
+        ctx.font = `bold ${h2FontSize}px ${hindiFontStack}`;
+        let h2Lines = wrapText(data.headline_line_2, maxTextWidth);
+        
+        while (h2Lines.length * (h2FontSize * 1.3) > height * 0.3 && h2FontSize > 30) {
+           h2FontSize -= 4;
+           ctx.font = `bold ${h2FontSize}px ${hindiFontStack}`;
+           h2Lines = wrapText(data.headline_line_2, maxTextWidth);
+        }
+
+        ctx.fillStyle = '#FCD34D'; // Premium yellow
+        ctx.shadowColor = 'rgba(0,0,0,0.9)';
+        ctx.shadowBlur = 15;
+        for (let i = h2Lines.length - 1; i >= 0; i--) {
+          ctx.fillText(h2Lines[i], width / 2, currentY);
+          currentY -= h2FontSize * 1.3;
+        }
+        currentY -= 15;
+      }
+
+      if (data.headline_line_1) {
+        let h1FontSize = Math.max(48, height * 0.07);
+        ctx.font = `bold ${h1FontSize}px ${hindiFontStack}`;
+        let h1Lines = wrapText(data.headline_line_1, maxTextWidth);
+        
+        while (h1Lines.length * (h1FontSize * 1.3) > height * 0.25 && h1FontSize > 24) {
+           h1FontSize -= 4;
+           ctx.font = `bold ${h1FontSize}px ${hindiFontStack}`;
+           h1Lines = wrapText(data.headline_line_1, maxTextWidth);
+        }
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = 'rgba(0,0,0,0.9)';
+        ctx.shadowBlur = 15;
+        for (let i = h1Lines.length - 1; i >= 0; i--) {
+          ctx.fillText(h1Lines[i], width / 2, currentY);
+          currentY -= h1FontSize * 1.3;
+        }
+        currentY -= 25;
+      }
+      ctx.shadowColor = 'transparent';
+      drawBreakingTag(currentY);
   }
 };
