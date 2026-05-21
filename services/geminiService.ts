@@ -1208,7 +1208,7 @@ STEP 1: GENERATE HEADLINE FOR IMAGE
 STEP 2: BACKGROUND IMAGE PROMPT
 - Describe the visual scene only (e.g., "A politician speaking at a rally with a crowd", "A dramatic view of a city").
 - DO NOT include any text, titles, or words in your description.
-- Ratio: 1:1 (Facebook image optimized to avoid cropping)
+- Ratio: 1:1 or 4:5 (Facebook optimized)
 - IMPORTANT: If a reference image is provided, the face must match exactly.
 - CRITICAL: DO NOT GENERATE ANY TEXT, WORDS, OR LETTERS IN THE IMAGE. The image must be a clean background ONLY. Text will be added later via overlay.
 
@@ -1283,7 +1283,7 @@ export const generateViralImage = async (prompt: string, referenceImageBase64?: 
 
   try {
     if (imageGenModel === 'cloudflare') {
-      const cfPrompt = `Realistic Indian news photo, press photography style. Subject: ${prompt}. Authentic Indian context, genuine Indian environment, natural lighting, real mundane location, NO neon, NO cinematic lighting, NO artificial glow, 1:1 aspect ratio. NO TEXT, NO WATERMARKS.`;
+      const cfPrompt = `Realistic Indian news photo, press photography style. Subject: ${prompt}. Authentic Indian context, genuine Indian environment, natural lighting, real mundane location, NO neon, NO cinematic lighting, NO artificial glow, 4:5 aspect ratio. NO TEXT, NO WATERMARKS.`;
       
       const cfReq = await fetch('/api/cloudflare-image', {
         method: "POST",
@@ -1313,7 +1313,7 @@ export const generateViralImage = async (prompt: string, referenceImageBase64?: 
         text: `Generate a clean, photographic background image ONLY. 
 Subject: ${prompt}
 Style: High quality, attention-grabbing, bold colors, photorealistic. The image MUST reflect an authentic Indian context. People must look like native Indians with accurate features, and places must look like genuine Indian environments.
-Aspect Ratio: 1:1.
+Aspect Ratio: 4:5.
 CRITICAL INSTRUCTION: You are strictly forbidden from generating any text, words, letters, numbers, watermarks, logos, signs, or banners in this image. The image MUST be 100% free of any written language or typography. If you generate text, you fail.
 IMPORTANT: If a reference image is provided, you MUST match the face of the person exactly. If the reference image contains any text, IGNORE IT. Do NOT copy any text into the generated image.`,
       },

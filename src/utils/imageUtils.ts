@@ -72,11 +72,6 @@ export const overlayTextOnImage = (base64Str: string, data: ViralPostOverlayData
       if (templateImg) {
         width = templateImg.width;
         height = templateImg.height;
-      } else {
-        // Force 1:1 (square) canvas to prevent Facebook from cropping tall images in the feed
-        const size = Math.min(newsImg.width, newsImg.height);
-        width = size;
-        height = size;
       }
 
       canvas.width = width;
@@ -147,10 +142,7 @@ export const overlayTextOnImage = (base64Str: string, data: ViralPostOverlayData
         }
       } else {
         // Standard case: No custom template, news photo is full background
-        // Center crop the image to 1:1 to ensure Facebook doesn't crop it
-        const sx = (newsImg.width - width) / 2;
-        const sy = (newsImg.height - height) / 2;
-        ctx.drawImage(newsImg, sx, sy, width, height, 0, 0, width, height);
+        ctx.drawImage(newsImg, 0, 0, width, height);
       }
 
       // Render the selected theme overlaid text
