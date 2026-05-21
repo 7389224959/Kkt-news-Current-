@@ -3,7 +3,7 @@ import { ViralPostOverlayData } from './imageUtils';
 export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number, height: number, data: ViralPostOverlayData) => {
   const fontStack = '"Inter", system-ui, -apple-system, sans-serif';
   const hindiFontStack = '"Noto Sans Devanagari", "Mangal", "Arial Unicode MS", sans-serif';
-  const maxTextWidth = width * 0.9;
+  const maxTextWidth = width * 0.8;
   
   // Helper for text wrapping
   const wrapText = (text: string, maxWidth: number) => {
@@ -151,9 +151,11 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
   };
 
   const drawBranding = (logoTheme: 'dark' | 'light' = 'dark') => {
-      const logoX = 24;
-      const logoY = 24;
-      const boxSize = Math.max(48, height * 0.06);
+      const sidePadding = 80;
+      const topPadding = 100;
+      const logoX = sidePadding;
+      const logoY = topPadding;
+      const boxSize = Math.max(48, height * 0.05);
       const appNameText = data.branding || 'Khabar Kal Tak';
       const subText = 'NEWS NETWORK';
 
@@ -421,7 +423,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
   }
 
   // Theme logic starts here
-  let currentY = height - Math.max(30, height * 0.05);
+  let currentY = height - 100;
   const theme = data.theme || 'breaking_red';
 
   if (theme === 'minimal_white') {
@@ -1269,6 +1271,6 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       ctx.fillRect(0, 0, width, height);
 
       drawBranding('dark');
-      drawDefaultLines(height - Math.max(30, height * 0.05));
+      drawDefaultLines(height - 100);
   }
 };

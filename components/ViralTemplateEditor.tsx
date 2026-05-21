@@ -69,17 +69,20 @@ const ViralTemplateEditor: React.FC<ViralTemplateEditorProps> = ({ template, onC
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const width = imgObj.width;
-    const height = imgObj.height;
+    // FORCE 1080x1350 for all Facebook templates to match standard safe zones
+    const CANVAS_WIDTH = 1080;
+    const CANVAS_HEIGHT = 1350;
+    const width = CANVAS_WIDTH;
+    const height = CANVAS_HEIGHT;
 
-    // Set internal resolution based on original image
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
+    // Set internal resolution strictly to 4:5 regardless of original image size
+    if (canvas.width !== CANVAS_WIDTH || canvas.height !== CANVAS_HEIGHT) {
+      canvas.width = CANVAS_WIDTH;
+      canvas.height = CANVAS_HEIGHT;
     }
 
-    // 1. Draw template background image
-    ctx.drawImage(imgObj, 0, 0, width, height);
+    // 1. Draw template background image (stretched to the 4:5 canvas)
+    ctx.drawImage(imgObj, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     const coords = template.coordinates || {};
     const styles = template.style_rules || {};

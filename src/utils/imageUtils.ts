@@ -66,22 +66,19 @@ export const overlayTextOnImage = (base64Str: string, data: ViralPostOverlayData
       }
 
       const canvas = document.createElement('canvas');
-      let width = newsImg.width;
-      let height = newsImg.height;
-
-      if (templateImg) {
-        width = templateImg.width;
-        height = templateImg.height;
-      }
-
-      canvas.width = width;
-      canvas.height = height;
+      
+      // FACEBOOK DEFAULT VIRAL POST SIZE (4:5 Ratio)
+      const CANVAS_WIDTH = 1080;
+      const CANVAS_HEIGHT = 1350;
+      
+      canvas.width = CANVAS_WIDTH;
+      canvas.height = CANVAS_HEIGHT;
       const ctx = canvas.getContext('2d');
       if (!ctx) return resolve(base64Str);
 
       if (templateImg && data.customTemplate) {
-        // Draw the template image as the background
-        ctx.drawImage(templateImg, 0, 0, width, height);
+        // Draw the template image as the background, stretched to new safe dimensions
+        ctx.drawImage(templateImg, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
         const tmpl = data.customTemplate;
         const coords = tmpl.coordinates || {};
@@ -92,10 +89,10 @@ export const overlayTextOnImage = (base64Str: string, data: ViralPostOverlayData
           const parts = boxStr.split('%').map(p => parseFloat(p.replace(/,/g, '').trim()));
           if (parts.length >= 4 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2]) && !isNaN(parts[3])) {
             return {
-              x: (parts[0] / 100) * width,
-              y: (parts[1] / 100) * height,
-              w: (parts[2] / 100) * width,
-              h: (parts[3] / 100) * height,
+              x: (parts[0] / 100) * CANVAS_WIDTH,
+              y: (parts[1] / 100) * CANVAS_HEIGHT,
+              w: (parts[2] / 100) * CANVAS_WIDTH,
+              h: (parts[3] / 100) * CANVAS_HEIGHT,
             };
           }
           return null;
@@ -141,12 +138,27 @@ export const overlayTextOnImage = (base64Str: string, data: ViralPostOverlayData
           // We assume image_box covers where the picture should go.
         }
       } else {
-        // Standard case: No custom template, news photo is full background
-        ctx.drawImage(newsImg, 0, 0, width, height);
+        // Standard case: No custom template, news photo as background (object cover to 1080x1350)
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        const imgAspect = newsImg.width / newsImg.height;
+        const boxAspect = CANVAS_WIDTH / CANVAS_HEIGHT;
+        let sx = 0, sy = 0, sw = newsImg.width, sh = newsImg.height;
+        
+        if (imgAspect > boxAspect) {
+          sw = newsImg.height * boxAspect;
+          sx = (newsImg.width - sw) / 2;
+        } else {
+          sh = newsImg.width / boxAspect;
+          sy = (newsImg.height - sh) / 2;
+        }
+        
+        ctx.drawImage(newsImg, sx, sy, sw, sh, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       }
 
       // Render the selected theme overlaid text
-      renderThemeOverlay(ctx, width, height, data);
+      renderThemeOverlay(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, data);
 
       resolve(canvas.toDataURL('image/jpeg', 0.9));
     } catch (e) {
