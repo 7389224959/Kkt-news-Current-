@@ -11,7 +11,7 @@ import Markdown from 'react-markdown';
 
 const ArticleDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
-  const { articles, isLoading: isAppLoading } = useApp();
+  const { articles, settings, isLoading: isAppLoading } = useApp();
   const [article, setArticle] = useState<Article | undefined>(undefined);
   const [relatedArticles, setRelatedArticles] = useState<Article[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -305,6 +305,20 @@ const ArticleDetail: React.FC = () => {
                 <div className="markdown-body">
                   <Markdown>{article.content}</Markdown>
                 </div>
+                
+                {article.author === "Sankalp Jha" && (settings?.adminPhoto || settings?.adminDesignation) && (
+                  <div className="mt-12 pt-8 border-t border-gray-100 flex items-center gap-4">
+                    {settings.adminPhoto && (
+                      <img src={settings.adminPhoto} alt={article.author} className="w-16 h-16 rounded-full object-cover border-2 border-bhaskar-orange bg-gray-100 shadow-sm" />
+                    )}
+                    <div>
+                      <h4 className="font-bold text-lg text-bhaskar-dark">{article.author}</h4>
+                      {settings.adminDesignation && (
+                        <p className="text-sm font-medium text-gray-500">{settings.adminDesignation}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {article.tags && article.tags.length > 0 && (

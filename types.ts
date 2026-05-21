@@ -104,6 +104,8 @@ export interface SiteSettings {
   tickerSpeed?: number;
   reelTemplates?: ReelTemplate[];
   viralTemplates?: ViralTemplate[];
+  adminPhoto?: string;
+  adminDesignation?: string;
 }
 
 export interface ViralTemplate {

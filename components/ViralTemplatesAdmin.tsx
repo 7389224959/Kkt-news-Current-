@@ -80,10 +80,22 @@ const ViralTemplatesAdmin: React.FC<ViralTemplatesAdminProps> = ({ settings, art
     setIsEditing(true);
   };
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this template?')) {
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id);
+      setTimeout(() => setConfirmDeleteId(null), 3000);
+      return;
+    }
+    
+    setConfirmDeleteId(null);
+    try {
       const updated = templates.filter((t: ViralTemplate) => t.id !== id);
       await onSaveSettings({ ...settings, viralTemplates: updated });
+      alert('Template deleted successfully');
+    } catch (error: any) {
+      alert(`Error deleting template: ${error.message || 'Permission denied in Supabase'}`);
     }
   };
 
@@ -619,8 +631,9 @@ const ViralTemplatesAdmin: React.FC<ViralTemplatesAdminProps> = ({ settings, art
                        <button onClick={() => handleEdit(tmpl)} className="text-gray-500 hover:text-blue-600 p-1">
                          <Edit2 size={16} />
                        </button>
-                       <button onClick={() => handleDelete(tmpl.id)} className="text-gray-500 hover:text-red-600 p-1">
+                       <button onClick={() => handleDelete(tmpl.id)} className={`p-1 flex items-center gap-1 ${confirmDeleteId === tmpl.id ? 'bg-red-600 text-white px-2 rounded font-bold text-xs' : 'text-gray-500 hover:text-red-600'}`}>
                          <Trash2 size={16} />
+                         {confirmDeleteId === tmpl.id && "Confirm?"}
                        </button>
                      </div>
                    </div>

@@ -60,8 +60,16 @@
 }
 
 /* Markdown Styling */
+.markdown-body h2 {
+  @apply text-2xl font-black mt-8 mb-4 text-bhaskar-dark border-l-4 border-bhaskar-orange pl-3;
+}
+
 .markdown-body h3 {
   @apply text-xl font-bold mt-8 mb-4 text-bhaskar-dark border-l-4 border-bhaskar-orange pl-3;
+}
+
+.markdown-body h4 {
+  @apply text-lg font-bold mt-6 mb-3 text-bhaskar-dark border-l-4 border-gray-400 pl-3;
 }
 
 .markdown-body p {

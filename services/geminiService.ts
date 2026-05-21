@@ -388,7 +388,7 @@ export const fetchTrendingKeywords = async (): Promise<{ label: string, articleS
   }
 };
 
-import { createArticle, getArticles } from './articleService';
+import { createArticle, getArticles, getSiteSettings } from './articleService';
 import { uploadImage } from './supabase';
 
 async function extractArticleLinks(url: string): Promise<{title: string, link: string, content?: string}[]> {
@@ -1166,7 +1166,7 @@ export const generateViralPost = async (options: ViralPostOptions): Promise<Vira
   };
   
   const sectionName = categoryMap[article.category] || article.category;
-  const articleUrl = `https://khabarkaltak.com/article/${article.slug}`;
+  const articleUrl = `https://kktnews.vercel.app/article/${article.slug || article.id}`;
 
   let prompt = `
 You are a viral Hindi news headline generator and thumbnail planner for "Khabar Kal Tak (KKT NEWS)".
@@ -1188,6 +1188,8 @@ STRICT RULES (VERY IMPORTANT):
 
 STYLE GUIDELINES FOR CAPTION:
 - Start with a strong hook (like: Breaking 🚨 / Big Update ⚡ / Alert 🔴)
+- CRUCIAL: You MUST include the EXACT article link at the very end of the caption: ${articleUrl}
+- DO NOT invent a fake link. Use ONLY ${articleUrl}.
 - Write in simple, engaging Hinglish tone (mix of Hindi + English)
 - Make it sound viral and social-media friendly
 - Keep it within 2–4 lines maximum

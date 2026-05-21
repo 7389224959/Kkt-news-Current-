@@ -140,8 +140,26 @@ export const deleteArticle = async (id: string): Promise<void> => {
   }
 };
 
+export const deleteOldArticles = async (days: number = 3): Promise<number> => {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+  
+  const { error, count } = await supabase
+    .from('articles')
+    .delete({ count: 'exact' })
+    .lt('published_at', cutoffDate.toISOString());
+
+  if (error) {
+    if (error.message?.includes('violates row-level security policy')) {
+      throw new Error("Supabase RLS Error: Please enable DELETE access for 'articles' table in Supabase.");
+    }
+    throw error;
+  }
+  return count || 0;
+};
+
 /**
- * Helper to sort articles by date (client-side fallback)
+ * Filter to sort articles by date (client-side fallback)
  */
 export const sortArticlesByDate = (articles: Article[]): Article[] => {
   return [...articles].sort((a, b) => {
