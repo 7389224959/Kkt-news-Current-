@@ -153,9 +153,6 @@ const Admin: React.FC = () => {
   const [viralRegeneratePrompt, setViralRegeneratePrompt] = useState('');
   const [viralSelectedTheme, setViralSelectedTheme] = useState<string>('breaking_red');
   const [scheduledTime, setScheduledTime] = useState<string>('');
-  const [fbPreviewLink, setFbPreviewLink] = useState<string | null>(null);
-  const [fbPreviewPostId, setFbPreviewPostId] = useState<string | null>(null);
-  const [isApprovingFbPost, setIsApprovingFbPost] = useState(false);
   
   // Daily News states
   const [showDailyNewsModal, setShowDailyNewsModal] = useState(false);
@@ -516,8 +513,6 @@ const Admin: React.FC = () => {
   };
 
   const handleOpenViralModal = () => {
-    setFbPreviewLink(null);
-    setFbPreviewPostId(null);
     if (articles.length === 0) {
       alert("No articles available to generate a viral post.");
       return;
@@ -532,8 +527,6 @@ const Admin: React.FC = () => {
   };
 
   const handleGenerateViralPost = async () => {
-    setFbPreviewLink(null);
-    setFbPreviewPostId(null);
     let articleToUse: Article | null = null;
 
     if (viralSourceType === 'latest_post') {
@@ -662,8 +655,6 @@ const Admin: React.FC = () => {
   };
 
   const handleRegenerateViralPost = async () => {
-    setFbPreviewLink(null);
-    setFbPreviewPostId(null);
     let articleToUse = articles[0];
     if (viralSourceType === 'select_article') {
       articleToUse = articles.find(a => a.id === viralSelectedArticleId) || articles[0];
@@ -781,7 +772,7 @@ const Admin: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleCreateFacebookPreview = async () => {
+  const handleFinalFacebookPost = async () => {
     if (!viralPost || !viralGeneratedImage) {
       alert("Please generate the viral post and image first.");
       return;
@@ -801,52 +792,25 @@ const Admin: React.FC = () => {
     }
 
     setIsPostingToFacebook(true);
-    setFbPreviewLink(null);
-    setFbPreviewPostId(null);
     try {
       // 1. Upload the already-rendered frontend image directly to Supabase
       const overlaidImageUrl = await uploadImage(viralGeneratedImage);
 
-      // Pass published = false
-      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, unixScheduledTime, false);
+      // Pass published = true instead of false
+      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, unixScheduledTime, true);
       
       if (result.success && result.id) {
-        // Construct preview link. If it's a page post, we can usually preview it via page link or direct post link.
-        // The ID format is often "PageID_PostID", so we can just use the returned ID directly or split it.
-        const pageIdStr = result.pageId ? `/${result.pageId}` : '';
-        const rawPostId = result.id.includes('_') ? result.id.split('_')[1] : result.id;
-        const previewUrl = `https://www.facebook.com${result.pageId ? pageIdStr : ''}/posts/${rawPostId}`;
-        
-        setFbPreviewLink(previewUrl);
-        setFbPreviewPostId(result.id);
-        alert(unixScheduledTime ? "Successfully scheduled dark post! You can preview it now." : "Successfully created dark post! You can preview it before publishing.");
+        alert(unixScheduledTime ? "Successfully scheduled post!" : "Successfully published post to Timeline!");
+        setShowViralModal(false);
+        setScheduledTime('');
       } else {
-        alert("Created post but could not retrieve ID for preview.");
+        alert("Created post but could not confirm completion.");
       }
     } catch (error: any) {
       console.error("Facebook post error:", error);
       alert(`Failed to create Facebook post: ${error.message}`);
     } finally {
       setIsPostingToFacebook(false);
-    }
-  };
-
-  const handleApproveAndPublishFbPost = async () => {
-    if (!fbPreviewPostId) return;
-    
-    setIsApprovingFbPost(true);
-    try {
-      await publishFacebookPost(fbPreviewPostId);
-      alert("Successfully published post to Timeline!");
-      setShowViralModal(false);
-      setScheduledTime('');
-      setFbPreviewLink(null);
-      setFbPreviewPostId(null);
-    } catch (error: any) {
-      console.error("Facebook publish error:", error);
-      alert(`Failed to publish post: ${error.message}`);
-    } finally {
-      setIsApprovingFbPost(false);
     }
   };
 
@@ -2427,46 +2391,22 @@ const Admin: React.FC = () => {
                       <p className="text-xs text-gray-500 mt-1">Leave blank to post immediately. Must be at least 10 minutes in the future.</p>
                     </div>
                     <div className="flex gap-4">
-                      {fbPreviewLink ? (
-                        <>
-                          <a 
-                            href={fbPreviewLink}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex-1 py-3 border border-blue-600 text-blue-600 rounded-lg font-bold hover:bg-blue-50 flex items-center justify-center gap-2"
-                          >
-                            <ExternalLink size={20} />
-                            View Preview
-                          </a>
-                          <button 
-                            onClick={handleApproveAndPublishFbPost}
-                            disabled={isApprovingFbPost}
-                            className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50"
-                          >
-                            {isApprovingFbPost ? <RefreshCw className="animate-spin" size={20} /> : <CheckCircle size={20} />}
-                            {isApprovingFbPost ? 'Publishing...' : 'Approve & Publish'}
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button 
-                            onClick={handleRegenerateViralPost}
-                            disabled={isGeneratingViral}
-                            className="flex-1 py-3 border border-gray-300 rounded-lg font-bold hover:bg-gray-50 flex items-center justify-center gap-2 disabled:opacity-50"
-                          >
-                            {isGeneratingViral ? <RefreshCw className="animate-spin" size={20} /> : <RefreshCw size={20} />}
-                            {isGeneratingViral ? 'Regenerating...' : 'Regenerate'}
-                          </button>
-                          <button 
-                            onClick={handleCreateFacebookPreview}
-                            disabled={isPostingToFacebook || !viralGeneratedImage || isGeneratingViral}
-                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50"
-                          >
-                            {isPostingToFacebook ? <RefreshCw className="animate-spin" size={20} /> : <Sparkles size={20} />}
-                            {isPostingToFacebook ? 'Creating...' : (scheduledTime ? 'Schedule Dark Post' : 'Create Preview')}
-                          </button>
-                        </>
-                      )}
+                      <button 
+                        onClick={handleRegenerateViralPost}
+                        disabled={isGeneratingViral}
+                        className="flex-1 py-3 border border-gray-300 rounded-lg font-bold hover:bg-gray-50 flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {isGeneratingViral ? <RefreshCw className="animate-spin" size={20} /> : <RefreshCw size={20} />}
+                        {isGeneratingViral ? 'Regenerating...' : 'Regenerate'}
+                      </button>
+                      <button 
+                        onClick={handleFinalFacebookPost}
+                        disabled={isPostingToFacebook || !viralGeneratedImage || isGeneratingViral}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {isPostingToFacebook ? <RefreshCw className="animate-spin" size={20} /> : <CheckCircle size={20} />}
+                        {isPostingToFacebook ? 'Posting...' : (scheduledTime ? 'Schedule Post' : 'Final Post')}
+                      </button>
                     </div>
                   </div>
                 </div>

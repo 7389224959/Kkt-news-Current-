@@ -1462,16 +1462,29 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       }
 
       if (data.breaking_tag) {
-         ctx.fillStyle = '#FCD34D';
-         ctx.font = `bold ${Math.max(30, height * 0.045)}px ${hindiFontStack}`;
+         let fontSize = Math.max(32, height * 0.045);
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
          const textWidth = ctx.measureText(data.breaking_tag).width;
-         const tagHeight = height * 0.06;
+         const tagHeight = fontSize * 1.6;
          currentY -= tagHeight;
 
-         ctx.fillRect(width/2 - textWidth/2 - 30, currentY, textWidth + 60, tagHeight);
+         ctx.shadowColor = 'rgba(0,0,0,0.3)';
+         ctx.shadowBlur = 10;
+         ctx.shadowOffsetY = 5;
+         ctx.fillStyle = '#FCD34D';
+         
+         ctx.beginPath();
+         ctx.roundRect(width/2 - textWidth/2 - 30, currentY, textWidth + 60, tagHeight, 8);
+         ctx.fill();
+         
+         ctx.shadowColor = 'transparent';
+         ctx.shadowBlur = 0;
+         ctx.shadowOffsetY = 0;
+
          ctx.fillStyle = '#0F172A';
          ctx.textBaseline = 'middle';
-         ctx.fillText(data.breaking_tag.toUpperCase(), width/2, currentY + tagHeight/2);
+         // Optical centering: push down slightly for Hindi scripts
+         ctx.fillText(data.breaking_tag.toUpperCase(), width/2, currentY + tagHeight/2 + (fontSize * 0.05));
          ctx.textBaseline = 'top'; 
       }
   }
