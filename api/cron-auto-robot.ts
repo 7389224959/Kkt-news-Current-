@@ -3,13 +3,13 @@ import { generateViralPost } from '../services/geminiService';
 import { supabase } from '../services/supabase';
 import { uploadImage } from '../services/supabase';
 import { renderThemeOverlay } from '../src/utils/themeRenderer';
-import { createCanvas, loadImage } from '@napi-rs/canvas';
 import dotenv from 'dotenv';
 dotenv.config();
 
 // Re-implement overlay using Node canvas
 export const overlayTextOnImageNode = async (base64Str: string, data: any): Promise<string> => {
   try {
+    const { createCanvas, loadImage } = await import('@napi-rs/canvas');
     const imgBuffer = Buffer.from(base64Str.replace(/^data:image\/[a-z]+;base64,/, ''), 'base64');
     const newsImg = await loadImage(imgBuffer);
     let templateImg: any = null;

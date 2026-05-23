@@ -1,5 +1,8 @@
 {
   "functions": {
+    "api/**/*.ts": {
+      "includeFiles": "node_modules/@napi-rs/**/*.node"
+    },
     "api/render-reel.js": {
       "includeFiles": "node_modules/ffmpeg-static/ffmpeg",
       "excludeFiles": "node_modules/onnxruntime-node/**"
