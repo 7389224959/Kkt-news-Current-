@@ -1,24 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
 
-const getEnv = (key: string) => {
+const getEnv = (key: string, viteKey: string) => {
   if (typeof process !== 'undefined' && process.env[key]) return process.env[key];
+  if (typeof process !== 'undefined' && process.env[viteKey]) return process.env[viteKey];
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env) return import.meta.env[viteKey];
   return undefined;
 };
 
-const supabaseUrl = getEnv('SUPABASE_URL') || getEnv('VITE_SUPABASE_URL');
-const supabaseKey = getEnv('SUPABASE_ANON_KEY') || getEnv('VITE_SUPABASE_ANON_KEY');
+const supabaseUrl = getEnv('SUPABASE_URL', 'VITE_SUPABASE_URL');
+const supabaseKey = getEnv('SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY');
+
+export const supabase = (supabaseUrl && supabaseKey) 
+  ? createClient(supabaseUrl, supabaseKey) 
+  : null as any;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('Supabase URL and Anon Key are required. Please check your environment variables.');
-}
-
-export let supabase: any = null;
-try {
-  if (supabaseUrl && supabaseKey) {
-    supabase = createClient(supabaseUrl, supabaseKey);
-  }
-} catch(e) {
-  console.error('Failed to initialize Supabase client:', e);
 }
 
 /**
