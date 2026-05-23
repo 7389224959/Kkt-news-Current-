@@ -183,6 +183,7 @@ const Admin: React.FC = () => {
   const [isCheckingRssStatus, setIsCheckingRssStatus] = useState(false);
   const [isAutoSchedulerEnabled, setIsAutoSchedulerEnabled] = useState(false);
   const [autoSchedulerInterval, setAutoSchedulerInterval] = useState(10);
+  const [isAutoRobotRunning, setIsAutoRobotRunning] = useState(false);
 
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [isFetchingTrending, setIsFetchingTrending] = useState(false);
@@ -371,6 +372,174 @@ const Admin: React.FC = () => {
       alert(`Error: ${error.message}`);
     } finally {
       setIsFetchingDailyNews(false);
+    }
+  };
+
+  const handleAutoRobot = async () => {
+    if (dailyNewsRssSources.length === 0) {
+      alert("Please add at least one RSS link to use Auto Robot.");
+      return;
+    }
+    setIsAutoRobotRunning(true);
+    setGlobalError(null);
+    try {
+      const { fetchDailyNews } = await import('../services/geminiService');
+      const newArticles = await fetchDailyNews(dailyNewsRssSources, dailyNewsModel, dailyNewsImageStrategy, dailyNewsImageGenModel);
+      
+      if (newArticles.length > 0) {
+        refreshData();
+        
+        let articleToUse = newArticles[0]; // Newest published post
+        let cachedSeoInfo;
+        try {
+          if (typeof window !== 'undefined' && articleToUse?.slug) {
+            const cached = localStorage.getItem(`seo_cache_${articleToUse.slug}`);
+            if (cached) cachedSeoInfo = JSON.parse(cached);
+          }
+        } catch(e){}
+
+        const defaultThemes = [
+          'kkt_premium_breaking', 'kkt_exclusive'
+        ];
+
+        let customThemes: string[] = [];
+        if (settings?.viralTemplates && settings.viralTemplates.length > 0) {
+          customThemes = settings.viralTemplates.filter((t: any) => t.isActive).map((t: any) => `custom_${t.id}`);
+        }
+
+        const allThemes = customThemes.length > 0 ? [...customThemes, ...defaultThemes] : defaultThemes;
+        let currentIndex = parseInt(localStorage.getItem('kkt_auto_template_index') || '0', 10);
+        if (isNaN(currentIndex) || currentIndex >= allThemes.length) {
+          currentIndex = 0;
+        }
+
+        const themeToUse = allThemes[currentIndex];
+        localStorage.setItem('kkt_auto_template_index', ((currentIndex + 1) % allThemes.length).toString());
+        setViralSelectedTheme(themeToUse);
+
+        let finalInstructions = "";
+
+        if (themeToUse.startsWith('custom_')) {
+          const tmplId = themeToUse.replace('custom_', '');
+          const tmpl = settings?.viralTemplates?.find((t: any) => t.id === tmplId);
+          if (tmpl) {
+            setViralTemplateOverrides(tmpl);
+            
+            finalInstructions += `\n\nTEMPLATE REQUIREMENTS:\nYou must use theme ID: "${themeToUse}".\n`;
+            
+            const hasSub = tmpl.coordinates?.subheadline_box && tmpl.coordinates.subheadline_box !== 'hidden';
+            const hasSum = tmpl.coordinates?.summary_box && tmpl.coordinates.summary_box !== 'hidden';
+            const hasBreak = tmpl.coordinates?.breaking_tag_box && tmpl.coordinates.breaking_tag_box !== 'hidden';
+            const hasHead1 = tmpl.coordinates?.headline_line_1_box && tmpl.coordinates.headline_line_1_box !== 'hidden';
+            const hasHead2 = tmpl.coordinates?.headline_line_2_box && tmpl.coordinates.headline_line_2_box !== 'hidden';
+            const hasHeadL = tmpl.coordinates?.headline_box && tmpl.coordinates.headline_box !== 'hidden';
+
+            const parseBoxToChars = (boxString: string, mult: number) => {
+               if(!boxString) return 0;
+               const parts = boxString.split(',').map(s => parseFloat(s.replace('%','')));
+               if(parts.length===4) {
+                 const w = parts[2];
+                 const h = parts[3];
+                 return Math.floor((w * h) / mult);
+               }
+               return 0;
+            };
+
+            if (!hasSub) {
+               finalInstructions += "- DO NOT GENERATE a subheadline, it is hidden in this template.\n";
+            } else {
+               const maxChars = tmpl.limits?.subheadlineMaxChars || Math.floor(parseBoxToChars(tmpl.coordinates.subheadline_box, 15));
+               if(maxChars > 0) finalInstructions += `- SUBHEADLINE MAX LENGTH: extremely strict limit of ~${maxChars} ALPHABETS/CHARACTERS.\n`;
+            }
+             
+            if (!hasSum) {
+               finalInstructions += "- DO NOT GENERATE a summary, it is hidden in this template.\n";
+            } else {
+               const limit = tmpl.limits?.summaryMaxChars || Math.floor(parseBoxToChars(tmpl.coordinates.summary_box || '', 12));
+               if(limit > 0) finalInstructions += `- SUMMARY MAX LENGTH: strictly keep it under ~${Math.max(20, limit)} ALPHABETS/CHARACTERS.\n`;
+            }
+
+            if (!hasBreak) {
+               finalInstructions += "- DO NOT GENERATE a breaking_tag, it is hidden.\n";
+            } else {
+               const limit = Math.floor(parseBoxToChars(tmpl.coordinates.breaking_tag_box || '', 20));
+               if(limit > 0) finalInstructions += `- BREAKING TAG MAX LENGTH: strictly keep it under ~${Math.max(5, limit)} ALPHABETS/CHARACTERS.\n`;
+            }
+             
+            if (!hasHead1 && !hasHead2 && !hasHeadL) {
+                 // no headline allowed!
+            } else {
+               if (hasHead1) {
+                   const limit1 = tmpl.limits?.headlineMaxChars || Math.floor(parseBoxToChars(tmpl.coordinates.headline_line_1_box || '', 8));
+                   if(limit1 > 0) finalInstructions += `- HEADLINE LINE 1 MAX LENGTH: strictly keep it under ~${Math.max(10, limit1)} ALPHABETS/CHARACTERS.\n`;
+               } else if (!hasHeadL) {
+                   finalInstructions += "- DO NOT GENERATE headline_line_1.\n";
+               }
+               
+               if (hasHead2) {
+                   const limit2 = tmpl.limits?.headline2MaxChars || Math.floor(parseBoxToChars(tmpl.coordinates.headline_line_2_box || '', 8));
+                   if(limit2 > 0) finalInstructions += `- HEADLINE LINE 2 MAX LENGTH: strictly keep it under ~${Math.max(10, limit2)} ALPHABETS/CHARACTERS.\n`;
+               } else if (!hasHeadL) {
+                   finalInstructions += "- DO NOT GENERATE headline_line_2.\n";
+               }
+            }
+          } else {
+            finalInstructions += `\n\nTEMPLATE REQUIREMENTS:\nYou must use theme ID: "${themeToUse}".\n`;
+          }
+        } else {
+           finalInstructions += `\n\nTEMPLATE REQUIREMENTS:\nYou must use theme ID: "${themeToUse}".\n`;
+        }
+
+        const post = await generateViralPost({
+          article: articleToUse,
+          cachedSeoInfo,
+          customInstructions: finalInstructions || undefined
+        });
+        
+        post.theme = themeToUse;
+        setViralPost(post);
+        setViralSourceType('select_article');
+        setViralSelectedArticleId(articleToUse.id!);
+        
+        let reuseImageUrl = articleToUse.featuredCollageImage || articleToUse.image || articleToUse.imageUrl;
+        setRawViralGeneratedImage(reuseImageUrl || '');
+        
+        let customTemplate = undefined;
+        if (themeToUse.startsWith('custom_')) {
+          const tmplId = themeToUse.replace('custom_', '');
+          customTemplate = settings?.viralTemplates?.find((t: any) => t.id === tmplId);
+        }
+        
+        const newImageBase64 = await overlayTextOnImage(reuseImageUrl || '', {
+          breaking_tag: post.breaking_tag,
+          headline_line_1: post.headline_line_1,
+          headline_line_2: post.headline_line_2,
+          subheadline: post.subheadline,
+          summary: post.summary,
+          branding: post.branding,
+          theme: post.theme,
+          customTemplate
+        });
+        
+        const overlaidImageUrl = await uploadImage(newImageBase64);
+        const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true);
+        
+        setShowDailyNewsModal(false);
+        setShowViralModal(false);
+        
+        if (fbResult.success && fbResult.id) {
+          alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically published viral post to Facebook!`);
+        } else {
+          alert(`Successfully auto-fetched ${newArticles.length} new articles, but Facebook viral post couldn't be confirmed.`);
+        }
+      } else {
+        alert("Failed to fetch new articles or they were already posted.");
+      }
+    } catch (error: any) {
+      console.error("Error in Auto Robot:", error);
+      alert(`Auto Robot Error: ${error.message}`);
+    } finally {
+      setIsAutoRobotRunning(false);
     }
   };
 
@@ -1603,6 +1772,14 @@ const Admin: React.FC = () => {
                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                  <h2 className="font-bold text-xl text-slate-800">Articles List ({articles.length})</h2>
                  <div className="flex flex-wrap gap-2">
+                   <button 
+                     onClick={handleAutoRobot}
+                     disabled={isAutoRobotRunning}
+                     className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-all disabled:opacity-50"
+                   >
+                     {isAutoRobotRunning ? <RefreshCw className="animate-spin" size={18} /> : <Zap size={18} />}
+                     Auto Robot
+                   </button>
                    <button 
                      onClick={() => setShowDailyNewsModal(true)}
                      className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-all"
