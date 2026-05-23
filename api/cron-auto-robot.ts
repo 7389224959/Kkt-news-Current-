@@ -132,7 +132,7 @@ const postToFacebook = async (message: string, imageUrl?: string, published: boo
     return tokenData;
 };
 
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST' && req.method !== 'GET') {
@@ -265,6 +265,10 @@ export default async function handler(req: any, res: any) {
 
   } catch (error: any) {
     console.error("Cron Auto Robot Error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(200).json({ 
+       error: error.message || "Unknown error",
+       stack: error.stack,
+       suggestion: "If this error persists, you may be hitting the 10-second Vercel Free Tier limit or missing an environment variable."
+    });
   }
 }
