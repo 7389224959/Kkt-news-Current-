@@ -70,7 +70,20 @@ export const generateAiImage = async (prompt: string, specificInstructions?: str
   if (!ai) throw new Error("API Key missing");
 
   try {
-    const basePrompt = `A highly realistic regional television news style photo about: ${prompt}. The image MUST reflect an authentic Indian context. Ensure all people look realistically like native Indians with natural skin tones and regional attire. The environment must look like a real, mundane location in India. Use normal, natural daylight or typical indoor house lighting. NO cinematic lighting, NO neon, NO gaming visuals, NO futuristic scenes, NO glowing accents. Maintain documentary journalism authenticity. No text, no labels, no watermarks, no overlays. IMPORTANT: If a reference image is provided, you MUST match the face of the person exactly.`;
+    const basePrompt = `Generate an ultra-realistic Indian news image about: ${prompt}
+
+STRICT RULES:
+Understand the news topic first and generate a relevant real-world scene or object related to it.
+Avoid random human portraits unless necessary.
+Prefer environments, places, objects, government offices, roads, farms, weather, police, technology, crowds, or activities matching the news.
+
+Style:
+Authentic newspaper photo, documentary journalism, photorealistic, natural lighting.
+
+NEGATIVE:
+No cartoon, no illustration, no glamour portrait, no cinematic lighting, no fantasy, no AI-art look, no jewelry focus, no close-up faces, no text, no watermark.
+
+IMPORTANT: If a reference image is provided, you MUST match the face of the person exactly.`;
     
     const finalPrompt = specificInstructions 
       ? `${basePrompt} ADDITIONAL ADMIN SPECIFICATIONS to strictly follow: ${specificInstructions}` 
@@ -1286,7 +1299,18 @@ export const generateViralImage = async (prompt: string, referenceImageBase64?: 
 
   try {
     if (imageGenModel === 'cloudflare') {
-      const cfPrompt = `Realistic Indian news photo, press photography style. Subject: ${prompt}. Authentic Indian context, genuine Indian environment, natural lighting, real mundane location, NO neon, NO cinematic lighting, NO artificial glow, 4:5 aspect ratio. NO TEXT, NO WATERMARKS.`;
+      const cfPrompt = `Generate an ultra-realistic Indian news image about: ${prompt}
+
+STRICT RULES:
+Understand the news topic first and generate a relevant real-world scene or object related to it.
+Avoid random human portraits unless necessary.
+Prefer environments, places, objects, government offices, roads, farms, weather, police, technology, crowds, or activities matching the news.
+
+Style:
+Authentic newspaper photo, documentary journalism, photorealistic, natural lighting.
+
+NEGATIVE:
+No cartoon, no illustration, no glamour portrait, no cinematic lighting, no fantasy, no AI-art look, no jewelry focus, no close-up faces, no text, no watermark.`;
       
       const cfReq = await fetch('/api/cloudflare-image', {
         method: "POST",
@@ -1313,11 +1337,19 @@ export const generateViralImage = async (prompt: string, referenceImageBase64?: 
 
     const parts: any[] = [
       {
-        text: `Generate a clean, photographic background image ONLY. 
-Subject: ${prompt}
-Style: High quality, attention-grabbing, bold colors, photorealistic. The image MUST reflect an authentic Indian context. People must look like native Indians with accurate features, and places must look like genuine Indian environments.
-Aspect Ratio: 4:5.
-CRITICAL INSTRUCTION: You are strictly forbidden from generating any text, words, letters, numbers, watermarks, logos, signs, or banners in this image. The image MUST be 100% free of any written language or typography. If you generate text, you fail.
+        text: `Generate an ultra-realistic Indian news image about: ${prompt}
+
+STRICT RULES:
+Understand the news topic first and generate a relevant real-world scene or object related to it.
+Avoid random human portraits unless necessary.
+Prefer environments, places, objects, government offices, roads, farms, weather, police, technology, crowds, or activities matching the news.
+
+Style:
+Authentic newspaper photo, documentary journalism, photorealistic, natural lighting.
+
+NEGATIVE:
+No cartoon, no illustration, no glamour portrait, no cinematic lighting, no fantasy, no AI-art look, no jewelry focus, no close-up faces, no text, no watermark.
+
 IMPORTANT: If a reference image is provided, you MUST match the face of the person exactly. If the reference image contains any text, IGNORE IT. Do NOT copy any text into the generated image.`,
       },
     ];

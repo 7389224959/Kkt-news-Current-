@@ -123,7 +123,7 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
     setIsGenerating(true);
     setStatus('Generating AI visual...');
     try {
-      const prompt = `Realistic Indian news photo representing: ${selectedArticle?.title}. Photorealistic, 4:5 aspect ratio, no text.`;
+      const prompt = selectedArticle?.title || "Indian news";
       const base64 = await generateAiImage(prompt);
       setCustomMediaUrl(`data:image/jpeg;base64,${base64}`);
     } catch(e) {
@@ -139,7 +139,7 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
     setIsGenerating(true);
     setStatus('Generating AI overlay visual...');
     try {
-      const prompt = `Realistic Indian news photo representing: ${selectedArticle?.title}. Photorealistic, 4:5 aspect ratio, no text.`;
+      const prompt = selectedArticle?.title || "Indian news";
       const base64 = await generateAiImage(prompt);
       setOverlayMediaUrl(`data:image/jpeg;base64,${base64}`);
     } catch(e) {
