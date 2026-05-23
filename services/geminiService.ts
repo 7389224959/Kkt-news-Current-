@@ -720,13 +720,15 @@ export const fetchDailyNews = async (
     let rawText = "[]";
 
     if (aiModel === 'openrouter') {
-      const getOrKey = () => {
-        if (typeof process !== 'undefined' && (process.env.OPENROUTER_API_KEY || process.env.VITE_OPENROUTER_API_KEY)) {
-          return process.env.OPENROUTER_API_KEY || process.env.VITE_OPENROUTER_API_KEY;
-        }
-        return '';
+      let openRouterKey = '';
+      if (typeof process !== 'undefined' && process.env.OPENROUTER_API_KEY) openRouterKey = process.env.OPENROUTER_API_KEY;
+      else if (typeof process !== 'undefined' && process.env.VITE_OPENROUTER_API_KEY) openRouterKey = process.env.VITE_OPENROUTER_API_KEY;
+      else {
+        try {
+          // @ts-ignore
+          openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+        } catch(e) {}
       }
-      const openRouterKey = getOrKey();
       if (!openRouterKey) {
         throw new Error("OpenRouter API Key is missing. Please set VITE_OPENROUTER_API_KEY in the environment.");
       }

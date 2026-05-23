@@ -1,15 +1,39 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 
-  (typeof process !== 'undefined' && process.env.SUPABASE_URL) || 
-  (typeof process !== 'undefined' && process.env.VITE_SUPABASE_URL);
+const getEnvVar = (key: string, viteKey: string): string => {
+  if (typeof process !== 'undefined' && process.env && process.env[key]) return process.env[key] as string;
+  if (typeof process !== 'undefined' && process.env && process.env[viteKey]) return process.env[viteKey] as string;
+  try {
+      // @ts-ignore
+      if (typeof import.meta !== 'undefined' && import.meta.env) {
+          // @ts-ignore
+          return import.meta.env[viteKey] as string;
+      }
+  } catch(e) {}
+  return '';
+};
 
-const supabaseKey = 
-  (typeof process !== 'undefined' && process.env.SUPABASE_ANON_KEY) || 
-  (typeof process !== 'undefined' && process.env.VITE_SUPABASE_ANON_KEY);
+// Vite static replacements needs direct access format like import.meta.env.VITE_SUPABASE_URL
+// For that to work, we must avoid wrapping it in too much abstraction for Vite
+let supabaseUrl = typeof process !== 'undefined' && process.env.SUPABASE_URL ? process.env.SUPABASE_URL : (typeof process !== 'undefined' && process.env.VITE_SUPABASE_URL ? process.env.VITE_SUPABASE_URL : '');
+let supabaseKey = typeof process !== 'undefined' && process.env.SUPABASE_ANON_KEY ? process.env.SUPABASE_ANON_KEY : (typeof process !== 'undefined' && process.env.VITE_SUPABASE_ANON_KEY ? process.env.VITE_SUPABASE_ANON_KEY : '');
+
+if (!supabaseUrl) {
+  try {
+    // @ts-ignore
+    supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  } catch(e) {}
+}
+
+if (!supabaseKey) {
+  try {
+    // @ts-ignore
+    supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  } catch(e) {}
+}
 
 export const supabase = (supabaseUrl && supabaseKey) 
-  ? createClient(supabaseUrl, supabaseKey) 
+  ? createClient(supabaseUrl as string, supabaseKey as string) 
   : null as any;
 
 if (!supabaseUrl || !supabaseKey) {

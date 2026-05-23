@@ -60,9 +60,9 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { data: settingsData } = await supabase.from('settings').select('*').limit(1).single();
-    if (!settingsData) {
-        return res.status(500).json({ error: 'Failed to fetch settings' });
+    const { data: settingsData, error: settingsError } = await supabase.from('site_settings').select('*').limit(1).single();
+    if (settingsError || !settingsData) {
+        return res.status(400).json({ error: 'Failed to fetch settings', details: settingsError });
     }
 
     const dailyNewsRssSources = settingsData.dailyNewsRssSources || [];
