@@ -56,13 +56,12 @@ const NewsImage: React.FC<NewsImageProps> = ({
     setErrorCount(nextErrorCount);
 
     if (nextErrorCount === 1) {
-      // First fallback: Dynamic highly relevant Indian news photo via Pollinations
-      const safeText = fallbackText.replace(/[^\w\s]/g, '') || 'News';
-      const prompt = `Highly realistic authentic Indian news documentary photography illustrating: ${safeText}. Real Indian everyday context, natural daylight, ordinary locations in India, photojournalism style, shot on DSLR. NO cartoons, NO animations.`;
-      setImgSrc(`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=800&height=450&nologo=true&seed=${Math.floor(Math.random() * 1000)}`);
-    } else if (nextErrorCount === 2) {
-      // Second fallback: Reliable generic news image
+      // First fallback: Reliable generic news image
       setImgSrc(`https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=800&q=80`);
+    } else if (nextErrorCount === 2) {
+      // Second fallback: LoremFlickr with fallback text
+      const safeText = fallbackText.replace(/[^\w\s]/g, '') || 'News';
+      setImgSrc(`https://loremflickr.com/800/450/${encodeURIComponent(safeText)}`);
     } else if (nextErrorCount === 3) {
       // Third fallback: Placeholder with English text only (to avoid boxes)
       const safeText = fallbackText.replace(/[^\w\s]/g, '') || 'News';

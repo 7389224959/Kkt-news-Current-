@@ -53,7 +53,7 @@ export const getStockImageUrl = (keywords: string, category?: Category): string 
     .slice(0, 6)
     .join(' ');
 
-  const prompt = `Highly realistic authentic Indian news documentary photography illustrating: ${cleanKeywords}. Real Indian everyday context, natural daylight, ordinary locations in India, photojournalism style, shot on DSLR, ultra detailed. NO cartoons, NO animations, NO illustrations, NO 3d renders, NO typography, NO text.`;
+  const prompt = `Premium Indian editorial news background for: ${cleanKeywords}. Include realistic Indian atmosphere, cinematic lighting, warm tones, subtle Indian flag or government architecture when relevant, ultra detailed, photorealistic, sharp focus, 8k. Do not generate any people, faces, portraits, or human figures.`;
   const randomSeed = Math.floor(Math.random() * 100000);
   
   // Use pollinations.ai to dynamically generate relevant background images
