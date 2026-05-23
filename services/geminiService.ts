@@ -724,8 +724,6 @@ export const fetchDailyNews = async (
         if (typeof process !== 'undefined' && (process.env.OPENROUTER_API_KEY || process.env.VITE_OPENROUTER_API_KEY)) {
           return process.env.OPENROUTER_API_KEY || process.env.VITE_OPENROUTER_API_KEY;
         }
-        // @ts-ignore
-        if (typeof import.meta !== 'undefined' && import.meta.env) return import.meta.env.VITE_OPENROUTER_API_KEY;
         return '';
       }
       const openRouterKey = getOrKey();

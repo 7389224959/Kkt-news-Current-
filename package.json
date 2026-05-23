@@ -14,7 +14,6 @@
     "@google/genai": "^1.40.0",
     "@imgly/background-removal": "^1.7.0",
     "@mozilla/readability": "^0.6.0",
-    "@napi-rs/canvas": "^1.0.0",
     "@openrouter/sdk": "^0.12.24",
     "@supabase/supabase-js": "^2.99.1",
     "@tailwindcss/vite": "^4.2.1",

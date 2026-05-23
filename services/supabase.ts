@@ -1,15 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
-const getEnv = (key: string, viteKey: string) => {
-  if (typeof process !== 'undefined' && process.env[key]) return process.env[key];
-  if (typeof process !== 'undefined' && process.env[viteKey]) return process.env[viteKey];
-  // @ts-ignore
-  if (typeof import.meta !== 'undefined' && import.meta.env) return import.meta.env[viteKey];
-  return undefined;
-};
+const supabaseUrl = 
+  (typeof process !== 'undefined' && process.env.SUPABASE_URL) || 
+  (typeof process !== 'undefined' && process.env.VITE_SUPABASE_URL);
 
-const supabaseUrl = getEnv('SUPABASE_URL', 'VITE_SUPABASE_URL');
-const supabaseKey = getEnv('SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY');
+const supabaseKey = 
+  (typeof process !== 'undefined' && process.env.SUPABASE_ANON_KEY) || 
+  (typeof process !== 'undefined' && process.env.VITE_SUPABASE_ANON_KEY);
 
 export const supabase = (supabaseUrl && supabaseKey) 
   ? createClient(supabaseUrl, supabaseKey) 
