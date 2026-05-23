@@ -3,17 +3,17 @@ import { generateViralPost } from '../services/geminiService';
 import { supabase } from '../services/supabase';
 import { uploadImage } from '../services/supabase';
 import { renderThemeOverlay } from '../src/utils/themeRenderer';
-import { createCanvas, loadImage } from 'canvas';
 import dotenv from 'dotenv';
 dotenv.config();
 
 // Re-implement overlay using Node canvas
-export const overlayTextOnImageNode = (base64Str: string, data: any): Promise<string> => {
-  return new Promise(async (resolve) => {
-    try {
-      const imgBuffer = Buffer.from(base64Str.replace(/^data:image\/[a-z]+;base64,/, ''), 'base64');
-      const newsImg = await loadImage(imgBuffer);
-      let templateImg: any = null;
+export const overlayTextOnImageNode = async (base64Str: string, data: any): Promise<string> => {
+  try {
+    const { createCanvas, loadImage } = await import('@napi-rs/canvas');
+    
+    const imgBuffer = Buffer.from(base64Str.replace(/^data:image\/[a-z]+;base64,/, ''), 'base64');
+    const newsImg = await loadImage(imgBuffer);
+    let templateImg: any = null;
       
       if (data.customTemplate) {
         const bgUrl = data.customTemplate.templateImageUrl || data.customTemplate.referenceImageUrl;
@@ -99,14 +99,13 @@ export const overlayTextOnImageNode = (base64Str: string, data: any): Promise<st
       }
 
       // @ts-ignore - The types strictly diverge somewhat for Node canvas, but structure is similar
-      renderThemeOverlay(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, data);
+      renderThemeOverlay(ctx as any, CANVAS_WIDTH, CANVAS_HEIGHT, data);
 
-      resolve(canvas.toDataURL('image/jpeg', 0.9));
+      return canvas.toDataURL('image/jpeg', 0.9);
     } catch (e) {
       console.error("Overlay failed in node canvas", e);
-      resolve(base64Str);
+      return base64Str;
     }
-  });
 };
 
 const postToFacebook = async (message: string, imageUrl?: string, published: boolean = true) => {
