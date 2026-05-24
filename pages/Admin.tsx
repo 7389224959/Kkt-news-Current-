@@ -158,7 +158,6 @@ const Admin: React.FC = () => {
   const [showDailyNewsModal, setShowDailyNewsModal] = useState(false);
   const [dailyNewsRssSources, setDailyNewsRssSources] = useState<{ url: string, category: Category }[]>([
     { url: 'https://www.bhaskar.com/rss-v1--category-1741.xml', category: Category.STATE },
-    { url: 'https://www.abplive.com/news/states/chhattisgarh/feed', category: Category.STATE },
     { url: 'https://www.amarujala.com/rss/chhattisgarh.xml', category: Category.STATE },
     { url: 'https://rss.jagran.com/naidunia/chhattisgarh.xml', category: Category.STATE },
     { url: 'https://www.indiatvnews.com/rssnews/topstory-chhattisgarh.xml', category: Category.STATE }

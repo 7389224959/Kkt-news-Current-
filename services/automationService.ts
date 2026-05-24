@@ -33,7 +33,17 @@ export const runAutoFetch = async () => {
     
     console.log("Settings response loaded successfully");
 
-    const dailyNewsRssSources = settingsData.dailyNewsRssSources || [];
+    let dailyNewsRssSources = settingsData.dailyNewsRssSources || [];
+    if (!Array.isArray(dailyNewsRssSources) || dailyNewsRssSources.length === 0) {
+        console.log("No RSS links in DB, using fallback defaults...");
+        dailyNewsRssSources = [
+            { url: 'https://www.bhaskar.com/rss-v1--category-1741.xml', category: 'State News' },
+            { url: 'https://www.amarujala.com/rss/chhattisgarh.xml', category: 'State News' },
+            { url: 'https://rss.jagran.com/naidunia/chhattisgarh.xml', category: 'State News' },
+            { url: 'https://www.indiatvnews.com/rssnews/topstory-chhattisgarh.xml', category: 'State News' }
+        ];
+    }
+    
     const dailyNewsModel = settingsData.dailyNewsModel || 'gemini';
     const dailyNewsImageStrategy = settingsData.dailyNewsImageStrategy || 'auto';
     const dailyNewsImageGenModel = settingsData.dailyNewsImageGenModel || 'gemini';
