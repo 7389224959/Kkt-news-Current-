@@ -17,7 +17,7 @@ export const runAutoFetch = async () => {
         throw err;
     }
 
-    const { data: settingsData, error: settingsError } = await supabase.from('settings').select('*').limit(1).single();
+    const { data: settingsData, error: settingsError } = await supabase.from('site_settings').select('*').limit(1).single();
     
     if (settingsError) {
         const err = new Error(`Database connection or table read failed: ${settingsError.message} (Code: ${settingsError.code})`);
