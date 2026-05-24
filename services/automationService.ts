@@ -1,5 +1,5 @@
-import { fetchDailyNews, generateViralPost } from './geminiService';
-import { supabase, uploadImage } from './supabase';
+import { fetchDailyNews, generateViralPost } from './geminiService.js';
+import { supabase, uploadImage } from './supabase.js';
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
@@ -91,7 +91,7 @@ export const runAutoViralPost = async (article: any, settings: any) => {
     let newImageBase64 = fallbackBase64;
     try {
         if (typeof window === 'undefined') {
-            const nodeOverlayModule = await import('../src/utils/nodeImageUtils');
+            const nodeOverlayModule = await import('../src/utils/nodeImageUtils.js');
             newImageBase64 = await nodeOverlayModule.overlayTextOnImageNode(fallbackBase64, {
                 breaking_tag: post.breaking_tag,
                 headline_line_1: post.headline_line_1,
@@ -104,7 +104,7 @@ export const runAutoViralPost = async (article: any, settings: any) => {
             });
         } else {
             // Frontend fallback just in case it runs on client
-            const { overlayTextOnImage } = await import('../src/utils/imageUtils');
+            const { overlayTextOnImage } = await import('../src/utils/imageUtils.js');
             newImageBase64 = await overlayTextOnImage(fallbackBase64, {
                 breaking_tag: post.breaking_tag,
                 headline_line_1: post.headline_line_1,
@@ -127,7 +127,7 @@ export const runAutoViralPost = async (article: any, settings: any) => {
     try {
         console.log("== [AutoRobot] Publishing to Facebook ==");
         // Import facebook service
-        const { postToFacebook } = await import('./facebookService');
+        const { postToFacebook } = await import('./facebookService.js');
         fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true);
         console.log("== [AutoRobot] Facebook Published Done ==");
     } catch(err: any) {

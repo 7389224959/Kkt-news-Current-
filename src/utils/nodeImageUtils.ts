@@ -1,4 +1,4 @@
-import { renderThemeOverlay } from './themeRenderer';
+import { renderThemeOverlay } from './themeRenderer.js';
 import { createCanvas, loadImage } from 'canvas';
 
 export const overlayTextOnImageNode = (base64Str: string, data: any): Promise<string> => {

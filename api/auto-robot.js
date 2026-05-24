@@ -1,6 +1,8 @@
-import { runAutoRobot } from '../services/automationService';
+import { runAutoRobot } from '../services/automationService.js';
 import dotenv from 'dotenv';
 dotenv.config();
+
+console.log("Cron Auto Robot Booted Successfully");
 
 export const maxDuration = 300;
 
