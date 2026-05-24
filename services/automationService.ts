@@ -178,24 +178,27 @@ export const runAutoRobot = async () => {
     try {
         const { newArticles, settingsData } = await runAutoFetch();
         
+        let articleToUse = null;
         if (!newArticles || newArticles.length === 0) {
-            console.log("=== AUTO ROBOT FINISHED: No new articles fetched. ===");
-            return { status: "success", message: "No new articles.", fetchedCount: 0 };
+            console.log("=== AUTO ROBOT: No new articles fetched. Attempting to post the most recent article... ===");
+            const { data: latestArticles, error } = await supabase.from('articles').select('*').order('created_at', { ascending: false }).limit(1);
+            if (!latestArticles || latestArticles.length === 0) {
+                return { status: "success", message: "No new articles and no existing articles to viral post.", fetchedCount: 0 };
+            }
+            articleToUse = latestArticles[0];
+        } else {
+            console.log(`=== Auto fetch grabbed ${newArticles.length} new articles. ===`);
+            articleToUse = newArticles[0]; 
         }
         
-        console.log(`=== Waiting 10 seconds before generating viral post... ===`);
-        await delay(10000);
-        
-        // Pick newest article
-        const articleToUse = newArticles[0]; 
-        
+        console.log(`=== Generating viral post for article: ${articleToUse.title} ===`);
         const viralResult = await runAutoViralPost(articleToUse, settingsData);
         
         console.log("=== AUTO ROBOT COMPLETE ===");
         return { 
             status: "success", 
             message: "Auto robot completed successfully.",
-            fetchedCount: newArticles.length,
+            fetchedCount: newArticles?.length || 0,
             viralPost: viralResult
         };
     } catch (e: any) {
