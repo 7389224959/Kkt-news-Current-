@@ -6,7 +6,7 @@ import { supabase } from "./supabase.js";
 import { jsonrepair } from 'jsonrepair';
 
 const getAiClient = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = (typeof process !== 'undefined' && (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)) || (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY);
   if (!apiKey) {
     console.warn("API Key is missing. Please ensure process.env.GEMINI_API_KEY is set.");
     return null;
@@ -720,7 +720,7 @@ export const fetchDailyNews = async (
     let rawText = "[]";
 
     if (aiModel === 'openrouter') {
-      const openRouterKey = (import.meta as any).env?.VITE_OPENROUTER_API_KEY || (typeof process !== 'undefined' ? process.env.OPENROUTER_API_KEY : '');
+      const openRouterKey = (typeof process !== 'undefined' && (process.env.OPENROUTER_API_KEY || process.env.VITE_OPENROUTER_API_KEY)) || (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_OPENROUTER_API_KEY);
       if (!openRouterKey) {
         throw new Error("OpenRouter API Key is missing. Please set VITE_OPENROUTER_API_KEY in the environment.");
       }

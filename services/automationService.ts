@@ -5,8 +5,33 @@ const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 export const runAutoFetch = async () => {
     console.log("== [AutoRobot] Starting Auto Fetch ==");
-    const { data: settingsData } = await supabase.from('settings').select('*').limit(1).single();
-    if (!settingsData) throw new Error('Failed to fetch settings');
+    
+    console.log("Loading settings...");
+    const hasEnvUrl = !!(typeof process !== 'undefined' ? (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL) : false);
+    const hasEnvKey = !!(typeof process !== 'undefined' ? (process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY) : false);
+    console.log("Firebase/Supabase env loaded:", hasEnvUrl && hasEnvKey);
+
+    if (!supabase) {
+        const err = new Error('Supabase client failed to initialize (missing or invalid env variables)');
+        (err as any).stage = "db_connection";
+        throw err;
+    }
+
+    const { data: settingsData, error: settingsError } = await supabase.from('settings').select('*').limit(1).single();
+    
+    if (settingsError) {
+        const err = new Error(`Database connection or table read failed: ${settingsError.message} (Code: ${settingsError.code})`);
+        (err as any).stage = "fetch_settings";
+        throw err;
+    }
+
+    if (!settingsData) {
+        const err = new Error('Settings document missing. Ensure settings exist in the database.');
+        (err as any).stage = "fetch_settings";
+        throw err;
+    }
+    
+    console.log("Settings response loaded successfully");
 
     const dailyNewsRssSources = settingsData.dailyNewsRssSources || [];
     const dailyNewsModel = settingsData.dailyNewsModel || 'gemini';
@@ -83,7 +108,7 @@ export const runAutoViralPost = async (article: any, settings: any) => {
     console.log("== [AutoRobot] Calling Vercel /api/proxy-image for overlay ==");
     // Cannot import canvas directly because automationService might be called by edge/client functions
     // Use an API call or dynamic import approach for the node canvas.
-    const siteUrl = process.env.VITE_APP_URL || process.env.URL || 'http://localhost:3000';
+    const siteUrl = process.env.VITE_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.URL) || 'http://localhost:3000';
     let overlaidImageUrl = reuseImageUrl;
 
     // We can conditionally call our own internal utility for node canvas if in Node.

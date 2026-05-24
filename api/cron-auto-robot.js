@@ -26,6 +26,10 @@ export default async function handler(req, res) {
     return res.status(200).json(result);
   } catch (error) {
     console.error("Cron Auto Robot Error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ 
+      status: "error", 
+      stage: error.stage || "runAutoRobot_general",
+      detailedError: error.message || String(error)
+    });
   }
 }
