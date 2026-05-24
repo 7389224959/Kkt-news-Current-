@@ -380,7 +380,7 @@ const Admin: React.FC = () => {
     setGlobalError(null);
     try {
       const secret = (import.meta as any).env?.VITE_CRON_SECRET || 'secret';
-      const response = await fetch('/api/auto-robot?key=' + secret);
+      const response = await fetch('/api/cron-auto-robot?key=' + secret);
       const data = await response.json();
       
       if (response.ok && data.status === 'success') {

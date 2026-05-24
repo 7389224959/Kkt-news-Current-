@@ -1,11 +1,18 @@
 {
   "functions": {
+    "api/**/*.js": {
+      "runtime": "nodejs22.x"
+    },
     "api/render-reel.js": {
       "includeFiles": "node_modules/ffmpeg-static/ffmpeg",
       "excludeFiles": "node_modules/onnxruntime-node/**"
     }
   },
   "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
     { "source": "/article/:slug", "destination": "/api/article?slug=:slug" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
