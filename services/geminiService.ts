@@ -406,7 +406,8 @@ import { uploadImage } from './supabase.js';
 
 async function extractArticleLinks(url: string): Promise<{title: string, link: string, content?: string}[]> {
   try {
-    const response = await fetch(`/api/extract-links?url=${encodeURIComponent(url)}`);
+    let siteUrl = typeof window !== 'undefined' ? '' : (process.env.VITE_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.URL) || `http://localhost:${process.env.PORT || 3000}`);
+    const response = await fetch(`${siteUrl}/api/extract-links?url=${encodeURIComponent(url)}`);
     if (!response.ok) {
       console.error(`Failed to fetch links from ${url}: ${response.statusText}`);
       return [];
@@ -601,8 +602,9 @@ export const fetchDailyNews = async (
   for (const item of candidateItems) {
     let fullText = "";
     let sourceImageUrl = item.image || "";
+    let siteUrl = typeof window !== 'undefined' ? '' : (process.env.VITE_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.URL) || `http://localhost:${process.env.PORT || 3000}`);
     try {
-      const extractRes = await fetch(`/api/extract-article?url=${encodeURIComponent(item.link)}`);
+      const extractRes = await fetch(`${siteUrl}/api/extract-article?url=${encodeURIComponent(item.link)}`);
       if (extractRes.ok) {
         const extractData = await extractRes.json();
         fullText = extractData.content;
@@ -1312,7 +1314,8 @@ Authentic newspaper photo, documentary journalism, photorealistic, natural light
 NEGATIVE:
 No cartoon, no illustration, no glamour portrait, no cinematic lighting, no fantasy, no AI-art look, no jewelry focus, no close-up faces, no text, no watermark.`;
       
-      const cfReq = await fetch('/api/cloudflare-image', {
+      let siteUrl = typeof window !== 'undefined' ? '' : (process.env.VITE_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.URL) || `http://localhost:${process.env.PORT || 3000}`);
+      const cfReq = await fetch(`${siteUrl}/api/cloudflare-image`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

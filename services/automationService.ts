@@ -1,5 +1,8 @@
 import { fetchDailyNews, generateViralPost } from './geminiService.js';
 import { supabase, uploadImage } from './supabase.js';
+import { overlayTextOnImageNode } from '../src/utils/nodeImageUtils.js';
+import { postToFacebook } from './facebookService.js';
+import { overlayTextOnImage } from '../src/utils/imageUtils.js';
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
@@ -126,8 +129,7 @@ export const runAutoViralPost = async (article: any, settings: any) => {
     let newImageBase64 = fallbackBase64;
     try {
         if (typeof window === 'undefined') {
-            const nodeOverlayModule = await import('../src/utils/nodeImageUtils.js');
-            newImageBase64 = await nodeOverlayModule.overlayTextOnImageNode(fallbackBase64, {
+            newImageBase64 = await overlayTextOnImageNode(fallbackBase64, {
                 breaking_tag: post.breaking_tag,
                 headline_line_1: post.headline_line_1,
                 headline_line_2: post.headline_line_2,
@@ -139,7 +141,6 @@ export const runAutoViralPost = async (article: any, settings: any) => {
             });
         } else {
             // Frontend fallback just in case it runs on client
-            const { overlayTextOnImage } = await import('../src/utils/imageUtils.js');
             newImageBase64 = await overlayTextOnImage(fallbackBase64, {
                 breaking_tag: post.breaking_tag,
                 headline_line_1: post.headline_line_1,
@@ -161,8 +162,7 @@ export const runAutoViralPost = async (article: any, settings: any) => {
     let fbResult;
     try {
         console.log("== [AutoRobot] Publishing to Facebook ==");
-        // Import facebook service
-        const { postToFacebook } = await import('./facebookService.js');
+        // using statically imported postToFacebook
         fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true);
         console.log("== [AutoRobot] Facebook Published Done ==");
     } catch(err: any) {
@@ -203,6 +203,6 @@ export const runAutoRobot = async () => {
         };
     } catch (e: any) {
         console.error("=== AUTO ROBOT FAILED ===", e);
-        return { status: "error", error: e.message };
+        throw e;
     }
 };
