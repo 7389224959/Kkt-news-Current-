@@ -1,6 +1,7 @@
 export const postToFacebook = async (message: string, imageUrl?: string, scheduledPublishTime?: number, published: boolean = true): Promise<{ success: boolean, id?: string, pageId?: string }> => {
   try {
-    const response = await fetch('/api/facebook/post', {
+    const siteUrl = typeof window !== 'undefined' ? '' : (process.env.VITE_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.URL) || 'http://localhost:3000');
+    const response = await fetch(`${siteUrl}/api/facebook/post`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -35,7 +36,8 @@ export const postToFacebook = async (message: string, imageUrl?: string, schedul
 
 export const publishFacebookPost = async (postId: string): Promise<boolean> => {
   try {
-    const response = await fetch('/api/facebook/publish', {
+    const siteUrl = typeof window !== 'undefined' ? '' : (process.env.VITE_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.URL) || 'http://localhost:3000');
+    const response = await fetch(`${siteUrl}/api/facebook/publish`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
