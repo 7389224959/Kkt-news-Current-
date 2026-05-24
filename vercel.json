@@ -1,8 +1,5 @@
 {
   "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs22.x"
-    },
     "api/render-reel.js": {
       "includeFiles": "node_modules/ffmpeg-static/ffmpeg",
       "excludeFiles": "node_modules/onnxruntime-node/**"
