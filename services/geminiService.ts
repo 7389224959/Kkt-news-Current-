@@ -6,22 +6,13 @@ import { supabase } from "./supabase";
 import { jsonrepair } from 'jsonrepair';
 
 const getAiClient = () => {
-  const getEnv = (key: string) => {
-    if (typeof window !== 'undefined' && (import.meta as any).env) {
-      return (import.meta as any).env[`VITE_${key}`] || (import.meta as any).env[key];
-    }
-    if (typeof process !== 'undefined' && process.env) {
-      return process.env[`VITE_${key}`] || process.env[key];
-    }
-    return undefined;
-  };
-
+  // Use explicit references so Vite's define plugin can statically replace them
   const keys = [
-    getEnv('GEMINI_API_KEY'),
-    getEnv('GEMINI_API_KEY_2'),
-    getEnv('GEMINI_API_KEY_3'),
-    getEnv('GEMINI_API_KEY_SECONDARY'),
-    getEnv('GEMINI_API_KEY_fallback')
+    (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.VITE_GEMINI_API_KEY : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.GEMINI_API_KEY : undefined),
+    (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY_2 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.VITE_GEMINI_API_KEY_2 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.GEMINI_API_KEY_2 : undefined),
+    (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY_3 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.VITE_GEMINI_API_KEY_3 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.GEMINI_API_KEY_3 : undefined),
+    (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY_4 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.VITE_GEMINI_API_KEY_4 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.GEMINI_API_KEY_4 : undefined),
+    (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY_5 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.VITE_GEMINI_API_KEY_5 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.GEMINI_API_KEY_5 : undefined)
   ].filter(key => !!key);
 
   if (keys.length === 0) {
@@ -40,12 +31,19 @@ const getAiClient = () => {
         } catch (error: any) {
             lastError = error;
             const status = error?.status || error?.response?.status;
-            const msg = error?.message || '';
-            const isQuotaError = status === 429 || msg.includes('429') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('exhausted') || msg.includes('RATE_LIMIT_EXCEEDED');
+            const msg = typeof error?.message === 'string' ? error.message : JSON.stringify(error?.message || '');
+            const stringifiedError = JSON.stringify(error);
+            const isQuotaError = status === 429 || msg.includes('429') || Math.floor(status) === 429 || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('exhausted') || msg.includes('RATE_LIMIT_EXCEEDED') || stringifiedError.includes('429') || stringifiedError.toLowerCase().includes('quota') || stringifiedError.toLowerCase().includes('exhausted');
             
             if (isQuotaError && i < keys.length - 1) {
                 console.warn(`[Gemini API Key ${i + 1}] Quota exceeded or rate limited. Falling back to key ${i + 2}.`);
                 continue;
+            }
+            
+            if (isQuotaError) {
+                // If we ran out of keys or there are no more keys
+                const newErr = new Error(`Quota limit reached across ${keys.length} API key(s). Please add more keys (GEMINI_API_KEY_2, etc). Original Error: ${msg}`);
+                throw newErr;
             }
             throw error;
         }

@@ -11,6 +11,8 @@ export default defineConfig({
     'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY),
     'process.env.GEMINI_API_KEY_2': JSON.stringify(process.env.GEMINI_API_KEY_2),
     'process.env.GEMINI_API_KEY_3': JSON.stringify(process.env.GEMINI_API_KEY_3),
+    'process.env.GEMINI_API_KEY_4': JSON.stringify(process.env.GEMINI_API_KEY_4),
+    'process.env.GEMINI_API_KEY_5': JSON.stringify(process.env.GEMINI_API_KEY_5),
     'process.env.OPENROUTER_API_KEY': JSON.stringify(process.env.OPENROUTER_API_KEY)
   },
   optimizeDeps: {
