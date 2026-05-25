@@ -1,4 +1,4 @@
-import { Article, Category } from './types.js';
+import { Article, Category } from './types';
 import anyAscii from 'any-ascii';
 
 /**

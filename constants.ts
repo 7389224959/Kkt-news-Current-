@@ -1,4 +1,4 @@
-import { Article, BreakingNews, Category, SiteSettings } from './types.js';
+import { Article, BreakingNews, Category, SiteSettings } from './types';
 
 // These serve as defaults if no custom settings are saved
 export const APP_NAME = "Khabar Kal Tak"; 
@@ -17,14 +17,7 @@ export const DEFAULT_SETTINGS: SiteSettings = {
     instagram: "#",
     youtube: "#"
   },
-  tickerSpeed: 30,
-  dailyNewsRssSources: [],
-  autoSchedulerEnabled: false,
-  autoSchedulerInterval: 10,
-  dailyNewsModel: 'gemini',
-  dailyNewsImageStrategy: 'auto',
-  dailyNewsImageGenModel: 'gemini',
-  autoTemplateIndex: 0
+  tickerSpeed: 30
 };
 
 export const MOCK_BREAKING_NEWS: BreakingNews[] = [

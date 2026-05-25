@@ -25,9 +25,9 @@ export const compressImage = (base64Str: string, maxWidth = 800, quality = 0.7):
   });
 };
 
-import { renderThemeOverlay } from './themeRenderer.js';
+import { renderThemeOverlay } from './themeRenderer';
 
-import { ViralTemplate } from '../../types.js';
+import { ViralTemplate } from '../../types';
 
 export interface ViralPostOverlayData {
   breaking_tag: string;

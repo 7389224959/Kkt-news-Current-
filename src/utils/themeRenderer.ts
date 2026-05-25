@@ -1,9 +1,8 @@
-import { ViralPostOverlayData } from './imageUtils.js';
+import { ViralPostOverlayData } from './imageUtils';
 
 export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number, height: number, data: ViralPostOverlayData) => {
-  const hindiFontStack = '"NotoDevanagari", "NotoEmoji", sans-serif';
-  const hindiFontStackBold = '"NotoDevanagariBold", "NotoEmoji", sans-serif';
-  const fontStack = hindiFontStack;
+  const fontStack = '"Inter", system-ui, -apple-system, sans-serif';
+  const hindiFontStack = '"Noto Sans Devanagari", "Mangal", "Arial Unicode MS", sans-serif';
   const maxTextWidth = width * 0.8;
   
   // Helper for text wrapping
@@ -203,7 +202,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
   const drawBreakingTag = (y: number, bg: string = '#DC2626', fg: string = '#FFFFFF') => {
     if (!data.breaking_tag) return 0;
     const tagFontSize = Math.max(18, height * 0.035);
-    ctx.font = `bold ${tagFontSize}px ${hindiFontStackBold}`;
+    ctx.font = `bold ${tagFontSize}px ${hindiFontStack}`;
     const tagText = data.breaking_tag.toUpperCase();
     const metrics = ctx.measureText(tagText);
     const boxWidth = metrics.width + 32;
@@ -239,7 +238,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.headline_line_2) {
         const h2FontSize = Math.max(40, height * 0.08);
-        ctx.font = `bold ${h2FontSize}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${h2FontSize}px ${hindiFontStack}`;
         ctx.fillStyle = '#FFD700'; // Yellow
         ctx.shadowColor = 'rgba(0,0,0,0.9)';
         ctx.shadowBlur = 15;
@@ -253,7 +252,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.headline_line_1) {
         const h1FontSize = Math.max(30, height * 0.055);
-        ctx.font = `bold ${h1FontSize}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${h1FontSize}px ${hindiFontStack}`;
         ctx.fillStyle = '#FFFFFF';
         ctx.shadowColor = 'rgba(0,0,0,0.9)';
         ctx.shadowBlur = 10;
@@ -289,7 +288,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
     // Parse boxes function
     const parseBox = (boxStr?: string) => {
       if (!boxStr || boxStr === 'hidden') return null;
-      const parts = boxStr.split(',').map(p => parseFloat(p.replace(/%/g, '').trim()));
+      const parts = boxStr.split('%').map(p => parseFloat(p.replace(/,/g, '').trim()));
       if (parts.length >= 4 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2]) && !isNaN(parts[3])) {
         return {
           x: (parts[0] / 100) * width,
@@ -438,7 +437,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
      ctx.textBaseline = 'top';
      
      if (data.headline_line_1) {
-       ctx.font = `bold ${Math.max(40, height * 0.07)}px ${hindiFontStackBold}`;
+       ctx.font = `bold ${Math.max(40, height * 0.07)}px ${hindiFontStack}`;
        ctx.fillStyle = '#000000';
        const h1Lines = wrapText(data.headline_line_1, maxTextWidth);
        for (const line of h1Lines) {
@@ -449,7 +448,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
      }
      
      if (data.headline_line_2) {
-       ctx.font = `bold ${Math.max(50, height * 0.09)}px ${hindiFontStackBold}`;
+       ctx.font = `bold ${Math.max(50, height * 0.09)}px ${hindiFontStack}`;
        ctx.fillStyle = '#DC2626'; // Red
        const h2Lines = wrapText(data.headline_line_2, maxTextWidth);
        for (const line of h2Lines) {
@@ -481,7 +480,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
      ctx.fillStyle = 'white';
      ctx.textAlign = 'center';
      ctx.textBaseline = 'middle';
-     ctx.font = `bold ${topH*0.5}px ${hindiFontStackBold}`;
+     ctx.font = `bold ${topH*0.5}px ${hindiFontStack}`;
      ctx.fillText(data.breaking_tag || 'क्या हुआ?', width * 0.5, height * 0.1 + topH * 0.5);
 
      let cy = height * 0.25;
@@ -490,7 +489,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
      
      if (data.headline_line_1 || data.headline_line_2) {
        ctx.fillStyle = '#0F172A';
-       ctx.font = `bold ${Math.max(34, height * 0.06)}px ${hindiFontStackBold}`;
+       ctx.font = `bold ${Math.max(34, height * 0.06)}px ${hindiFontStack}`;
        const htext = [data.headline_line_1, data.headline_line_2].filter(Boolean).join(' ');
        const hLines = wrapText(htext, maxTextWidth);
        for(const l of hLines) {
@@ -511,7 +510,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
      ctx.fillRect(width * 0.05, cy, width * 0.4, topSecH);
      ctx.fillStyle = 'white';
      ctx.textAlign = 'left';
-     ctx.font = `bold ${topSecH*0.6}px ${hindiFontStackBold}`;
+     ctx.font = `bold ${topSecH*0.6}px ${hindiFontStack}`;
      ctx.fillText("क्या-क्या सामने आया?", width * 0.08, cy + topSecH*0.2);
      
      if (data.subheadline) {
@@ -541,7 +540,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       drawBranding('dark');
 
       const qFontSize = Math.max(120, height * 0.2);
-      ctx.font = `bold ${qFontSize}px ${hindiFontStackBold}`;
+      ctx.font = `bold ${qFontSize}px ${hindiFontStack}`;
       ctx.fillStyle = '#F59E0B';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'top';
@@ -555,7 +554,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       let cy = height * 0.35;
       
       if (data.headline_line_1) {
-        ctx.font = `bold ${Math.max(48, height * 0.08)}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${Math.max(48, height * 0.08)}px ${hindiFontStack}`;
         ctx.fillStyle = '#FFFFFF';
         const lines = wrapText(data.headline_line_1, width * 0.8);
         for(const l of lines) {
@@ -564,7 +563,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
         }
       }
       if (data.headline_line_2) {
-        ctx.font = `bold ${Math.max(54, height * 0.09)}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${Math.max(54, height * 0.09)}px ${hindiFontStack}`;
         ctx.fillStyle = '#FCD34D'; // Yellow
         const lines = wrapText(data.headline_line_2, width * 0.8);
         for(const l of lines) {
@@ -577,7 +576,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
          cy += Math.max(20, height * 0.03);
          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
          ctx.fillRect(width * 0.08, cy, width * 0.8, height * 0.15);
-         ctx.font = `bold ${Math.max(28, height * 0.05)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(28, height * 0.05)}px ${hindiFontStack}`;
          ctx.fillStyle = '#1E293B';
          const lines = wrapText(data.subheadline, width * 0.7);
          let sy = cy + height * 0.03;
@@ -589,7 +588,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       
       if (data.breaking_tag) {
          ctx.fillStyle = '#FCD34D';
-         ctx.font = `bold ${Math.max(30, height * 0.05)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(30, height * 0.05)}px ${hindiFontStack}`;
          ctx.textAlign = 'left';
          ctx.textBaseline = 'bottom';
          ctx.fillText(data.breaking_tag, width * 0.08, height * 0.95);
@@ -611,7 +610,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       let cy = height * 0.45;
       
       if (data.headline_line_1) {
-        ctx.font = `bold ${Math.max(40, height * 0.07)}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${Math.max(40, height * 0.07)}px ${hindiFontStack}`;
         ctx.fillStyle = '#E5E7EB';
         const lines = wrapText(data.headline_line_1, maxTextWidth);
         for(const l of lines) {
@@ -623,7 +622,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       cy += height * 0.05;
       
       if (data.headline_line_2) {
-        ctx.font = `bold ${Math.max(56, height * 0.09)}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${Math.max(56, height * 0.09)}px ${hindiFontStack}`;
         ctx.fillStyle = '#FCD34D';
         ctx.shadowColor = 'red';
         ctx.shadowBlur = 15;
@@ -639,7 +638,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
          ctx.fillStyle = '#DC2626';
          ctx.fillRect(0, height - height*0.15, width, height*0.15);
          ctx.fillStyle = '#FFFFFF';
-         ctx.font = `bold ${Math.max(34, height * 0.06)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(34, height * 0.06)}px ${hindiFontStack}`;
          ctx.textAlign = 'center';
          ctx.textBaseline = 'middle';
          ctx.fillText(data.breaking_tag, width * 0.5, height - height*0.075);
@@ -657,7 +656,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       
       const tagText = data.breaking_tag || 'सावधान!';
       const tagFontSize = Math.max(40, height * 0.07);
-      ctx.font = `bold ${tagFontSize}px ${hindiFontStackBold}`;
+      ctx.font = `bold ${tagFontSize}px ${hindiFontStack}`;
       const boxW = ctx.measureText(tagText).width + 100;
       ctx.fillStyle = '#DC2626';
       ctx.fillRect(width - boxW - 20, 20, boxW, 80);
@@ -671,7 +670,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       let cy = height * 0.5;
       
       if (data.headline_line_1) {
-        ctx.font = `bold ${Math.max(36, height * 0.06)}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${Math.max(36, height * 0.06)}px ${hindiFontStack}`;
         ctx.fillStyle = '#FFFFFF';
         const lines = wrapText(data.headline_line_1, maxTextWidth);
         for(const l of lines) {
@@ -683,7 +682,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       cy += height * 0.05;
       
       if (data.headline_line_2) {
-        ctx.font = `bold ${Math.max(48, height * 0.08)}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${Math.max(48, height * 0.08)}px ${hindiFontStack}`;
         const lines = wrapText(data.headline_line_2, maxTextWidth);
         for(const l of lines) {
            const lw = ctx.measureText(l).width;
@@ -697,7 +696,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       
       if (data.subheadline) {
          ctx.fillStyle = '#FCD34D';
-         ctx.font = `bold ${Math.max(26, height * 0.045)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(26, height * 0.045)}px ${hindiFontStack}`;
          ctx.fillText(data.subheadline, width * 0.5, height - height*0.05);
       }
       return;
@@ -711,7 +710,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       drawBranding('dark');
       
-      ctx.font = `bold ${Math.max(40, height * 0.07)}px ${hindiFontStackBold}`;
+      ctx.font = `bold ${Math.max(40, height * 0.07)}px ${hindiFontStack}`;
       ctx.fillStyle = '#FCD34D';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
@@ -720,7 +719,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       ctx.fillStyle = 'white';
       let cy = height * 0.45;
       const combined = [data.headline_line_1, data.headline_line_2].filter(Boolean).join(' ');
-      ctx.font = `bold ${Math.max(48, height * 0.08)}px ${hindiFontStackBold}`;
+      ctx.font = `bold ${Math.max(48, height * 0.08)}px ${hindiFontStack}`;
       const lines = wrapText(combined, width * 0.8);
       for(const l of lines) {
          ctx.fillText(l, width * 0.1, cy);
@@ -730,7 +729,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, height - height*0.1, width, height*0.1);
       ctx.fillStyle = '#000000';
-      ctx.font = `bold ${Math.max(24, height * 0.04)}px ${hindiFontStackBold}`;
+      ctx.font = `bold ${Math.max(24, height * 0.04)}px ${hindiFontStack}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(data.breaking_tag || 'पूरा मामला जानने के लिए पढ़ते रहें ➡️', width * 0.5, height - height*0.05);
@@ -744,7 +743,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       ctx.fillRect(0, 0, width, height);
       drawBranding('dark');
       
-      ctx.font = `bold ${Math.max(80, height * 0.12)}px ${hindiFontStackBold}`;
+      ctx.font = `bold ${Math.max(80, height * 0.12)}px ${hindiFontStack}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillText('😱', width * 0.5, height * 0.1);
@@ -752,7 +751,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       let cy = height * 0.3;
       if (data.headline_line_1) {
         ctx.fillStyle = 'white';
-        ctx.font = `bold ${Math.max(44, height * 0.07)}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${Math.max(44, height * 0.07)}px ${hindiFontStack}`;
         const lines = wrapText(data.headline_line_1, maxTextWidth);
         for(const l of lines) {
            ctx.fillText(l, width * 0.5, cy);
@@ -764,7 +763,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       
       if (data.headline_line_2) {
         ctx.fillStyle = '#FCD34D';
-        ctx.font = `bold ${Math.max(54, height * 0.09)}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${Math.max(54, height * 0.09)}px ${hindiFontStack}`;
         const lines = wrapText(data.headline_line_2, maxTextWidth);
         for(const l of lines) {
            ctx.fillText(l, width * 0.5, cy);
@@ -776,7 +775,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
          ctx.fillRect(width*0.1, cy + height*0.05, width*0.8, height*0.15);
          ctx.fillStyle = '#DC2626';
-         ctx.font = `bold ${Math.max(34, height * 0.06)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(34, height * 0.06)}px ${hindiFontStack}`;
          ctx.textBaseline = 'middle';
          const lines = wrapText(data.breaking_tag, width*0.75);
          ctx.fillText(lines.join(' '), width * 0.5, cy + height*0.125);
@@ -809,7 +808,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       
       if (data.headline_line_1) {
         ctx.fillStyle = 'white';
-        ctx.font = `bold ${Math.max(40, height * 0.07)}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${Math.max(40, height * 0.07)}px ${hindiFontStack}`;
         const lines = wrapText(data.headline_line_1, maxTextWidth);
         for(const l of lines) {
            ctx.fillText(l, width * 0.5, cy);
@@ -820,7 +819,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       if (data.headline_line_2) {
         ctx.fillStyle = '#DC2626';
         const h2FontSize = Math.max(50, height * 0.08);
-        ctx.font = `bold ${h2FontSize}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${h2FontSize}px ${hindiFontStack}`;
         const lines = wrapText(data.headline_line_2, maxTextWidth);
         for(const l of lines) {
            const lw = ctx.measureText(l).width;
@@ -833,7 +832,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       }
       
       ctx.fillStyle = '#FCD34D';
-      ctx.font = `bold ${Math.max(28, height * 0.045)}px ${hindiFontStackBold}`;
+      ctx.font = `bold ${Math.max(28, height * 0.045)}px ${hindiFontStack}`;
       ctx.fillText(data.breaking_tag || 'पूरी कहानी जानिए इस वीडियो में...', width * 0.5, height - 50);
       return;
   }
@@ -850,7 +849,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       
       if (data.headline_line_1) {
         ctx.fillStyle = 'white';
-        ctx.font = `bold ${Math.max(44, height * 0.07)}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${Math.max(44, height * 0.07)}px ${hindiFontStack}`;
         const lines = wrapText(data.headline_line_1, maxTextWidth);
         for(const l of lines) {
            ctx.fillText(l, width * 0.5, cy);
@@ -860,7 +859,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       if (data.headline_line_2) {
          cy += 20;
          ctx.fillStyle = '#FCD34D';
-         ctx.font = `bold ${Math.max(50, height * 0.08)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(50, height * 0.08)}px ${hindiFontStack}`;
          const lines = wrapText(data.headline_line_2, maxTextWidth);
          for(const l of lines) {
             ctx.fillText(l, width * 0.5, cy);
@@ -870,7 +869,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       
       cy += height * 0.1;
       ctx.fillStyle = 'white';
-      ctx.font = `bold ${Math.max(34, height * 0.06)}px ${hindiFontStackBold}`;
+      ctx.font = `bold ${Math.max(34, height * 0.06)}px ${hindiFontStack}`;
       ctx.fillText(data.breaking_tag || 'आपकी क्या राय है?', width * 0.5, cy);
       
       cy += height * 0.1;
@@ -895,7 +894,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
          ctx.fillStyle = '#111827';
          ctx.fillRect(0, cy - 20, width * 0.4, 40);
          ctx.fillStyle = 'white';
-         ctx.font = `bold ${Math.max(20, height * 0.035)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(20, height * 0.035)}px ${hindiFontStack}`;
          ctx.textAlign = 'center';
          ctx.textBaseline = 'middle';
          ctx.fillText(data.breaking_tag.toUpperCase(), width * 0.2, cy);
@@ -905,7 +904,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       if (data.headline_line_1) {
-         ctx.font = `bold ${Math.max(30, height * 0.055)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(30, height * 0.055)}px ${hindiFontStack}`;
          ctx.fillStyle = '#FFFFFF';
          const h1Lines = wrapText(data.headline_line_1, maxTextWidth);
          for (const l of h1Lines) {
@@ -914,7 +913,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
          }
       }
       if (data.headline_line_2) {
-         ctx.font = `bold ${Math.max(36, height * 0.065)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(36, height * 0.065)}px ${hindiFontStack}`;
          ctx.fillStyle = '#FCD34D';
          const h2Lines = wrapText(data.headline_line_2, maxTextWidth);
          for (const l of h2Lines) {
@@ -934,12 +933,12 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       ctx.textBaseline = 'top';
       if (data.breaking_tag) {
          ctx.fillStyle = '#DC2626';
-         ctx.font = `bold ${Math.max(22, height * 0.04)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(22, height * 0.04)}px ${hindiFontStack}`;
          ctx.fillText(data.breaking_tag.toUpperCase(), width / 2, cy);
          cy += Math.max(22, height * 0.04) * 1.5;
       }
       const combined = [data.headline_line_1, data.headline_line_2].filter(Boolean).join(' | ');
-      ctx.font = `bold ${Math.max(28, height * 0.05)}px ${hindiFontStackBold}`;
+      ctx.font = `bold ${Math.max(28, height * 0.05)}px ${hindiFontStack}`;
       ctx.fillStyle = '#FFFFFF';
       const lines = wrapText(combined, width * 0.9);
       for (const l of lines) {
@@ -961,7 +960,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.breaking_tag) {
          ctx.fillStyle = '#DC2626';
-         ctx.font = `bold ${Math.max(50, height * 0.08)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(50, height * 0.08)}px ${hindiFontStack}`;
          const textWidth = ctx.measureText(data.breaking_tag).width;
          ctx.fillRect(width/2 - textWidth/2 - 20, cy - 40, textWidth + 40, 80);
          ctx.fillStyle = '#FFFFFF';
@@ -969,7 +968,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
          cy += 100;
       }
       if (data.headline_line_1) {
-         ctx.font = `bold ${Math.max(48, height * 0.08)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(48, height * 0.08)}px ${hindiFontStack}`;
          ctx.fillStyle = '#FFFFFF';
          const h1Lines = wrapText(data.headline_line_1, maxTextWidth);
          for (const l of h1Lines) {
@@ -980,7 +979,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
          }
       }
       if (data.headline_line_2) {
-         ctx.font = `bold ${Math.max(56, height * 0.09)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(56, height * 0.09)}px ${hindiFontStack}`;
          ctx.fillStyle = '#FBBF24';
          const h2Lines = wrapText(data.headline_line_2, maxTextWidth);
          for (const l of h2Lines) {
@@ -1008,13 +1007,13 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
          ctx.fillStyle = '#FBBF24';
          ctx.fillRect(width * 0.05, cy, width * 0.9, height * 0.06);
          ctx.fillStyle = '#000000';
-         ctx.font = `bold ${Math.max(28, height * 0.045)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(28, height * 0.045)}px ${hindiFontStack}`;
          ctx.fillText('⚡ ' + data.breaking_tag.toUpperCase(), width * 0.08, cy + 5);
          cy += height * 0.08;
       }
       
       if (data.headline_line_1) {
-         ctx.font = `bold ${Math.max(40, height * 0.07)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(40, height * 0.07)}px ${hindiFontStack}`;
          ctx.fillStyle = '#FFFFFF';
          const h1Lines = wrapText(data.headline_line_1, maxTextWidth);
          for (const l of h1Lines) {
@@ -1023,7 +1022,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
          }
       }
       if (data.headline_line_2) {
-         ctx.font = `bold ${Math.max(48, height * 0.08)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(48, height * 0.08)}px ${hindiFontStack}`;
          ctx.fillStyle = '#FBBF24';
          const h2Lines = wrapText(data.headline_line_2, maxTextWidth);
          for (const l of h2Lines) {
@@ -1056,7 +1055,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.breaking_tag) {
          ctx.fillStyle = '#EF4444';
-         ctx.font = `bold ${Math.max(24, height * 0.04)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(24, height * 0.04)}px ${hindiFontStack}`;
          ctx.fillText(data.breaking_tag.toUpperCase(), width / 2, cy);
          cy += Math.max(24, height * 0.04) * 1.5;
          ctx.fillStyle = 'rgba(255,255,255,0.2)';
@@ -1065,7 +1064,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       }
 
       if (data.headline_line_1) {
-         ctx.font = `bold ${Math.max(36, height * 0.06)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(36, height * 0.06)}px ${hindiFontStack}`;
          ctx.fillStyle = '#FFFFFF';
          const lines = wrapText(data.headline_line_1, width * 0.8);
          for (const l of lines) {
@@ -1075,7 +1074,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       }
       if (data.headline_line_2) {
          cy += 10;
-         ctx.font = `bold ${Math.max(44, height * 0.075)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(44, height * 0.075)}px ${hindiFontStack}`;
          ctx.fillStyle = '#FCD34D';
          const lines = wrapText(data.headline_line_2, width * 0.8);
          for (const l of lines) {
@@ -1099,7 +1098,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.breaking_tag) {
          ctx.fillStyle = '#DC2626';
-         ctx.font = `bold ${Math.max(28, height * 0.045)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(28, height * 0.045)}px ${hindiFontStack}`;
          const textWidth = ctx.measureText(data.breaking_tag).width;
          ctx.fillRect(width * 0.05, cy, textWidth + 40, height * 0.06);
          ctx.fillStyle = '#FFFFFF';
@@ -1108,7 +1107,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       }
       
       const combined = [data.headline_line_1, data.headline_line_2].filter(Boolean).join(' ');
-      ctx.font = `bold ${Math.max(44, height * 0.07)}px ${hindiFontStackBold}`;
+      ctx.font = `bold ${Math.max(44, height * 0.07)}px ${hindiFontStack}`;
       const lines = wrapText(combined, width * 0.8);
       for (const l of lines) {
          const lw = ctx.measureText(l).width;
@@ -1133,7 +1132,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.breaking_tag) {
          ctx.fillStyle = '#DC2626';
-         ctx.font = `bold ${Math.max(26, height * 0.04)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(26, height * 0.04)}px ${hindiFontStack}`;
          ctx.fillText(data.breaking_tag.toUpperCase(), width * 0.95, cy);
          cy += Math.max(26, height * 0.04) * 1.5;
          ctx.strokeStyle = '#DC2626';
@@ -1146,7 +1145,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       }
 
       if (data.headline_line_1) {
-         ctx.font = `bold ${Math.max(40, height * 0.06)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(40, height * 0.06)}px ${hindiFontStack}`;
          ctx.fillStyle = '#FFFFFF';
          const h1Lines = wrapText(data.headline_line_1, maxTextWidth);
          for (const l of h1Lines) {
@@ -1157,7 +1156,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
          ctx.shadowBlur = 0;
       }
       if (data.headline_line_2) {
-         ctx.font = `bold ${Math.max(54, height * 0.085)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(54, height * 0.085)}px ${hindiFontStack}`;
          ctx.fillStyle = '#FCD34D';
          const h2Lines = wrapText(data.headline_line_2, maxTextWidth);
          for (const l of h2Lines) {
@@ -1182,7 +1181,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       ctx.fillRect(0, height - bottomBarH, width, bottomBarH);
       
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = `bold ${Math.max(24, height * 0.04)}px ${hindiFontStackBold}`;
+      ctx.font = `bold ${Math.max(24, height * 0.04)}px ${hindiFontStack}`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       const tickerText = data.breaking_tag ? (data.breaking_tag + " | " + "KKT NEWS") : "KKT NEWS | LATEST UPDATES";
@@ -1193,7 +1192,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       ctx.textBaseline = 'top';
 
       if (data.headline_line_1) {
-         ctx.font = `bold ${Math.max(44, height * 0.07)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(44, height * 0.07)}px ${hindiFontStack}`;
          ctx.fillStyle = '#FFFFFF';
          const h1Lines = wrapText(data.headline_line_1, maxTextWidth);
          for (const l of h1Lines) {
@@ -1202,7 +1201,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
          }
       }
       if (data.headline_line_2) {
-         ctx.font = `bold ${Math.max(54, height * 0.085)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(54, height * 0.085)}px ${hindiFontStack}`;
          ctx.fillStyle = '#FCD34D';
          const h2Lines = wrapText(data.headline_line_2, maxTextWidth);
          for (const l of h2Lines) {
@@ -1226,7 +1225,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.breaking_tag) {
          ctx.fillStyle = '#FBBF24';
-         ctx.font = `bold ${Math.max(34, height * 0.055)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(34, height * 0.055)}px ${hindiFontStack}`;
          ctx.fillText(data.breaking_tag.toUpperCase(), width * 0.5, cy);
          cy += Math.max(34, height * 0.055) * 1.5;
          ctx.strokeStyle = '#FBBF24';
@@ -1239,7 +1238,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       }
 
       if (data.headline_line_1) {
-         ctx.font = `bold ${Math.max(42, height * 0.065)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(42, height * 0.065)}px ${hindiFontStack}`;
          ctx.fillStyle = '#FFFFFF';
          const h1Lines = wrapText(data.headline_line_1, maxTextWidth);
          for (const l of h1Lines) {
@@ -1251,7 +1250,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
       }
       if (data.headline_line_2) {
          cy += 10;
-         ctx.font = `bold ${Math.max(52, height * 0.08)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(52, height * 0.08)}px ${hindiFontStack}`;
          ctx.fillStyle = '#FFFFFF'; // All white but bigger
          const h2Lines = wrapText(data.headline_line_2, maxTextWidth);
          for (const l of h2Lines) {
@@ -1281,12 +1280,12 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.subheadline) {
          let fontSize = Math.max(28, height * 0.045);
-         ctx.font = `bold ${fontSize}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
          let lines = wrapText(data.subheadline, width * 0.78);
          
          while (lines.length * (fontSize * 1.5) > height * 0.2 && fontSize > 16) {
              fontSize -= 2;
-             ctx.font = `bold ${fontSize}px ${hindiFontStackBold}`;
+             ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
              lines = wrapText(data.subheadline, width * 0.78);
          }
          
@@ -1310,12 +1309,12 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.headline_line_2) {
          let fontSize = Math.max(62, height * 0.09);
-         ctx.font = `bold ${fontSize}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
          let lines = wrapText(data.headline_line_2, width * 0.84);
          
          while (lines.length * (fontSize * 1.35) > height * 0.3 && fontSize > 32) {
              fontSize -= 4;
-             ctx.font = `bold ${fontSize}px ${hindiFontStackBold}`;
+             ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
              lines = wrapText(data.headline_line_2, width * 0.84);
          }
          
@@ -1335,12 +1334,12 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.headline_line_1) {
          let fontSize = Math.max(48, height * 0.07);
-         ctx.font = `bold ${fontSize}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
          let lines = wrapText(data.headline_line_1, width * 0.84);
          
          while (lines.length * (fontSize * 1.35) > height * 0.25 && fontSize > 28) {
              fontSize -= 4;
-             ctx.font = `bold ${fontSize}px ${hindiFontStackBold}`;
+             ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
              lines = wrapText(data.headline_line_1, width * 0.84);
          }
          
@@ -1360,7 +1359,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.breaking_tag) {
          ctx.fillStyle = '#DC2626';
-         ctx.font = `bold ${Math.max(34, height * 0.05)}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${Math.max(34, height * 0.05)}px ${hindiFontStack}`;
          const textWidth = ctx.measureText(data.breaking_tag.toUpperCase()).width;
          const tagHeight = height * 0.07;
          currentY -= tagHeight;
@@ -1393,11 +1392,11 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.subheadline) {
          let fontSize = Math.max(32, height * 0.05);
-         ctx.font = `bold ${fontSize}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
          let lines = wrapText(data.subheadline, width * 0.9);
          while (lines.length * (fontSize * 1.4) > height * 0.2 && fontSize > 16) {
              fontSize -= 2;
-             ctx.font = `bold ${fontSize}px ${hindiFontStackBold}`;
+             ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
              lines = wrapText(data.subheadline, width * 0.9);
          }
 
@@ -1415,11 +1414,11 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.headline_line_2) {
          let fontSize = Math.max(52, height * 0.08);
-         ctx.font = `bold ${fontSize}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
          let lines = wrapText(data.headline_line_2, width * 0.9);
          while (lines.length * (fontSize * 1.45) > height * 0.25 && fontSize > 28) {
              fontSize -= 4;
-             ctx.font = `bold ${fontSize}px ${hindiFontStackBold}`;
+             ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
              lines = wrapText(data.headline_line_2, width * 0.9);
          }
          
@@ -1440,11 +1439,11 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.headline_line_1) {
          let fontSize = Math.max(44, height * 0.065);
-         ctx.font = `bold ${fontSize}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
          let lines = wrapText(data.headline_line_1, width * 0.9);
          while (lines.length * (fontSize * 1.35) > height * 0.25 && fontSize > 24) {
              fontSize -= 4;
-             ctx.font = `bold ${fontSize}px ${hindiFontStackBold}`;
+             ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
              lines = wrapText(data.headline_line_1, width * 0.9);
          }
          
@@ -1464,7 +1463,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.breaking_tag) {
          let fontSize = Math.max(32, height * 0.045);
-         ctx.font = `bold ${fontSize}px ${hindiFontStackBold}`;
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
          const textWidth = ctx.measureText(data.breaking_tag).width;
          const tagHeight = fontSize * 1.6;
          currentY -= tagHeight;
@@ -1526,12 +1525,12 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.headline_line_2) {
         let h2FontSize = Math.max(56, height * 0.085);
-        ctx.font = `bold ${h2FontSize}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${h2FontSize}px ${hindiFontStack}`;
         let h2Lines = wrapText(data.headline_line_2, maxTextWidth);
         
         while (h2Lines.length * (h2FontSize * 1.3) > height * 0.3 && h2FontSize > 30) {
            h2FontSize -= 4;
-           ctx.font = `bold ${h2FontSize}px ${hindiFontStackBold}`;
+           ctx.font = `bold ${h2FontSize}px ${hindiFontStack}`;
            h2Lines = wrapText(data.headline_line_2, maxTextWidth);
         }
 
@@ -1547,12 +1546,12 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
       if (data.headline_line_1) {
         let h1FontSize = Math.max(48, height * 0.07);
-        ctx.font = `bold ${h1FontSize}px ${hindiFontStackBold}`;
+        ctx.font = `bold ${h1FontSize}px ${hindiFontStack}`;
         let h1Lines = wrapText(data.headline_line_1, maxTextWidth);
         
         while (h1Lines.length * (h1FontSize * 1.3) > height * 0.25 && h1FontSize > 24) {
            h1FontSize -= 4;
-           ctx.font = `bold ${h1FontSize}px ${hindiFontStackBold}`;
+           ctx.font = `bold ${h1FontSize}px ${hindiFontStack}`;
            h1Lines = wrapText(data.headline_line_1, maxTextWidth);
         }
 

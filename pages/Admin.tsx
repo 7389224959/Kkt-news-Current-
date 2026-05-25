@@ -55,17 +55,8 @@ const Admin: React.FC = () => {
   useEffect(() => {
     setArticles(contextArticles);
     setBreakingNews(contextBreakingNews);
+    setSiteSettings(contextSettings);
     setTrendingKeywords(contextKeywords);
-    
-    if (contextSettings) {
-      setSiteSettings(contextSettings);
-      if (contextSettings.dailyNewsRssSources) setDailyNewsRssSources(contextSettings.dailyNewsRssSources as any);
-      if (contextSettings.autoSchedulerEnabled !== undefined) setIsAutoSchedulerEnabled(contextSettings.autoSchedulerEnabled);
-      if (contextSettings.autoSchedulerInterval !== undefined) setAutoSchedulerInterval(contextSettings.autoSchedulerInterval);
-      if (contextSettings.dailyNewsModel) setDailyNewsModel(contextSettings.dailyNewsModel as any);
-      if (contextSettings.dailyNewsImageStrategy) setDailyNewsImageStrategy(contextSettings.dailyNewsImageStrategy as any);
-      if (contextSettings.dailyNewsImageGenModel) setDailyNewsImageGenModel(contextSettings.dailyNewsImageGenModel as any);
-    }
   }, [contextArticles, contextBreakingNews, contextSettings, contextKeywords]);
 
   const handleFetchTrendingKeywords = async () => {
@@ -199,69 +190,28 @@ const Admin: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
-  // --- Auth Init ---
+  // --- Init ---
   useEffect(() => {
     if (sessionStorage.getItem('kkt_admin_logged_in') === 'true') {
       setIsAuthenticated(true);
       refreshData();
     }
-  }, []); // Run only on mount
 
-  // --- Migration Init ---
-  useEffect(() => {
-    const runMigration = async () => {
-      if (contextSettings && !contextSettings.dailyNewsRssSources) {
-        // Migration: pull from local storage
-        let updatedSettings = { ...contextSettings };
-        let migrated = false;
-
-        const savedDailyNewsRssSources = localStorage.getItem('kkt_daily_news_rss_sources');
-        if (savedDailyNewsRssSources) {
-          try {
-            updatedSettings.dailyNewsRssSources = JSON.parse(savedDailyNewsRssSources);
-            migrated = true;
-          } catch (e) {}
-        }
-        
-        const savedAutoSchedulerEnabled = localStorage.getItem('kkt_auto_scheduler_enabled');
-        if (savedAutoSchedulerEnabled === 'true') {
-            updatedSettings.autoSchedulerEnabled = true;
-            migrated = true;
-        }
-
-        const savedAutoSchedulerInterval = localStorage.getItem('kkt_auto_scheduler_interval');
-        if (savedAutoSchedulerInterval) {
-            updatedSettings.autoSchedulerInterval = parseInt(savedAutoSchedulerInterval, 10);
-            migrated = true;
-        }
-
-        const savedAutoTemplateIndex = localStorage.getItem('kkt_auto_template_index');
-        if (savedAutoTemplateIndex) {
-            updatedSettings.autoTemplateIndex = parseInt(savedAutoTemplateIndex, 10);
-            migrated = true;
-        }
-
-        if (migrated) {
-            console.log("Migrating local storage settings to Supabase site_settings...");
-            try {
-              await saveSiteSettings(updatedSettings);
-              // Clean up localStorage
-              localStorage.removeItem('kkt_daily_news_rss_sources');
-              localStorage.removeItem('kkt_auto_scheduler_enabled');
-              localStorage.removeItem('kkt_auto_scheduler_interval');
-              localStorage.removeItem('kkt_auto_template_index');
-              console.log("Migration successful.");
-              alert("✅ Migration of Auto Robot configurations to Supabase completed successfully!");
-              setSiteSettings(updatedSettings);
-              refreshGlobalData(); // Also ensures AppContext is aware
-            } catch (error) {
-              console.error("Migration failed:", error);
-            }
-        }
+    const savedDailyNewsRssSources = localStorage.getItem('kkt_daily_news_rss_sources');
+    if (savedDailyNewsRssSources) {
+      try {
+        setDailyNewsRssSources(JSON.parse(savedDailyNewsRssSources));
+      } catch (e) {
+        console.error('Error parsing daily news RSS sources', e);
       }
-    };
-    runMigration();
-  }, [contextSettings]);
+    }
+    
+    // Load scheduler settings
+    const savedAutoSchedulerEnabled = localStorage.getItem('kkt_auto_scheduler_enabled');
+    if (savedAutoSchedulerEnabled === 'true') setIsAutoSchedulerEnabled(true);
+    const savedAutoSchedulerInterval = localStorage.getItem('kkt_auto_scheduler_interval');
+    if (savedAutoSchedulerInterval) setAutoSchedulerInterval(parseInt(savedAutoSchedulerInterval, 10) || 10);
+  }, []);
 
   // Sync state to ref for access in setInterval
   useEffect(() => {
@@ -458,15 +408,13 @@ const Admin: React.FC = () => {
         }
 
         const allThemes = customThemes.length > 0 ? [...customThemes, ...defaultThemes] : defaultThemes;
-        let currentIndex = settings?.autoTemplateIndex || 0;
+        let currentIndex = parseInt(localStorage.getItem('kkt_auto_template_index') || '0', 10);
         if (isNaN(currentIndex) || currentIndex >= allThemes.length) {
           currentIndex = 0;
         }
 
         const themeToUse = allThemes[currentIndex];
-        if (settings) {
-           saveSiteSettings({ ...settings, autoTemplateIndex: (currentIndex + 1) % allThemes.length }).then(() => refreshGlobalData());
-        }
+        localStorage.setItem('kkt_auto_template_index', ((currentIndex + 1) % allThemes.length).toString());
         setViralSelectedTheme(themeToUse);
 
         let finalInstructions = "";
@@ -709,7 +657,7 @@ const Admin: React.FC = () => {
 
 
   // --- Daily News Auto Fetch Handlers ---
-  const handleAddDailyNewsRssSource = async () => {
+  const handleAddDailyNewsRssSource = () => {
     if (!newDailyNewsRssLink.trim()) return;
     try {
       new URL(newDailyNewsRssLink);
@@ -723,20 +671,14 @@ const Admin: React.FC = () => {
     }
     const updatedSources = [...dailyNewsRssSources, { url: newDailyNewsRssLink, category: newDailyNewsRssCategory }];
     setDailyNewsRssSources(updatedSources);
+    localStorage.setItem('kkt_daily_news_rss_sources', JSON.stringify(updatedSources));
     setNewDailyNewsRssLink('');
-    if (settings) {
-       await saveSiteSettings({ ...settings, dailyNewsRssSources: updatedSources });
-       refreshGlobalData();
-    }
   };
 
-  const handleRemoveDailyNewsRssSource = async (idxToRemove: number) => {
+  const handleRemoveDailyNewsRssSource = (idxToRemove: number) => {
     const updatedSources = dailyNewsRssSources.filter((_, idx) => idx !== idxToRemove);
     setDailyNewsRssSources(updatedSources);
-    if (settings) {
-       await saveSiteSettings({ ...settings, dailyNewsRssSources: updatedSources });
-       refreshGlobalData();
-    }
+    localStorage.setItem('kkt_daily_news_rss_sources', JSON.stringify(updatedSources));
   };
 
   const handleOpenViralModal = () => {
@@ -2682,11 +2624,7 @@ const Admin: React.FC = () => {
                 <select
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none mb-4"
                   value={dailyNewsModel}
-                  onChange={(e) => {
-                    const val = e.target.value as 'gemini' | 'openrouter';
-                    setDailyNewsModel(val);
-                    if (settings) saveSiteSettings({ ...settings, dailyNewsModel: val }).then(() => refreshGlobalData());
-                  }}
+                  onChange={(e) => setDailyNewsModel(e.target.value as 'gemini' | 'openrouter')}
                   disabled={isFetchingDailyNews}
                 >
                   <option value="gemini">Gemini 3.1 Pro (Default)</option>
@@ -2697,11 +2635,7 @@ const Admin: React.FC = () => {
                 <select
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none mb-4"
                   value={dailyNewsImageStrategy}
-                  onChange={(e) => {
-                    const val = e.target.value as 'auto' | 'manual';
-                    setDailyNewsImageStrategy(val);
-                    if (settings) saveSiteSettings({ ...settings, dailyNewsImageStrategy: val }).then(() => refreshGlobalData());
-                  }}
+                  onChange={(e) => setDailyNewsImageStrategy(e.target.value as 'auto' | 'manual')}
                   disabled={isFetchingDailyNews}
                 >
                   <option value="auto">Auto-generate image with news</option>
@@ -2714,11 +2648,7 @@ const Admin: React.FC = () => {
                     <select
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none mb-4"
                       value={dailyNewsImageGenModel}
-                      onChange={(e) => {
-                        const val = e.target.value as 'gemini' | 'cloudflare';
-                        setDailyNewsImageGenModel(val);
-                        if (settings) saveSiteSettings({ ...settings, dailyNewsImageGenModel: val }).then(() => refreshGlobalData());
-                      }}
+                      onChange={(e) => setDailyNewsImageGenModel(e.target.value as 'gemini' | 'cloudflare')}
                       disabled={isFetchingDailyNews}
                     >
                       <option value="gemini">Gemini API</option>
@@ -2827,9 +2757,7 @@ const Admin: React.FC = () => {
                       onChange={(e) => {
                         const val = e.target.checked;
                         setIsAutoSchedulerEnabled(val);
-                        if (settings) {
-                          saveSiteSettings({ ...settings, autoSchedulerEnabled: val }).then(() => refreshGlobalData());
-                        }
+                        localStorage.setItem('kkt_auto_scheduler_enabled', String(val));
                       }}
                     />
                     Enable Auto Fetch Loop
@@ -2847,9 +2775,7 @@ const Admin: React.FC = () => {
                       onChange={(e) => {
                         const val = parseInt(e.target.value) || 10;
                         setAutoSchedulerInterval(val);
-                        if (settings) {
-                          saveSiteSettings({ ...settings, autoSchedulerInterval: val }).then(() => refreshGlobalData());
-                        }
+                        localStorage.setItem('kkt_auto_scheduler_interval', String(val));
                       }}
                     />
                     <span className="text-sm text-orange-800">minutes</span>

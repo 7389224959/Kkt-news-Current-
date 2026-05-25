@@ -1,8 +1,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { OpenRouter } from "@openrouter/sdk";
-import { Article, Category, ViralPost } from '../types.js';
-import { generateSlug } from '../newsUtils.js';
-import { supabase } from './supabase.js';
+import { Article, Category, ViralPost } from "../types";
+import { generateSlug } from "../newsUtils";
+import { supabase } from "./supabase";
 import { jsonrepair } from 'jsonrepair';
 
 const getAiClient = () => {
@@ -60,7 +60,7 @@ export const getStockImageUrl = (keywords: string, category?: Category): string 
   return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1080&height=1080&nologo=true&seed=${randomSeed}&model=flux`;
 };
 
-import { compressImage } from '../src/utils/imageUtils.js';
+import { compressImage } from '../src/utils/imageUtils';
 
 /**
  * Generates a high-quality AI image using Gemini 2.5 Flash Image
@@ -401,8 +401,8 @@ export const fetchTrendingKeywords = async (): Promise<{ label: string, articleS
   }
 };
 
-import { createArticle, getArticles, getSiteSettings } from './articleService.js';
-import { uploadImage } from './supabase.js';
+import { createArticle, getArticles, getSiteSettings } from './articleService';
+import { uploadImage } from './supabase';
 
 async function extractArticleLinks(url: string): Promise<{title: string, link: string, content?: string}[]> {
   try {
@@ -419,7 +419,7 @@ async function extractArticleLinks(url: string): Promise<{title: string, link: s
   }
 }
 
-import { getWikipediaImage } from './wikipediaService.js';
+import { getWikipediaImage } from './wikipediaService';
 
 export const checkDailyNewsStatus = async (rssSources: { url: string, category: string }[]) => {
   if (!rssSources || rssSources.length === 0) {
@@ -891,11 +891,11 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
             
             try {
               if (typeof window !== 'undefined') {
-                const { createCollageOnFrontend } = await import('../src/utils/frontendCollage.js');
+                const { createCollageOnFrontend } = await import('../src/utils/frontendCollage');
                 console.log("Generating premium collage entirely on frontend canvas...");
                 const base64Collage = await createCollageOnFrontend(finalHeroImageUrl, contextImageUrl, host);
                 
-                const { uploadImage } = await import('./supabase.js');
+                const { uploadImage } = await import('./supabase');
                 const uploadedUrl = await uploadImage(base64Collage);
                 if (uploadedUrl) {
                   imageUrl = uploadedUrl;
