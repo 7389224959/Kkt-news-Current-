@@ -289,7 +289,7 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
     // Parse boxes function
     const parseBox = (boxStr?: string) => {
       if (!boxStr || boxStr === 'hidden') return null;
-      const parts = boxStr.split('%').map(p => parseFloat(p.replace(/,/g, '').trim()));
+      const parts = boxStr.split(',').map(p => parseFloat(p.replace(/%/g, '').trim()));
       if (parts.length >= 4 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2]) && !isNaN(parts[3])) {
         return {
           x: (parts[0] / 100) * width,

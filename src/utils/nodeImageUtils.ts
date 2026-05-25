@@ -89,7 +89,7 @@ export const overlayTextOnImageNode = (base64Str: string, data: any): Promise<st
 
         const parseBox = (boxStr: string | undefined) => {
           if (!boxStr || boxStr === 'hidden') return null;
-          const parts = boxStr.split('%').map((p: string) => parseFloat(p.replace(/,/g, '').trim()));
+          const parts = boxStr.split(',').map((p: string) => parseFloat(p.replace(/%/g, '').trim()));
           if (parts.length >= 4 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2]) && !isNaN(parts[3])) {
             return {
               x: (parts[0] / 100) * CANVAS_WIDTH,
@@ -111,6 +111,8 @@ export const overlayTextOnImageNode = (base64Str: string, data: any): Promise<st
 
         if (!data.customTemplate.templateImageUrl) {
           if (coords.headline_box) drawEraseBox(coords.headline_box, styles.headlineBg);
+          if (coords.headline_line_1_box) drawEraseBox(coords.headline_line_1_box, styles.headlineBg);
+          if (coords.headline_line_2_box) drawEraseBox(coords.headline_line_2_box, styles.headlineBg);
           if (coords.subheadline_box) drawEraseBox(coords.subheadline_box, styles.subheadlineBg);
           if (coords.summary_box) drawEraseBox(coords.summary_box, styles.summaryBg);
           if (coords.breaking_tag_box) drawEraseBox(coords.breaking_tag_box, styles.breakingTagBg);

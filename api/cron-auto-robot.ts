@@ -72,20 +72,58 @@ export default async function handler(req: any, res: any) {
       customTemplate = viralTemplates.find((t: any) => t.id === tmplId);
       if (customTemplate) {
          const tmpl = customTemplate;
-         const hasSub = tmpl.coordinates?.subheadline_box && tmpl.coordinates.subheadline_box !== 'hidden';
-         const hasSum = tmpl.coordinates?.summary_box && tmpl.coordinates.summary_box !== 'hidden';
-         const hasBreak = tmpl.coordinates?.breaking_tag_box && tmpl.coordinates.breaking_tag_box !== 'hidden';
-         const hasHead1 = tmpl.coordinates?.headline_line_1_box && tmpl.coordinates.headline_line_1_box !== 'hidden';
-         const hasHead2 = tmpl.coordinates?.headline_line_2_box && tmpl.coordinates.headline_line_2_box !== 'hidden';
-         const hasHeadL = tmpl.coordinates?.headline_box && tmpl.coordinates.headline_box !== 'hidden';
+         const coords = tmpl.coordinates || {};
+         const hasSub = coords.subheadline_box && coords.subheadline_box !== 'hidden';
+         const hasSum = coords.summary_box && coords.summary_box !== 'hidden';
+         const hasBreak = coords.breaking_tag_box && coords.breaking_tag_box !== 'hidden';
+         const hasHead1 = coords.headline_line_1_box && coords.headline_line_1_box !== 'hidden';
+         const hasHead2 = coords.headline_line_2_box && coords.headline_line_2_box !== 'hidden';
+         const hasHeadL = coords.headline_box && coords.headline_box !== 'hidden';
 
-         if (!hasSub) finalInstructions += "- DO NOT GENERATE a subheadline, it is hidden in this template.\n";
-         if (!hasSum) finalInstructions += "- DO NOT GENERATE a summary, it is hidden in this template.\n";
-         if (!hasBreak) finalInstructions += "- DO NOT GENERATE a breaking_tag, it is hidden.\n";
-         if (!hasHead1 && !hasHead2 && !hasHeadL) { } 
-         else {
-             if (hasHead1) {} else if (!hasHeadL) finalInstructions += "- DO NOT GENERATE headline_line_1.\n";
-             if (hasHead2) {} else if (!hasHeadL) finalInstructions += "- DO NOT GENERATE headline_line_2.\n";
+         const parseBoxToChars = (boxString: string | undefined, mult: number) => {
+            if(!boxString || boxString === 'hidden') return 0;
+            const parts = boxString.split(',').map((s: string) => parseFloat(s.replace('%','')));
+            if(parts.length===4) {
+              const w = parts[2];
+              const h = parts[3];
+              return Math.floor((w * h) / mult);
+            }
+            return 0;
+         };
+
+         if (!hasSub) {
+            finalInstructions += "- DO NOT GENERATE a subheadline, it is hidden in this template.\n";
+         } else {
+            const maxChars = tmpl.limits?.subheadlineMaxChars || Math.floor(parseBoxToChars(coords.subheadline_box, 15));
+            if(maxChars > 0) finalInstructions += `- SUBHEADLINE MAX LENGTH: extremely strict limit of ~${maxChars} ALPHABETS/CHARACTERS.\n`;
+         }
+
+         if (!hasSum) {
+            finalInstructions += "- DO NOT GENERATE a summary, it is hidden in this template.\n";
+         } else {
+            const maxChars = tmpl.limits?.summaryMaxChars || parseBoxToChars(coords.summary_box, 20);
+            finalInstructions += `- IMPORTANT: You MUST GENERATE a 'summary' containing key bullet points or a short news summary for this template.\n`;
+            if(maxChars > 0) finalInstructions += `- SUMMARY MAX LENGTH: strictly keep it under ~${Math.max(60, maxChars)} characters so it fits the screen box.\n`;
+         }
+
+         if (!hasBreak) finalInstructions += "- DO NOT GENERATE a breaking_tag, it is hidden in this template.\n";
+
+         if (!hasHead1 && !hasHead2 && !hasHeadL) {
+            finalInstructions += "- DO NOT GENERATE a headline (line 1 or 2), it is hidden in this template.\n";
+         } else {
+            if (hasHead1 || hasHeadL) {
+                const limit1 = tmpl.limits?.headlineMaxChars || Math.floor(parseBoxToChars(coords.headline_line_1_box || coords.headline_box, 8));
+                if(limit1 > 0) finalInstructions += `- HEADLINE LINE 1 MAX LENGTH: strictly keep it under ~${Math.max(5, limit1)} ALPHABETS/CHARACTERS.\n`;
+            } else {
+                finalInstructions += "- DO NOT GENERATE headline_line_1.\n";
+            }
+            
+            if (hasHead2) {
+                const limit2 = tmpl.limits?.headline2MaxChars || Math.floor(parseBoxToChars(coords.headline_line_2_box, 8));
+                if(limit2 > 0) finalInstructions += `- HEADLINE LINE 2 MAX LENGTH: strictly keep it under ~${Math.max(5, limit2)} ALPHABETS/CHARACTERS.\n`;
+            } else if (!hasHeadL) {
+                finalInstructions += "- DO NOT GENERATE headline_line_2.\n";
+            }
          }
       }
     }
