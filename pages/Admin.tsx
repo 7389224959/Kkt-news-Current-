@@ -199,14 +199,17 @@ const Admin: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
-  // --- Init ---
+  // --- Auth Init ---
   useEffect(() => {
-    const checkAuthAndMigrate = async () => {
-      if (sessionStorage.getItem('kkt_admin_logged_in') === 'true') {
-        setIsAuthenticated(true);
-        refreshData();
-      }
+    if (sessionStorage.getItem('kkt_admin_logged_in') === 'true') {
+      setIsAuthenticated(true);
+      refreshData();
+    }
+  }, []); // Run only on mount
 
+  // --- Migration Init ---
+  useEffect(() => {
+    const runMigration = async () => {
       if (contextSettings && !contextSettings.dailyNewsRssSources) {
         // Migration: pull from local storage
         let updatedSettings = { ...contextSettings };
@@ -232,6 +235,12 @@ const Admin: React.FC = () => {
             migrated = true;
         }
 
+        const savedAutoTemplateIndex = localStorage.getItem('kkt_auto_template_index');
+        if (savedAutoTemplateIndex) {
+            updatedSettings.autoTemplateIndex = parseInt(savedAutoTemplateIndex, 10);
+            migrated = true;
+        }
+
         if (migrated) {
             console.log("Migrating local storage settings to Supabase site_settings...");
             try {
@@ -240,6 +249,7 @@ const Admin: React.FC = () => {
               localStorage.removeItem('kkt_daily_news_rss_sources');
               localStorage.removeItem('kkt_auto_scheduler_enabled');
               localStorage.removeItem('kkt_auto_scheduler_interval');
+              localStorage.removeItem('kkt_auto_template_index');
               console.log("Migration successful.");
               setSiteSettings(updatedSettings);
               refreshGlobalData(); // Also ensures AppContext is aware
@@ -249,7 +259,7 @@ const Admin: React.FC = () => {
         }
       }
     };
-    checkAuthAndMigrate();
+    runMigration();
   }, [contextSettings]);
 
   // Sync state to ref for access in setInterval
