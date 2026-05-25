@@ -163,9 +163,18 @@ export default async function handler(req, res) {
     }
     
     if (!imageUrl) {
-      const imgElements = doc.window.document.querySelectorAll('article img, main img, figure img');
+      const imgElements = doc.window.document.querySelectorAll('article img, main img, figure img, .post-content img, .entry-content img, .content img');
       if (imgElements.length > 0) {
          imageUrl = imgElements[0].getAttribute('src') || '';
+      } else {
+         const allImgs = doc.window.document.querySelectorAll('img');
+         for (const img of Array.from(allImgs)) {
+            const src = img.getAttribute('src');
+            if (src && !src.includes('logo') && !src.includes('avatar') && !src.includes('icon') && !src.includes('spinner')) {
+               imageUrl = src;
+               break;
+            }
+         }
       }
     }
     

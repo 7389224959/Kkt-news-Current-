@@ -83,7 +83,7 @@ export const getStockImageUrl = async (keywords: string, category?: Category): P
     .slice(0, 6)
     .join(' ');
 
-  const prompt = `Realistic Indian news report photography about ${cleanKeywords}. Professional editorial journalism photography, documentary style, action shot or relevant context. No text, no words, no watermarks, realistic lighting.`;
+  const prompt = `Realistic Indian news report photography about: ${cleanKeywords}. Professional editorial journalism photography. Must be highly relevant to the topic. Do not generate generic monuments or random landscapes unless specifically mentioned. No text or watermarks.`;
 
   try {
     const fetchUrl = typeof window !== 'undefined' 
@@ -677,7 +677,7 @@ export const fetchDailyNews = async (
   }
 
   const promptContext = extractedArticlesData.map((data, index) => `
-    CANDIDATE ${index + 1}:
+    CANDIDATE ID: ${index}
     - Category: ${data.category}
     - Original Title: ${data.title}
     - Source Link: ${data.link}
@@ -753,12 +753,13 @@ export const fetchDailyNews = async (
       [
         {
           "title": "HEADLINE (Hindi)",
+          "candidateId": "MUST be the integer CANDIDATE ID from the chosen candidate",
           "excerpt": "SUMMARY (Hindi)",
           "content": "A single string containing the full article including Intro, Main Content, Data, User Value, Conclusion formatted nicely in Markdown WITHOUT SEO elements",
           "category": "State News" | "Politics" | "Crime" | "National" | "Sports" | "Entertainment" | "Lifestyle",
           "author": "Professional Journalist",
-          "sourceUrl": "MUST be the EXACT source link provided in the chosen candidate.",
-          "sourceImageUrl": "MUST be the exactly the same as the Source Image URL provided in the chosen candidate (if available).",
+          "sourceUrl": "Return the EXACT Source Link string from the chosen CANDIDATE. Do not change it.",
+          "sourceImageUrl": "Return the EXACT Source Image URL string from the chosen CANDIDATE. Do not change it.",
           "imageGenerationPlan": {
             "primarySubject": "Name of main subject/person for hero cutout (if applicable), e.g. 'Narendra Modi', 'Amit Shah'. MUST be a well-known entity on Wikipedia.",
             "englishImagePrompt": "A highly detailed, 1-sentence English description of the scene that perfectly describes the news event. E.g. 'Police arresting a suspect near a modern Indian bank building'. NO NAMES OF PEOPLE OR TEXT."
@@ -922,10 +923,18 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
           const dp = (a as any).imageGenerationPlan || {};
           
           // Guarantee real RSS image by matching candidate data, fallback to AI output
-          let realCandidateImage = extractedArticlesData.find(cad => cad.link === a.sourceUrl)?.sourceImageUrl;
+          let realCandidateImage = null;
+          
+          if (typeof (a as any).candidateId === 'number' && extractedArticlesData[(a as any).candidateId]) {
+              realCandidateImage = extractedArticlesData[(a as any).candidateId].sourceImageUrl;
+          }
+          
+          if (!realCandidateImage) {
+            realCandidateImage = extractedArticlesData.find(cad => cad.link === a.sourceUrl)?.sourceImageUrl;
+          }
           if (!realCandidateImage) {
             // Attempt fuzzy match on title if URL match failed
-            realCandidateImage = extractedArticlesData.find(cad => cad.title.includes(a.title.substring(0, 10)) || a.title.includes(cad.title.substring(0, 10)))?.sourceImageUrl;
+            realCandidateImage = extractedArticlesData.find(cad => a.title.includes(cad.title.substring(0, 15)) || cad.title.includes(a.title.substring(0, 15)))?.sourceImageUrl;
           }
           
           let heroImage = realCandidateImage && realCandidateImage !== 'none' ? realCandidateImage : null;
@@ -933,14 +942,11 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
              heroImage = (a as any).sourceImageUrl && (a as any).sourceImageUrl !== 'none' ? (a as any).sourceImageUrl : null;
           }
           
-          if (!heroImage && dp.primarySubject && dp.primarySubject.trim().length > 0) {
-            heroImage = await getWikipediaImage(dp.primarySubject);
-            if (heroImage) console.log(`Found Wikipedia hero image for ${dp.primarySubject}: ${heroImage}`);
-          }
-
           // If no heroImage found at all, fallback to Gemini or Cloudflare
           if (!heroImage) {
-             const imagePromptToUse = dp.englishImagePrompt || a.imagePrompt || a.title;
+             const imagePromptToUse = dp.englishImagePrompt || (a as any).seoTitle || a.title;
+             console.log("No RSS image found. Falling back to AI Image generation with prompt:", imagePromptToUse);
+             
              try {
                 if (imageGenModel === 'gemini') {
                     console.log("Generating AI hero image with Gemini...");

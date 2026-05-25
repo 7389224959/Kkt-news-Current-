@@ -817,7 +817,7 @@ const Admin: React.FC = () => {
       setRawViralGeneratedImage(reuseImageUrl || '');
     } catch (error) {
       console.error("Error generating viral post:", error);
-      alert("Failed to generate viral post. Please try again.");
+      alert("Failed to generate viral post: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsGeneratingViral(false);
     }
@@ -924,7 +924,7 @@ const Admin: React.FC = () => {
       setViralRegeneratePrompt(''); // Clear feedback after successful regeneration
     } catch (error) {
       console.error("Error regenerating viral post:", error);
-      alert("Failed to regenerate viral post. Please try again.");
+      alert("Failed to regenerate viral post: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsGeneratingViral(false);
     }
