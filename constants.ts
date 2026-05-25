@@ -1,4 +1,4 @@
-import { Article, BreakingNews, Category, SiteSettings } from './types';
+import { Article, BreakingNews, Category, SiteSettings } from './types.js';
 
 // These serve as defaults if no custom settings are saved
 export const APP_NAME = "Khabar Kal Tak"; 

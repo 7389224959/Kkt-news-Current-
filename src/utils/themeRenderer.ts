@@ -1,4 +1,4 @@
-import { ViralPostOverlayData } from './imageUtils';
+import { ViralPostOverlayData } from './imageUtils.js';
 
 export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number, height: number, data: ViralPostOverlayData) => {
   const fontStack = '"Inter", system-ui, -apple-system, sans-serif';

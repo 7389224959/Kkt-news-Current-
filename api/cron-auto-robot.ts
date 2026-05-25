@@ -1,8 +1,8 @@
-import { fetchDailyNews } from '../services/geminiService';
-import { generateViralPost } from '../services/geminiService';
-import { supabase } from '../services/supabase';
-import { uploadImage } from '../services/supabase';
-import { renderThemeOverlay } from '../src/utils/themeRenderer';
+import { fetchDailyNews } from '../services/geminiService.js';
+import { generateViralPost } from '../services/geminiService.js';
+import { supabase } from '../services/supabase.js';
+import { uploadImage } from '../services/supabase.js';
+import { renderThemeOverlay } from '../src/utils/themeRenderer.js';
 import { createCanvas, loadImage } from 'canvas';
 import dotenv from 'dotenv';
 dotenv.config();
