@@ -83,8 +83,8 @@ export const getStockImageUrl = async (keywords: string, category?: Category): P
     .slice(0, 6)
     .join(' ');
 
-  const prompt = `Premium Indian editorial news background for: ${cleanKeywords}. Include realistic Indian atmosphere, cinematic lighting, warm tones, subtle Indian flag or government architecture when relevant, ultra detailed, photorealistic, sharp focus, 8k. Do not generate any people, faces, portraits, or human figures.`;
-  
+  const prompt = `Realistic news report photography about ${cleanKeywords}. Professional editorial journalism photography, documentary style, action shot or relevant context. No text, no words, no watermarks, realistic lighting.`;
+
   try {
     const fetchUrl = typeof window !== 'undefined' 
       ? '/api/cloudflare-image' 
@@ -919,7 +919,18 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
       if (imageStrategy === 'auto') {
         try {
           const dp = (a as any).imageGenerationPlan || {};
-          let heroImage = (a as any).sourceImageUrl && (a as any).sourceImageUrl !== 'none' ? (a as any).sourceImageUrl : null;
+          
+          // Guarantee real RSS image by matching candidate data, fallback to AI output
+          let realCandidateImage = extractedArticlesData.find(cad => cad.link === a.sourceUrl)?.sourceImageUrl;
+          if (!realCandidateImage) {
+            // Attempt fuzzy match on title if URL match failed
+            realCandidateImage = extractedArticlesData.find(cad => cad.title.includes(a.title.substring(0, 10)) || a.title.includes(cad.title.substring(0, 10)))?.sourceImageUrl;
+          }
+          
+          let heroImage = realCandidateImage && realCandidateImage !== 'none' ? realCandidateImage : null;
+          if (!heroImage) {
+             heroImage = (a as any).sourceImageUrl && (a as any).sourceImageUrl !== 'none' ? (a as any).sourceImageUrl : null;
+          }
           
           if (!heroImage && dp.primarySubject && dp.primarySubject.trim().length > 0) {
             heroImage = await getWikipediaImage(dp.primarySubject);

@@ -19,7 +19,7 @@ export default async function handler(req, res) {
     }
     
     const fetchWithFallback = async (targetUrl) => {
-      const proxies = ['none', 'twitterbot', 'facebookbot', 'bingbot', 'googlebot', 'jina', 'archive', 'allorigins', 'corsproxy', 'codetabs'];
+      const proxies = ['none', 'twitterbot', 'facebookbot', 'googlebot', 'allorigins', 'corsproxy', 'codetabs', 'jina', 'archive'];
       let lastErrorText = '';
 
       for (const proxy of proxies) {
