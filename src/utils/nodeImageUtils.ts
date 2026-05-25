@@ -2,27 +2,69 @@ import { createCanvas, loadImage, registerFont } from 'canvas';
 import { renderThemeOverlay } from './themeRenderer.js';
 import path from 'path';
 import fs from 'fs';
+import https from 'https';
+import os from 'os';
 
-// Register fonts for Node Canvas
-const fontRegularPath = path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-Regular.ttf');
-const fontBoldPath = path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-Bold.ttf');
+let fontsRegistered = false;
 
-try {
-  if (fs.existsSync(fontRegularPath)) {
+const downloadFont = (url: string, dest: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if (fs.existsSync(dest)) {
+      return resolve();
+    }
+    const file = fs.createWriteStream(dest);
+    https.get(url, (response) => {
+      if (response.statusCode === 301 || response.statusCode === 302) {
+        return downloadFont(response.headers.location!, dest).then(resolve).catch(reject);
+      }
+      response.pipe(file);
+      file.on('finish', () => {
+        file.close(() => resolve());
+      });
+    }).on('error', (err) => {
+      fs.unlink(dest, () => {});
+      reject(err);
+    });
+  });
+};
+
+const ensureFonts = async () => {
+  if (fontsRegistered) return;
+  const tmpDir = os.tmpdir();
+  const fontRegularPath = path.join(tmpDir, 'NotoSansDevanagari-Regular.ttf');
+  const fontBoldPath = path.join(tmpDir, 'NotoSansDevanagari-Bold.ttf');
+  
+  try {
+    await downloadFont('https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf', fontRegularPath);
+    await downloadFont('https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf', fontBoldPath);
+    
     registerFont(fontRegularPath, { family: 'NotoDevanagari' });
-    console.log("Font registered successfully");
-  }
-  if (fs.existsSync(fontBoldPath)) {
     registerFont(fontBoldPath, { family: 'NotoDevanagariBold' });
-    console.log("Font registered successfully");
+    fontsRegistered = true;
+    console.log("Fonts downloaded and registered successfully to /tmp");
+  } catch (e) {
+    console.error("Failed to download or register fonts:", e);
+    
+    // Fallback to local repo paths if testing locally
+    const localReg = path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-Regular.ttf');
+    const localBold = path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-Bold.ttf');
+    
+    if (fs.existsSync(localReg) && fs.existsSync(localBold)) {
+      try {
+        registerFont(localReg, { family: 'NotoDevanagari' });
+        registerFont(localBold, { family: 'NotoDevanagariBold' });
+        fontsRegistered = true;
+        console.log("Fallback fonts registered successfully");
+      } catch (err) {}
+    }
   }
-} catch (e) {
-  console.error("Failed to register fonts:", e);
-}
+};
 
 export const overlayTextOnImageNode = (base64Str: string, data: any): Promise<string> => {
   return new Promise(async (resolve) => {
     try {
+      await ensureFonts();
+      
       const imgBuffer = Buffer.from(base64Str.replace(/^data:image\/[a-z]+;base64,/, ''), 'base64');
       const newsImg = await loadImage(imgBuffer);
       let templateImg: any = null;
