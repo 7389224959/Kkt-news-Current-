@@ -83,7 +83,7 @@ export const getStockImageUrl = async (keywords: string, category?: Category): P
     .slice(0, 6)
     .join(' ');
 
-  const prompt = `Realistic news report photography about ${cleanKeywords}. Professional editorial journalism photography, documentary style, action shot or relevant context. No text, no words, no watermarks, realistic lighting.`;
+  const prompt = `Realistic Indian news report photography about ${cleanKeywords}. Professional editorial journalism photography, documentary style, action shot or relevant context. No text, no words, no watermarks, realistic lighting.`;
 
   try {
     const fetchUrl = typeof window !== 'undefined' 
@@ -760,7 +760,8 @@ export const fetchDailyNews = async (
           "sourceUrl": "MUST be the EXACT source link provided in the chosen candidate.",
           "sourceImageUrl": "MUST be the exactly the same as the Source Image URL provided in the chosen candidate (if available).",
           "imageGenerationPlan": {
-            "primarySubject": "Name of main subject/person for hero cutout (if applicable), e.g. 'Narendra Modi', 'Amit Shah'. MUST be a well-known entity on Wikipedia."
+            "primarySubject": "Name of main subject/person for hero cutout (if applicable), e.g. 'Narendra Modi', 'Amit Shah'. MUST be a well-known entity on Wikipedia.",
+            "englishImagePrompt": "A highly detailed, 1-sentence English description of the scene that perfectly describes the news event. E.g. 'Police arresting a suspect near a modern Indian bank building'. NO NAMES OF PEOPLE OR TEXT."
           },
           "tags": ["Tag 1", "Tag 2"],
           "seoTitle": "A 60 character SEO optimized title",
@@ -937,11 +938,27 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
             if (heroImage) console.log(`Found Wikipedia hero image for ${dp.primarySubject}: ${heroImage}`);
           }
 
-          // If no heroImage found at all, skip collage and fallback to standard AI background ONLY below
+          // If no heroImage found at all, fallback to Gemini or Cloudflare
+          if (!heroImage) {
+             const imagePromptToUse = dp.englishImagePrompt || a.imagePrompt || a.title;
+             try {
+                if (imageGenModel === 'gemini') {
+                    console.log("Generating AI hero image with Gemini...");
+                    const base64Img = await generateAiImage(imagePromptToUse);
+                    heroImage = await uploadImage(base64Img);
+                } else {
+                    console.log("Generating AI hero image with Cloudflare...");
+                    heroImage = await getStockImageUrl(imagePromptToUse, category);
+                }
+             } catch(err) {
+                console.error("Image generation failed, fallback to Cloudflare", err);
+                heroImage = await getStockImageUrl(imagePromptToUse, category);
+             }
+          }
+
           if (heroImage) {
             console.log("Found source/primary image, creating premium editorial collage layout...");
             
-            // We no longer generate AI background (Pollinations etc.) 
             // The frontend rendering engine uses the SAME image for both foreground and blurred background
             const contextImageUrl = null;
             
@@ -952,7 +969,6 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
               else host = `http://localhost:${process.env.PORT || 3000}`;
             }
             
-            // We no longer remove background because we want a sharp photo card for foreground
             let finalHeroImageUrl = heroImage;
             
             try {
@@ -978,19 +994,11 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
                imageUrl = finalHeroImageUrl;
             }
           }
-          
-          if (!imageUrl && imageGenModel === 'gemini') {
-            const base64Image = await generateAiImage(a.imagePrompt || a.title);
-            // Upload to Supabase Storage
-            imageUrl = await uploadImage(base64Image);
-          }
-          
-          if (!imageUrl) {
-            imageUrl = await getStockImageUrl(a.imagePrompt || "news", category);
-          }
         } catch (e) {
           console.warn("AI Image generation/upload failed, falling back to stock:", e);
-          imageUrl = await getStockImageUrl(a.imagePrompt || "news", category);
+          const dp = (a as any).imageGenerationPlan || {};
+          const imagePromptToUse = dp.englishImagePrompt || a.imagePrompt || a.title;
+          imageUrl = await getStockImageUrl(imagePromptToUse, category);
         }
       } else {
         console.log(`Manual image override for: ${a.title}`);

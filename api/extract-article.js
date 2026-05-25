@@ -157,11 +157,13 @@ export default async function handler(req, res) {
     
     // Extract og:image or any primary metadata image
     let imageUrl = '';
-    const ogImage = doc.window.document.querySelector('meta[property="og:image"]');
+    const ogImage = doc.window.document.querySelector('meta[property="og:image"], meta[property="og:image:secure_url"], meta[name="twitter:image"], meta[property="twitter:image"]');
     if (ogImage) {
-      imageUrl = ogImage.getAttribute('content');
-    } else {
-      const imgElements = doc.window.document.querySelectorAll('article img, main img');
+      imageUrl = ogImage.getAttribute('content') || '';
+    }
+    
+    if (!imageUrl) {
+      const imgElements = doc.window.document.querySelectorAll('article img, main img, figure img');
       if (imgElements.length > 0) {
          imageUrl = imgElements[0].getAttribute('src') || '';
       }
