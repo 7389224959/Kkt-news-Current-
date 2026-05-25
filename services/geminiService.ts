@@ -1,12 +1,12 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { OpenRouter } from "@openrouter/sdk";
-import { Article, Category, ViralPost } from "../types.js";
-import { generateSlug } from "../newsUtils.js";
-import { supabase } from "./supabase.js";
+import { Article, Category, ViralPost } from "../types";
+import { generateSlug } from "../newsUtils";
+import { supabase } from "./supabase";
 import { jsonrepair } from 'jsonrepair';
 
 const getAiClient = () => {
-  const apiKey = (typeof process !== 'undefined' && (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)) || (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY);
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.warn("API Key is missing. Please ensure process.env.GEMINI_API_KEY is set.");
     return null;
@@ -60,7 +60,7 @@ export const getStockImageUrl = (keywords: string, category?: Category): string 
   return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1080&height=1080&nologo=true&seed=${randomSeed}&model=flux`;
 };
 
-import { compressImage } from '../src/utils/imageUtils.js';
+import { compressImage } from '../src/utils/imageUtils';
 
 /**
  * Generates a high-quality AI image using Gemini 2.5 Flash Image
@@ -401,13 +401,12 @@ export const fetchTrendingKeywords = async (): Promise<{ label: string, articleS
   }
 };
 
-import { createArticle, getArticles, getSiteSettings } from './articleService.js';
-import { uploadImage } from './supabase.js';
+import { createArticle, getArticles, getSiteSettings } from './articleService';
+import { uploadImage } from './supabase';
 
 async function extractArticleLinks(url: string): Promise<{title: string, link: string, content?: string}[]> {
   try {
-    let siteUrl = typeof window !== 'undefined' ? '' : (process.env.VITE_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.URL) || `http://localhost:${process.env.PORT || 3000}`);
-    const response = await fetch(`${siteUrl}/api/extract-links?url=${encodeURIComponent(url)}`);
+    const response = await fetch(`/api/extract-links?url=${encodeURIComponent(url)}`);
     if (!response.ok) {
       console.error(`Failed to fetch links from ${url}: ${response.statusText}`);
       return [];
@@ -420,7 +419,7 @@ async function extractArticleLinks(url: string): Promise<{title: string, link: s
   }
 }
 
-import { getWikipediaImage } from './wikipediaService.js';
+import { getWikipediaImage } from './wikipediaService';
 
 export const checkDailyNewsStatus = async (rssSources: { url: string, category: string }[]) => {
   if (!rssSources || rssSources.length === 0) {
@@ -602,9 +601,8 @@ export const fetchDailyNews = async (
   for (const item of candidateItems) {
     let fullText = "";
     let sourceImageUrl = item.image || "";
-    let siteUrl = typeof window !== 'undefined' ? '' : (process.env.VITE_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.URL) || `http://localhost:${process.env.PORT || 3000}`);
     try {
-      const extractRes = await fetch(`${siteUrl}/api/extract-article?url=${encodeURIComponent(item.link)}`);
+      const extractRes = await fetch(`/api/extract-article?url=${encodeURIComponent(item.link)}`);
       if (extractRes.ok) {
         const extractData = await extractRes.json();
         fullText = extractData.content;
@@ -722,7 +720,7 @@ export const fetchDailyNews = async (
     let rawText = "[]";
 
     if (aiModel === 'openrouter') {
-      const openRouterKey = (typeof process !== 'undefined' && (process.env.OPENROUTER_API_KEY || process.env.VITE_OPENROUTER_API_KEY)) || (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_OPENROUTER_API_KEY);
+      const openRouterKey = (import.meta as any).env?.VITE_OPENROUTER_API_KEY || (typeof process !== 'undefined' ? process.env.OPENROUTER_API_KEY : '');
       if (!openRouterKey) {
         throw new Error("OpenRouter API Key is missing. Please set VITE_OPENROUTER_API_KEY in the environment.");
       }
@@ -893,11 +891,11 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
             
             try {
               if (typeof window !== 'undefined') {
-                const { createCollageOnFrontend } = await import('../src/utils/frontendCollage.js');
+                const { createCollageOnFrontend } = await import('../src/utils/frontendCollage');
                 console.log("Generating premium collage entirely on frontend canvas...");
                 const base64Collage = await createCollageOnFrontend(finalHeroImageUrl, contextImageUrl, host);
                 
-                const { uploadImage } = await import('./supabase.js');
+                const { uploadImage } = await import('./supabase');
                 const uploadedUrl = await uploadImage(base64Collage);
                 if (uploadedUrl) {
                   imageUrl = uploadedUrl;
@@ -1314,8 +1312,7 @@ Authentic newspaper photo, documentary journalism, photorealistic, natural light
 NEGATIVE:
 No cartoon, no illustration, no glamour portrait, no cinematic lighting, no fantasy, no AI-art look, no jewelry focus, no close-up faces, no text, no watermark.`;
       
-      let siteUrl = typeof window !== 'undefined' ? '' : (process.env.VITE_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.URL) || `http://localhost:${process.env.PORT || 3000}`);
-      const cfReq = await fetch(`${siteUrl}/api/cloudflare-image`, {
+      const cfReq = await fetch('/api/cloudflare-image', {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

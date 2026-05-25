@@ -1,5 +1,5 @@
-import { supabase } from './supabase.js';
-import { Article, BreakingNews, SiteSettings, TrendingKeyword } from '../types.js';
+import { supabase } from './supabase';
+import { Article, BreakingNews, SiteSettings, TrendingKeyword } from '../types';
 
 /**
  * Fetch articles with pagination
