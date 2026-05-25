@@ -86,9 +86,26 @@ async function runAutoRobot(attempt = 1) {
         await takeScreenshot(page, "2-before-login");
         await loginButton.click();
         console.log("Clicked login button.");
-        await page.waitForNavigation({ waitUntil: "networkidle" });
+        await takeScreenshot(page, "3-after-login-click");
+        
+        console.log("Waiting for dashboard...");
+        
+        const autoRobotPromise = page.getByRole('button', { name: /auto robot/i }).waitFor({ timeout: 60000 });
+        const failurePromise = (async () => {
+          await page.waitForTimeout(10000);
+          const passVisible = await page.isVisible("input[type='password']");
+          if (passVisible) {
+            throw new Error("Login failed or incorrect password");
+          }
+          await new Promise(() => {}); // Wait indefinitely so it doesn't resolve the race prematurely
+        })();
+        
+        await Promise.race([autoRobotPromise, failurePromise]);
+        
+        console.log("Dashboard detected");
+        console.log("Auto Robot button found");
         console.log("Login successful");
-        await takeScreenshot(page, "3-after-login");
+        await takeScreenshot(page, "4-after-dashboard");
       } else {
         throw new Error("Login page detected but password input not found.");
       }
@@ -98,7 +115,6 @@ async function runAutoRobot(attempt = 1) {
 
     // Now on admin dashboard, wait a moment for elements to settle
     await page.waitForTimeout(2000);
-    await takeScreenshot(page, "4-admin-dashboard");
 
     // Find the Auto Robot button
     let autoRobotButton = null;
