@@ -180,7 +180,7 @@ CONTENT:
 ${content}`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.0-flash",
+      model: "gemini-3.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -337,7 +337,7 @@ export const draftNewsReport = async (options: DraftNewsOptions): Promise<NewsDr
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.0-flash',
+      model: 'gemini-3.5-flash',
       contents: { parts },
       config: {
         responseMimeType: "application/json",
@@ -408,7 +408,7 @@ export const fetchTrendingKeywords = async (): Promise<{ label: string, articleS
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.0-flash",
+      model: "gemini-3.5-flash",
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
@@ -1111,7 +1111,7 @@ export const fetchTickerHeadlines = async (category: 'national' | 'state' | 'mix
     const toolsConfig: any[] = [{ googleSearch: {} }];
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.0-flash',
+      model: 'gemini-3.5-flash',
       contents: prompt,
       config: {
         tools: toolsConfig,
@@ -1311,7 +1311,7 @@ Only generate text content for overlay.
   }
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.0-flash',
+    model: 'gemini-3.5-flash',
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -1456,7 +1456,7 @@ OUTPUT OBLIGATIONS (JSON ONLY):
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3.0-flash',
+      model: 'gemini-3.5-flash',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -1512,7 +1512,7 @@ Return ONLY JSON:
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3.0-flash',
+      model: 'gemini-3.5-flash',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
