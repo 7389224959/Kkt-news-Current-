@@ -8,7 +8,10 @@ export default defineConfig({
     tailwindcss()
   ],
   define: {
-    'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY)
+    'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY),
+    'process.env.GEMINI_API_KEY_2': JSON.stringify(process.env.GEMINI_API_KEY_2),
+    'process.env.GEMINI_API_KEY_3': JSON.stringify(process.env.GEMINI_API_KEY_3),
+    'process.env.OPENROUTER_API_KEY': JSON.stringify(process.env.OPENROUTER_API_KEY)
   },
   optimizeDeps: {
     force: true,

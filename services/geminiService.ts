@@ -6,14 +6,26 @@ import { supabase } from "./supabase";
 import { jsonrepair } from 'jsonrepair';
 
 const getAiClient = () => {
+  const getEnv = (key: string) => {
+    if (typeof window !== 'undefined' && (import.meta as any).env) {
+      return (import.meta as any).env[`VITE_${key}`] || (import.meta as any).env[key];
+    }
+    if (typeof process !== 'undefined' && process.env) {
+      return process.env[`VITE_${key}`] || process.env[key];
+    }
+    return undefined;
+  };
+
   const keys = [
-    process.env.GEMINI_API_KEY,
-    process.env.GEMINI_API_KEY_2,
-    process.env.GEMINI_API_KEY_3
+    getEnv('GEMINI_API_KEY'),
+    getEnv('GEMINI_API_KEY_2'),
+    getEnv('GEMINI_API_KEY_3'),
+    getEnv('GEMINI_API_KEY_SECONDARY'),
+    getEnv('GEMINI_API_KEY_fallback')
   ].filter(key => !!key);
 
   if (keys.length === 0) {
-    console.warn("API Keys are missing. Please ensure process.env.GEMINI_API_KEY is set.");
+    console.warn("API Keys are missing. Please ensure GEMINI_API_KEY is set.");
     return null;
   }
   
