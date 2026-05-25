@@ -251,6 +251,7 @@ const Admin: React.FC = () => {
               localStorage.removeItem('kkt_auto_scheduler_interval');
               localStorage.removeItem('kkt_auto_template_index');
               console.log("Migration successful.");
+              alert("✅ Migration of Auto Robot configurations to Supabase completed successfully!");
               setSiteSettings(updatedSettings);
               refreshGlobalData(); // Also ensures AppContext is aware
             } catch (error) {
