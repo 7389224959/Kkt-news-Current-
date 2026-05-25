@@ -1,5 +1,6 @@
-const { chromium } = require("playwright");
-require("dotenv").config();
+import { chromium } from "playwright";
+import dotenv from "dotenv";
+dotenv.config();
 
 (async () => {
   const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
@@ -51,6 +52,12 @@ require("dotenv").config();
       await page.goto(appUrl, { waitUntil: "networkidle" });
 
       console.log("Logging in...");
+      // Fill email if exists
+      const emailInput = page.locator('input[type="email"]');
+      if (await emailInput.count() > 0) {
+          await emailInput.fill(process.env.ADMIN_EMAIL || "");
+      }
+
       // Fill the password input and click "Login to Dashboard"
       const passwordInput = page.locator('input[type="password"]');
       if ((await passwordInput.count()) > 0) {

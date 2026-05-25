@@ -27,6 +27,7 @@ jobs:
 
       - name: Run Auto Robot Script
         env:
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           APP_URL: ${{ secrets.APP_URL || 'https://kktnews.vercel.app/admin' }}
         run: node scripts/auto-robot-click.js
