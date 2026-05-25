@@ -1,0 +1,39 @@
+name: Auto Robot Cron
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-auto-robot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      - name: Run Auto Robot Script
+        env:
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          APP_URL: ${{ secrets.APP_URL }} 
+        run: node scripts/auto-robot-click.js
+
+      - name: Upload Screenshots as Artifacts
+        uses: actions/upload-artifact@v4
+        if: always() # Always upload screenshots even if it fails
+        with:
+          name: auto-robot-screenshots
+          path: artifacts/
+          retention-days: 7
