@@ -109,30 +109,6 @@ export const overlayTextOnImageNode = (base64Str: string, data: any): Promise<st
   });
 };
 
-const postToFacebook = async (message: string, imageUrl?: string, published: boolean = true) => {
-    const pageId = process.env.FB_PAGE_ID || process.env.VITE_FB_PAGE_ID;
-    const accessToken = process.env.FB_PAGE_ACCESS_TOKEN || process.env.VITE_FB_PAGE_ACCESS_TOKEN;
-    if (!pageId || !accessToken) throw new Error("FB Credentials missing");
-    
-    let fbApiUrl = `https://graph.facebook.com/v19.0/${pageId}/feed`;
-    let body: any = { message, access_token: accessToken };
-    if (published === false) body.published = false;
-    
-    if (imageUrl) {
-        fbApiUrl = `https://graph.facebook.com/v19.0/${pageId}/photos`;
-        body.url = imageUrl;
-    }
-    
-    const fbResponse = await fetch(fbApiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    
-    const tokenData = await fbResponse.json();
-    return tokenData;
-};
-
 export const maxDuration = 300;
 
 export default async function handler(req: any, res: any) {
@@ -250,11 +226,34 @@ export default async function handler(req: any, res: any) {
     console.log("Uploading final overlay image...");
     const overlaidImageUrl = await uploadImage(newImageBase64);
     
+    const protocol = req.headers['x-forwarded-proto'] || (req.headers.host?.includes('localhost') ? 'http' : 'https');
+    const baseUrl = `${protocol}://${req.headers.host}`;
+    
+    const accessToken = process.env.FB_PAGE_ACCESS_TOKEN || process.env.VITE_FB_PAGE_ACCESS_TOKEN;
+    console.log("FB endpoint:", `${baseUrl}/api/facebook/post`);
+    console.log("Token source:", "process.env (FB_PAGE_ACCESS_TOKEN or VITE_FB_PAGE_ACCESS_TOKEN)");
+    console.log("Token prefix:", accessToken?.slice(0, 20));
+    
     console.log("Posting to Facebook...");
     let fbResult;
     try {
-        fbResult = await postToFacebook(post.caption, overlaidImageUrl, true);
+        const postRes = await fetch(`${baseUrl}/api/facebook/post`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: post.caption,
+                imageUrl: overlaidImageUrl,
+                published: true
+            })
+        });
+        
+        fbResult = await postRes.json();
+        
+        if (!postRes.ok) {
+            console.error("Facebook API internal post failed:", fbResult);
+        }
     } catch(err: any) {
+        console.error("Fetch to internal FB post API failed:", err);
         fbResult = { error: err.message };
     }
     
