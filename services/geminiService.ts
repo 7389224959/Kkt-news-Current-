@@ -6,12 +6,42 @@ import { supabase } from "./supabase";
 import { jsonrepair } from 'jsonrepair';
 
 const getAiClient = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.warn("API Key is missing. Please ensure process.env.GEMINI_API_KEY is set.");
+  const keys = [
+    process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY_2,
+    process.env.GEMINI_API_KEY_3
+  ].filter(key => !!key);
+
+  if (keys.length === 0) {
+    console.warn("API Keys are missing. Please ensure process.env.GEMINI_API_KEY is set.");
     return null;
   }
-  return new GoogleGenAI({ apiKey });
+  
+  const baseClient = new GoogleGenAI({ apiKey: keys[0] as string });
+  
+  baseClient.models.generateContent = async (config: any) => {
+    let lastError;
+    for (let i = 0; i < keys.length; i++) {
+        try {
+            const client = new GoogleGenAI({ apiKey: keys[i] as string });
+            return await client.models.generateContent(config);
+        } catch (error: any) {
+            lastError = error;
+            const status = error?.status || error?.response?.status;
+            const msg = error?.message || '';
+            const isQuotaError = status === 429 || msg.includes('429') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('exhausted') || msg.includes('RATE_LIMIT_EXCEEDED');
+            
+            if (isQuotaError && i < keys.length - 1) {
+                console.warn(`[Gemini API Key ${i + 1}] Quota exceeded or rate limited. Falling back to key ${i + 2}.`);
+                continue;
+            }
+            throw error;
+        }
+    }
+    throw lastError;
+  };
+  
+  return baseClient;
 };
 
 export interface NewsDraft {
