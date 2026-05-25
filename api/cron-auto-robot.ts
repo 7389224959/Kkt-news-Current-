@@ -143,7 +143,7 @@ export default async function handler(req: any, res: any) {
             body: JSON.stringify({
                 message: post.caption,
                 imageUrl: overlaidImageUrl,
-                published: false
+                published: true
             })
         });
         
