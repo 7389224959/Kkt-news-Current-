@@ -106,6 +106,13 @@ export interface SiteSettings {
   viralTemplates?: ViralTemplate[];
   adminPhoto?: string;
   adminDesignation?: string;
+  dailyNewsRssSources?: { url: string; category: string }[];
+  autoSchedulerEnabled?: boolean;
+  autoSchedulerInterval?: number;
+  dailyNewsModel?: string;
+  dailyNewsImageStrategy?: string;
+  dailyNewsImageGenModel?: string;
+  autoTemplateIndex?: number;
 }
 
 export interface ViralTemplate {

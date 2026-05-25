@@ -17,7 +17,14 @@ export const DEFAULT_SETTINGS: SiteSettings = {
     instagram: "#",
     youtube: "#"
   },
-  tickerSpeed: 30
+  tickerSpeed: 30,
+  dailyNewsRssSources: [],
+  autoSchedulerEnabled: false,
+  autoSchedulerInterval: 10,
+  dailyNewsModel: 'gemini',
+  dailyNewsImageStrategy: 'auto',
+  dailyNewsImageGenModel: 'gemini',
+  autoTemplateIndex: 0
 };
 
 export const MOCK_BREAKING_NEWS: BreakingNews[] = [
