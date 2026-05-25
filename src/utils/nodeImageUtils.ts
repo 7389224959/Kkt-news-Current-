@@ -23,13 +23,19 @@ const ensureFonts = async () => {
   const tmpDir = os.tmpdir();
   const fontRegularPath = path.join(tmpDir, 'NotoSansDevanagari-Regular.ttf');
   const fontBoldPath = path.join(tmpDir, 'NotoSansDevanagari-Bold.ttf');
+  const fontEmojiPath = path.join(tmpDir, 'NotoColorEmoji.ttf');
   
   try {
     await downloadFont('https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf', fontRegularPath);
     await downloadFont('https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf', fontBoldPath);
+    await downloadFont('https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoColorEmoji.ttf', fontEmojiPath);
     
     registerFont(fontRegularPath, { family: 'NotoDevanagari' });
     registerFont(fontBoldPath, { family: 'NotoDevanagariBold' });
+    registerFont(fontBoldPath, { family: 'NotoDevanagari', weight: 'bold' });
+    registerFont(fontRegularPath, { family: 'Noto Sans Devanagari' });
+    registerFont(fontBoldPath, { family: 'Noto Sans Devanagari', weight: 'bold' });
+    registerFont(fontEmojiPath, { family: 'NotoEmoji' });
     fontsRegistered = true;
     console.log("Fonts downloaded and registered successfully to /tmp");
   } catch (e) {
@@ -140,6 +146,21 @@ export const overlayTextOnImageNode = (base64Str: string, data: any): Promise<st
           sy = (newsImg.height - sh) / 2;
         }
         ctx.drawImage(newsImg, sx, sy, sw, sh, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      }
+
+      // Substitute "Inter" with "NotoDevanagari" since node-canvas doesn't have Inter
+      if (data.customTemplate && data.customTemplate.style_rules) {
+        const rules = data.customTemplate.style_rules;
+        Object.keys(rules).forEach(k => {
+          if (typeof rules[k] === 'string') {
+            if (rules[k].includes('Inter')) {
+              rules[k] = rules[k].replace(/Inter/g, 'NotoDevanagari');
+            }
+            if (rules[k].includes('sans-serif') && !rules[k].includes('NotoEmoji')) {
+               rules[k] = rules[k].replace(/sans-serif/g, '"NotoEmoji", sans-serif');
+            }
+          }
+        });
       }
 
       // @ts-ignore
