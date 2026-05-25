@@ -6,14 +6,22 @@ import { supabase } from "./supabase";
 import { jsonrepair } from 'jsonrepair';
 
 const getAiClient = () => {
-  // Use explicit references so Vite's define plugin can statically replace them
-  const keys = [
-    (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.VITE_GEMINI_API_KEY : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.GEMINI_API_KEY : undefined),
-    (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY_2 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.VITE_GEMINI_API_KEY_2 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.GEMINI_API_KEY_2 : undefined),
-    (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY_3 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.VITE_GEMINI_API_KEY_3 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.GEMINI_API_KEY_3 : undefined),
-    (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY_4 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.VITE_GEMINI_API_KEY_4 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.GEMINI_API_KEY_4 : undefined),
-    (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY_5 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.VITE_GEMINI_API_KEY_5 : undefined) || (typeof window !== 'undefined' ? (import.meta as any).env?.GEMINI_API_KEY_5 : undefined)
-  ].filter(key => !!key);
+  let k1, k2, k3, k4, k5;
+  // Try to read from Vite env
+  try { k1 = (import.meta as any).env.VITE_GEMINI_API_KEY || (import.meta as any).env.GEMINI_API_KEY; } catch(e) {}
+  try { k2 = (import.meta as any).env.VITE_GEMINI_API_KEY_2 || (import.meta as any).env.GEMINI_API_KEY_2; } catch(e) {}
+  try { k3 = (import.meta as any).env.VITE_GEMINI_API_KEY_3 || (import.meta as any).env.GEMINI_API_KEY_3; } catch(e) {}
+  try { k4 = (import.meta as any).env.VITE_GEMINI_API_KEY_4 || (import.meta as any).env.GEMINI_API_KEY_4; } catch(e) {}
+  try { k5 = (import.meta as any).env.VITE_GEMINI_API_KEY_5 || (import.meta as any).env.GEMINI_API_KEY_5; } catch(e) {}
+
+  // Try to read from process.env (Node / Vite define)
+  try { if (!k1) k1 = process.env.GEMINI_API_KEY; } catch(e) {}
+  try { if (!k2) k2 = process.env.GEMINI_API_KEY_2; } catch(e) {}
+  try { if (!k3) k3 = process.env.GEMINI_API_KEY_3; } catch(e) {}
+  try { if (!k4) k4 = process.env.GEMINI_API_KEY_4; } catch(e) {}
+  try { if (!k5) k5 = process.env.GEMINI_API_KEY_5; } catch(e) {}
+
+  const keys = [k1, k2, k3, k4, k5].filter(key => !!key);
 
   if (keys.length === 0) {
     console.warn("API Keys are missing. Please ensure GEMINI_API_KEY is set.");
