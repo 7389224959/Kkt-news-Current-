@@ -153,9 +153,10 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { data: settingsData } = await supabase.from('settings').select('*').limit(1).single();
+    const { data: settingsData, error: settingsError } = await supabase.from('site_settings').select('*').limit(1).single();
     if (!settingsData) {
-        return res.status(500).json({ error: 'Failed to fetch settings' });
+        console.error("Failed to fetch settings:", settingsError);
+        return res.status(500).json({ error: 'Failed to fetch settings', details: settingsError });
     }
 
     const dailyNewsRssSources = settingsData.dailyNewsRssSources || [];
