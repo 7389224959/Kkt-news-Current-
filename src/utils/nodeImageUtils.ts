@@ -21,13 +21,13 @@ const downloadFont = async (url: string, dest: string): Promise<void> => {
 const ensureFonts = async () => {
   if (fontsRegistered) return;
   const tmpDir = os.tmpdir();
-  const fontRegularPath = path.join(tmpDir, 'NotoSansDevanagari-Regular.ttf');
-  const fontBoldPath = path.join(tmpDir, 'NotoSansDevanagari-Bold.ttf');
+  const fontRegularPath = path.join(tmpDir, 'Mukta-Regular.ttf');
+  const fontBoldPath = path.join(tmpDir, 'Mukta-Bold.ttf');
   const fontEmojiPath = path.join(tmpDir, 'NotoColorEmoji.ttf');
   
   try {
-    await downloadFont('https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf', fontRegularPath);
-    await downloadFont('https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf', fontBoldPath);
+    await downloadFont('https://raw.githubusercontent.com/google/fonts/main/ofl/mukta/Mukta-Regular.ttf', fontRegularPath);
+    await downloadFont('https://raw.githubusercontent.com/google/fonts/main/ofl/mukta/Mukta-Bold.ttf', fontBoldPath);
     await downloadFont('https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoColorEmoji.ttf', fontEmojiPath);
     
     registerFont(fontRegularPath, { family: 'NotoDevanagari' });
@@ -35,6 +35,8 @@ const ensureFonts = async () => {
     registerFont(fontBoldPath, { family: 'NotoDevanagari', weight: 'bold' });
     registerFont(fontRegularPath, { family: 'Noto Sans Devanagari' });
     registerFont(fontBoldPath, { family: 'Noto Sans Devanagari', weight: 'bold' });
+    registerFont(fontRegularPath, { family: 'Mukta' });
+    registerFont(fontBoldPath, { family: 'Mukta', weight: 'bold' });
     registerFont(fontEmojiPath, { family: 'NotoEmoji' });
     fontsRegistered = true;
     console.log("Fonts downloaded and registered successfully to /tmp");
@@ -42,8 +44,8 @@ const ensureFonts = async () => {
     console.error("Failed to download or register fonts:", e);
     
     // Fallback to local repo paths if testing locally
-    const localReg = path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-Regular.ttf');
-    const localBold = path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-Bold.ttf');
+    const localReg = path.join(process.cwd(), 'assets', 'fonts', 'Mukta-Regular.ttf');
+    const localBold = path.join(process.cwd(), 'assets', 'fonts', 'Mukta-Bold.ttf');
     
     if (fs.existsSync(localReg) && fs.existsSync(localBold)) {
       try {

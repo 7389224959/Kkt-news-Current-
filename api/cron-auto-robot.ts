@@ -1,5 +1,5 @@
 import { fetchDailyNews } from '../services/geminiService.js';
-import { generateViralPost } from '../services/geminiService.js';
+import { generateViralPost, generateViralImage } from '../services/geminiService.js';
 import { supabase } from '../services/supabase.js';
 import { uploadImage } from '../services/supabase.js';
 import { renderThemeOverlay } from '../src/utils/themeRenderer.js';
@@ -136,17 +136,26 @@ export default async function handler(req: any, res: any) {
     
     post.theme = themeToUse;
     
-    let reuseImageUrl = articleToUse.featuredCollageImage || articleToUse.image || articleToUse.imageUrl;
-    let fallbackBase64 = reuseImageUrl || '';
-    if (reuseImageUrl) {
-       // Convert remote URL to Base64 for the canvas rendering
-       try {
-           const ibResponse = await fetch(reuseImageUrl);
-           const ibBuffer = await ibResponse.arrayBuffer();
-           fallbackBase64 = `data:image/jpeg;base64,${Buffer.from(ibBuffer).toString('base64')}`;
-       } catch (e) {
-           console.warn("Failed to fetch article image to base64", e);
-       }
+    // Generate AI Image identically to the browser auto-viral-post feature (avoiding RSS images with baked-in text/squares)
+    let fallbackBase64 = '';
+    console.log("Generating AI background image...");
+    try {
+        const imageGenModelToUse = dailyNewsImageGenModel || 'gemini';
+        fallbackBase64 = await generateViralImage(post.image_prompt || articleToUse.title, undefined, imageGenModelToUse as any);
+    } catch (e) {
+        console.warn("Failed to generate AI viral image, falling back to article image", e);
+        let reuseImageUrl = articleToUse.featuredCollageImage || articleToUse.image || articleToUse.imageUrl;
+        if (reuseImageUrl) {
+           try {
+               const ibResponse = await fetch(reuseImageUrl);
+               if (ibResponse.ok) {
+                   const ibBuffer = await ibResponse.arrayBuffer();
+                   fallbackBase64 = `data:image/jpeg;base64,${Buffer.from(ibBuffer).toString('base64')}`;
+               }
+           } catch (fetchErr) {
+               console.warn("Failed to fetch fallback article image to base64", fetchErr);
+           }
+        }
     }
 
     console.log("Overlaying text on image...");
