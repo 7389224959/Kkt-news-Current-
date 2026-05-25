@@ -575,7 +575,7 @@ export const fetchDailyNews = async (
   let existingSourceUrls: string[] = [];
   let existingTitles: string[] = [];
   try {
-    const { data: recentArticles } = await getArticles(1, 20);
+    const { data: recentArticles } = await getArticles(1, 30);
     existingSourceUrls = recentArticles.map(a => a.sourceUrl || a.source).filter(Boolean) as string[];
     existingTitles = recentArticles.map(a => a.title);
   } catch (e) {
@@ -601,8 +601,9 @@ export const fetchDailyNews = async (
 
   const candidateItems = [];
 
-  // Gather up to 5 potential articles across the shuffled sources
+  // Gather candidates, spreading across sources for variety
   for (const source of shuffledSources) {
+    let sourceCandidates = 0;
     try {
       const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.url)}&api_key=`);
       if (!res.ok) continue;
@@ -632,15 +633,17 @@ export const fetchDailyNews = async (
             description: item.description,
             image: item.thumbnail || (item.enclosure && item.enclosure.link) || ""
           });
+          sourceCandidates++;
         }
         
-        if (candidateItems.length >= 5) break;
+        // Take up to 3 candidates per source so we check multiple sources
+        if (sourceCandidates >= 3) break;
       }
     } catch (e) {
       console.error(`Failed to fetch RSS for ${source.url}:`, e);
     }
     
-    if (candidateItems.length >= 5) {
+    if (candidateItems.length >= 15) {
        break;
     }
   }
@@ -683,7 +686,7 @@ export const fetchDailyNews = async (
     - Extracted Content: ${data.content.substring(0, 3000)}
   `).join('\n\n');
 
-  const recentTitlesList = existingTitles.slice(0, 20).map(t => `- ${t}`).join('\n');
+  const recentTitlesList = existingTitles.slice(0, 30).map(t => `- ${t}`).join('\n');
 
   try {
     const prompt = `
@@ -691,15 +694,15 @@ export const fetchDailyNews = async (
 
       Current Date & Time: ${today} ${currentTime}
 
-      CRITICAL CONTEXT - AVOID THESE TOPICS:
-      We want to avoid publishing news on the exact same topics we recently covered. 
+      CRITICAL CONTEXT - STRICT RULE AGAINST DUPLICATION:
+      We aim for complete variety. We MUST strictly avoid publishing news on the same topics we have covered in our last 30 articles!
       Here are the headlines of our most recently published articles:
       ${recentTitlesList}
       
       YOUR TASK:
       1. Review the CANDIDATE ARTICLES below.
-      2. Choose EXACTLY ONE candidate article that discusses a COMPLETELY DIFFERENT topic than the ones listed above.
-      3. If all candidates are somewhat similar, pick the one that introduces the most significantly novel development or is the freshest breaking news.
+      2. Choose EXACTLY ONE candidate article that discusses a COMPLETELY DIFFERENT topic than ALL 30 of the ones listed above.
+      3. If an article covers a topic strongly related to any of the headlines above (even if there is a new update on it), SKIP IT! Pick the candidate that introduces the most significantly novel development or is about a completely different issue.
       4. Write a 100% SEO-optimized, fact-based, human-like Hindi news article (450–650 words) based ONLY on your chosen candidate.
       
       CANDIDATE ARTICLES:
