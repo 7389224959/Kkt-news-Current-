@@ -7,25 +7,15 @@ import os from 'os';
 
 let fontsRegistered = false;
 
-const downloadFont = (url: string, dest: string): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (fs.existsSync(dest)) {
-      return resolve();
-    }
-    const file = fs.createWriteStream(dest);
-    https.get(url, (response) => {
-      if (response.statusCode === 301 || response.statusCode === 302) {
-        return downloadFont(response.headers.location!, dest).then(resolve).catch(reject);
-      }
-      response.pipe(file);
-      file.on('finish', () => {
-        file.close(() => resolve());
-      });
-    }).on('error', (err) => {
-      fs.unlink(dest, () => {});
-      reject(err);
-    });
-  });
+const downloadFont = async (url: string, dest: string): Promise<void> => {
+  if (fs.existsSync(dest)) {
+    const stats = fs.statSync(dest);
+    if (stats.size > 0) return;
+  }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.statusText}`);
+  const buffer = await res.arrayBuffer();
+  fs.writeFileSync(dest, Buffer.from(buffer));
 };
 
 const ensureFonts = async () => {
