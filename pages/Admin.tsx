@@ -565,7 +565,7 @@ const Admin: React.FC = () => {
 
       // Use centralized stock image helper
       const category = draft.category ? mapCategory(draft.category) : currentArticle.category;
-      const imageUrl = getStockImageUrl(draft.imageKeywords || "news", category);
+      const imageUrl = await getStockImageUrl(draft.imageKeywords || "news", category);
       
       setCurrentArticle(prev => ({
         ...prev,

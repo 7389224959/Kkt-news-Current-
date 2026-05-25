@@ -15,7 +15,7 @@ const replacement = `          if (!imageUrl && imageGenModel === 'gemini') {
           }
           
           if (!imageUrl) {
-            imageUrl = getStockImageUrl(a.imagePrompt || "news", category);
+            imageUrl = await getStockImageUrl(a.imagePrompt || "news", category);
           }`;
 
 content = content.replace(target1, replacement);

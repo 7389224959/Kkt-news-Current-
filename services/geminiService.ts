@@ -56,7 +56,7 @@ export interface NewsDraft {
   facebookCaption?: string;
 }
 
-export const getStockImageUrl = (keywords: string, category?: Category): string => {
+export const getStockImageUrl = async (keywords: string, category?: Category): Promise<string> => {
   if (typeof keywords !== 'string') {
     keywords = String(keywords || '');
   }
@@ -84,10 +84,32 @@ export const getStockImageUrl = (keywords: string, category?: Category): string 
     .join(' ');
 
   const prompt = `Premium Indian editorial news background for: ${cleanKeywords}. Include realistic Indian atmosphere, cinematic lighting, warm tones, subtle Indian flag or government architecture when relevant, ultra detailed, photorealistic, sharp focus, 8k. Do not generate any people, faces, portraits, or human figures.`;
-  const randomSeed = Math.floor(Math.random() * 100000);
   
-  // Use pollinations.ai to dynamically generate relevant background images
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1080&height=1080&nologo=true&seed=${randomSeed}&model=flux`;
+  try {
+    const fetchUrl = typeof window !== 'undefined' 
+      ? '/api/cloudflare-image' 
+      : (process.env.VITE_SITE_URL ? `${process.env.VITE_SITE_URL}/api/cloudflare-image` : 'http://localhost:3000/api/cloudflare-image');
+      
+    const cfReq = await fetch(fetchUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, model: "@cf/black-forest-labs/flux-1-schnell" })
+    });
+    
+    if (cfReq.ok) {
+        const resData = await cfReq.json();
+        if (resData.base64) {
+          const b64 = `data:image/jpeg;base64,${resData.base64}`;
+          const { uploadImage } = await import('./supabase');
+          return await uploadImage(b64);
+        }
+    } else {
+        console.error("Cloudflare fallback image generation failed:", await cfReq.text());
+    }
+  } catch (e) {
+      console.error("Cloudflare fallback image fetch failed", e);
+  }
+  return "";
 };
 
 import { compressImage } from '../src/utils/imageUtils';
@@ -950,11 +972,11 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
           }
           
           if (!imageUrl) {
-            imageUrl = getStockImageUrl(a.imagePrompt || "news", category);
+            imageUrl = await getStockImageUrl(a.imagePrompt || "news", category);
           }
         } catch (e) {
           console.warn("AI Image generation/upload failed, falling back to stock:", e);
-          imageUrl = getStockImageUrl(a.imagePrompt || "news", category);
+          imageUrl = await getStockImageUrl(a.imagePrompt || "news", category);
         }
       } else {
         console.log(`Manual image override for: ${a.title}`);
