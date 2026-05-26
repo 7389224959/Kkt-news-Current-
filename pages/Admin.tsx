@@ -399,7 +399,7 @@ const Admin: React.FC = () => {
         } catch(e){}
 
         const defaultThemes = [
-          'kkt_premium_breaking', 'kkt_exclusive'
+          'breaking_red', 'kkt_premium_breaking', 'kkt_exclusive'
         ];
 
         let customThemes: string[] = [];
