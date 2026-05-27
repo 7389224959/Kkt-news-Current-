@@ -32,30 +32,50 @@ const getAiClient = () => {
   
   baseClient.models.generateContent = async (config: any) => {
     let lastError;
-    for (let i = 0; i < keys.length; i++) {
-        try {
-            const client = new GoogleGenAI({ apiKey: keys[i] as string });
-            return await client.models.generateContent(config);
-        } catch (error: any) {
-            lastError = error;
-            const status = error?.status || error?.response?.status;
-            const msg = typeof error?.message === 'string' ? error.message : JSON.stringify(error?.message || '');
-            const stringifiedError = JSON.stringify(error);
-            const isQuotaError = status === 429 || msg.includes('429') || Math.floor(status) === 429 || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('exhausted') || msg.includes('RATE_LIMIT_EXCEEDED') || stringifiedError.includes('429') || stringifiedError.toLowerCase().includes('quota') || stringifiedError.toLowerCase().includes('exhausted');
-            
-            if (isQuotaError && i < keys.length - 1) {
-                console.warn(`[Gemini API Key ${i + 1}] Quota exceeded or rate limited. Falling back to key ${i + 2}.`);
-                continue;
+    const maxRetries = 3;
+    
+    for (let retry = 0; retry < maxRetries; retry++) {
+        for (let i = 0; i < keys.length; i++) {
+            try {
+                const client = new GoogleGenAI({ apiKey: keys[i] as string });
+                return await client.models.generateContent(config);
+            } catch (error: any) {
+                lastError = error;
+                const status = error?.status || error?.response?.status;
+                const msg = typeof error?.message === 'string' ? error.message : JSON.stringify(error?.message || '');
+                const stringifiedError = JSON.stringify(error);
+                
+                const isQuotaError = status === 429 || msg.includes('429') || Math.floor(status) === 429 || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('exhausted') || msg.includes('RATE_LIMIT_EXCEEDED') || stringifiedError.includes('429') || stringifiedError.toLowerCase().includes('quota') || stringifiedError.toLowerCase().includes('exhausted');
+                
+                const isTempError = status >= 500 || msg.includes('Internal error') || msg.toLowerCase().includes('internal') || msg.includes('500') || msg.includes('503') || stringifiedError.includes('500') || stringifiedError.includes('503');
+
+                if (isQuotaError) {
+                    if (i < keys.length - 1) {
+                        console.warn(`[Gemini API Key ${i + 1}] Quota exceeded or rate limited. Falling back to key ${i + 2}.`);
+                        continue;
+                    }
+                } else if (isTempError) {
+                    console.warn(`[Gemini API Key ${i + 1}] Temporary error encountered (${status || 'unknown'}). Triggering retry...`);
+                    break; // Break inner keys loop to trigger outer delay + retry
+                } else {
+                    // Non-retryable error (e.g. 400 Bad Request, Authentication failed, etc.)
+                    throw error;
+                }
             }
-            
-            if (isQuotaError) {
-                // If we ran out of keys or there are no more keys
-                const newErr = new Error(`Quota limit reached across ${keys.length} API key(s). Please add more keys (GEMINI_API_KEY_2, etc). Original Error: ${msg}`);
-                throw newErr;
-            }
-            throw error;
+        }
+        
+        if (retry < maxRetries - 1) {
+            const delayMs = Math.pow(2, retry) * 5000; // 5s, 10s backoff
+            console.log(`Retrying API call after ${delayMs}ms due to temporary error or quota... (Attempt ${retry+2}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
         }
     }
+    
+    const finalMsg = typeof lastError?.message === 'string' ? lastError.message : JSON.stringify(lastError?.message || '');
+    if (finalMsg.toLowerCase().includes('quota') || finalMsg.includes('429') || finalMsg.toLowerCase().includes('exhausted')) {
+       throw new Error(`Quota limit reached across ${keys.length} API key(s) after retries. Please add more keys. Original Error: ${finalMsg}`);
+    }
+    
     throw lastError;
   };
   
@@ -1355,10 +1375,10 @@ Output STRICT JSON formatting:
 {
   "theme": "<selected_theme_id>",
   "breaking_tag": "BREAKING NEWS / सावधान! / सोचने वाली बात! / etc.",
-  "headline_line_1": "<first impactful line. Enclose important keywords in *asterisks* for highlights, e.g. *बड़ा ऐलान*>",
-  "headline_line_2": "<second emotional/highlighted line. Enclose keywords in *asterisks*>",
-  "subheadline": "<optional short explanation. Enclose important keywords in *asterisks* for highlights>",
-  "summary": "<REQUIRED: 1-2 sentence news summary or key bullet points. Enclose important keywords in *asterisks* for highlights>",
+  "headline_line_1": "<first impactful line. DO NOT use asterisks or markdown.>",
+  "headline_line_2": "<second emotional line. DO NOT use asterisks.>",
+  "subheadline": "<optional short explanation. DO NOT use asterisks.>",
+  "summary": "<REQUIRED: 1-2 sentence news summary. DO NOT use asterisks.>",
   "branding": "KKT NEWS",
   "caption": "<The final news post caption following the STYLE GUIDELINES and BRANDING & LINKS rules above. This string must include the article url!>",
   "hashtags": ["#KhabarKalTak", "#tag1", "#tag2"],
@@ -1388,7 +1408,17 @@ Only generate text content for overlay.
 
   const rawText = response.text || "{}";
   const cleanedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-  return JSON.parse(cleanedText) as ViralPost;
+  const parsed = JSON.parse(cleanedText) as ViralPost;
+  
+  // Forcibly strip asterisks just in case
+  if (parsed.headline_line_1) parsed.headline_line_1 = parsed.headline_line_1.replace(/\*/g, '');
+  if (parsed.headline_line_2) parsed.headline_line_2 = parsed.headline_line_2.replace(/\*/g, '');
+  if (parsed.subheadline) parsed.subheadline = parsed.subheadline.replace(/\*/g, '');
+  if (parsed.summary) parsed.summary = parsed.summary.replace(/\*/g, '');
+  if (parsed.breaking_tag) parsed.breaking_tag = parsed.breaking_tag.replace(/\*/g, '');
+  if (parsed.caption) parsed.caption = parsed.caption.replace(/\*/g, '');
+  
+  return parsed;
 };
 
 export const generateViralImage = async (prompt: string, referenceImageBase64?: string, imageGenModel: 'gemini' | 'cloudflare' = 'gemini'): Promise<string> => {
