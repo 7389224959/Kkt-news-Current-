@@ -408,13 +408,28 @@ const Admin: React.FC = () => {
         }
 
         const allThemes = customThemes.length > 0 ? [...customThemes, ...defaultThemes] : defaultThemes;
-        let currentIndex = parseInt(localStorage.getItem('kkt_auto_template_index') || '0', 10);
+        
+        let currentIndex = settings?.autoTemplateIndex !== undefined ? settings.autoTemplateIndex : parseInt(localStorage.getItem('kkt_auto_template_index') || '0', 10);
         if (isNaN(currentIndex) || currentIndex >= allThemes.length) {
           currentIndex = 0;
         }
 
         const themeToUse = allThemes[currentIndex];
-        localStorage.setItem('kkt_auto_template_index', ((currentIndex + 1) % allThemes.length).toString());
+        const nextIndex = (currentIndex + 1) % allThemes.length;
+        
+        localStorage.setItem('kkt_auto_template_index', nextIndex.toString());
+        
+        // Persist to Supabase so it survives between headless browser sessions
+        if (settings) {
+          try {
+             const updatedSettings = { ...settings, autoTemplateIndex: nextIndex };
+             await saveSiteSettings(updatedSettings);
+             setSiteSettings(updatedSettings);
+          } catch(e) {
+             console.error("Failed to save template index", e);
+          }
+        }
+
         setViralSelectedTheme(themeToUse);
 
         let finalInstructions = "";

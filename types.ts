@@ -106,6 +106,7 @@ export interface SiteSettings {
   viralTemplates?: ViralTemplate[];
   adminPhoto?: string;
   adminDesignation?: string;
+  autoTemplateIndex?: number;
 }
 
 export interface ViralTemplate {
