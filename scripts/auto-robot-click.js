@@ -89,7 +89,7 @@ async function executePhase(page, buttonSelector, phaseName) {
   page.on("dialog", dialogHandler);
 
   try {
-    const button = await page.$(`#${buttonSelector}`);
+    const button = await page.waitForSelector(`#${buttonSelector}`, { timeout: 15000, state: 'attached' });
     if (!button) {
       throw new Error(`${phaseName} button not found.`);
     }
