@@ -3,17 +3,14 @@ import fs from "fs";
 import path from "path";
 import url from "url";
 
-// Get current directory in ESM
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const artifactsDir = path.join(__dirname, "../artifacts");
 
-// Ensure artifacts directory exists
 if (!fs.existsSync(artifactsDir)) {
   fs.mkdirSync(artifactsDir, { recursive: true });
 }
 
-// Configuration
 const APP_URL = process.env.APP_URL || "https://kktnews.vercel.app/admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
@@ -22,8 +19,8 @@ if (!ADMIN_PASSWORD) {
   process.exit(1);
 }
 
-const MAX_RETRIES = 3;
-const WAIT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_RETRIES = 4;
+const WAIT_TIMEOUT_MS = 5 * 60 * 1000;
 
 async function takeScreenshot(page, stepName) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -36,123 +33,74 @@ async function takeScreenshot(page, stepName) {
   }
 }
 
-async function runAutoRobot(attempt = 1) {
-  console.log(`\n--- Starting Auto Robot Click (Attempt ${attempt}/${MAX_RETRIES}) ---`);
+const getRetryDelayMs = (retryCount) => {
+  if (retryCount === 1) return 5 * 60 * 1000;
+  if (retryCount === 2) return 10 * 60 * 1000;
+  if (retryCount === 3) return 15 * 60 * 1000;
+  if (retryCount >= 4) return 20 * 60 * 1000;
+  return 5 * 60 * 1000;
+};
+
+const isTemporaryFailure = (messageLower) => {
+  const tempKeywords = [
+    "temporary error",
+    "api issue",
+    "timeout",
+    "generation failed",
+    "gemini overload",
+    "429",
+    "fetch failed",
+    "network issue",
+    "model spike"
+  ];
+  return tempKeywords.some(kw => messageLower.includes(kw)) || messageLower.includes("error") || messageLower.includes("failed");
+};
+
+async function executePhase(page, buttonSelector, phaseName) {
+  console.log(`\nExecuting Phase: ${phaseName}...`);
   
-  const browser = await chromium.launch({
-    headless: true, // Always headless in Actions
-  });
-  
-  const page = await browser.newPage();
-  
-  // Setup alert handling
   let alertSuccess = false;
   let alertError = false;
   let alertMessage = "";
   
-  page.on("dialog", async (dialog) => {
+  const dialogHandler = async (dialog) => {
     alertMessage = dialog.message();
-    console.log(`Alert received: ${alertMessage}`);
+    console.log(`Alert received [${phaseName}]: ${alertMessage}`);
     
     const messageLower = alertMessage.toLowerCase();
     
     if (messageLower.includes("error") || messageLower.includes("failed")) {
-      alertError = true;
+      // However, if the alert says "No new articles found or already posted" it might be treated as success in fetch
+      if (phaseName === 'Auto Fetch' && messageLower.includes("no new articles")) {
+         alertSuccess = true;
+      } else {
+         alertError = true;
+      }
     } else if (
       messageLower.includes("success") || 
-      messageLower.includes("completed") ||
-      messageLower.includes("auto robot")
+      messageLower.includes("completed")
     ) {
       alertSuccess = true;
     }
     
     await dialog.accept();
-  });
+  };
+
+  page.on("dialog", dialogHandler);
 
   try {
-    console.log(`Opening admin panel: ${APP_URL}`);
-    await page.goto(APP_URL, { waitUntil: "networkidle" });
-    await takeScreenshot(page, "1-initial-load");
-
-    // Check if we need to login
-    const loginButton = await page.$("button:has-text('Login')");
-    
-    if (loginButton) {
-      console.log("Login page detected. Attempting login...");
-      // Find password input
-      const passwordInput = await page.$("input[type='password']");
-      if (passwordInput) {
-        await passwordInput.fill(ADMIN_PASSWORD);
-        await takeScreenshot(page, "2-before-login");
-        await loginButton.click();
-        console.log("Clicked login button.");
-        await takeScreenshot(page, "3-after-login-click");
-        
-        console.log("Waiting for dashboard...");
-        
-        const autoRobotPromise = page.getByRole('button', { name: /auto robot/i }).waitFor({ timeout: 60000 });
-        const failurePromise = (async () => {
-          await page.waitForTimeout(10000);
-          const passVisible = await page.isVisible("input[type='password']");
-          if (passVisible) {
-            throw new Error("Login failed or incorrect password");
-          }
-          await new Promise(() => {}); // Wait indefinitely so it doesn't resolve the race prematurely
-        })();
-        
-        await Promise.race([autoRobotPromise, failurePromise]);
-        
-        console.log("Dashboard detected");
-        console.log("Auto Robot button found");
-        console.log("Login successful");
-        await takeScreenshot(page, "4-after-dashboard");
-      } else {
-        throw new Error("Login page detected but password input not found.");
-      }
-    } else {
-      console.log("No login required or already logged in.");
+    const button = await page.$(`#${buttonSelector}`);
+    if (!button) {
+      throw new Error(`${phaseName} button not found.`);
     }
 
-    // Now on admin dashboard, wait a moment for elements to settle
-    await page.waitForTimeout(2000);
+    console.log(`Clicking ${phaseName} button...`);
+    // Clicking hidden button might require force
+    await button.click({ force: true });
+    await takeScreenshot(page, `${phaseName.replace(/\s+/g, '-').toLowerCase()}-after-click`);
 
-    // Find the Auto Robot button
-    let autoRobotButton = null;
+    console.log(`Waiting for ${phaseName} completion (up to ${WAIT_TIMEOUT_MS / 1000}s)...`);
     
-    console.log("Searching for Auto Robot button...");
-    
-    // Priority 1: Text
-    const buttons = await page.$$("button");
-    for (const btn of buttons) {
-      const text = await btn.textContent();
-      if (text && text.toLowerCase().includes("auto robot")) {
-        autoRobotButton = btn;
-        console.log("Found button by text content.");
-        break;
-      }
-    }
-    
-    // Priority 2: Data attribute if text not found
-    if (!autoRobotButton) {
-      autoRobotButton = await page.$("[data-testid='auto-robot-button']");
-      if (autoRobotButton) console.log("Found button by data-testid.");
-    }
-    
-    // Priority 3: Fallback specific classes / common icons context if needed 
-    // Add fallback selectors here if the above fail
-
-    if (!autoRobotButton) {
-      throw new Error("Auto Robot button not found on the page.");
-    }
-
-    // Click the button
-    console.log("Clicking Auto Robot...");
-    await autoRobotButton.click();
-    await takeScreenshot(page, "5-after-click");
-
-    console.log(`Waiting for completion (up to ${WAIT_TIMEOUT_MS / 1000}s)...`);
-    
-    // Poll for alert flags
     const startTime = Date.now();
     let isComplete = false;
     
@@ -161,36 +109,119 @@ async function runAutoRobot(attempt = 1) {
         isComplete = true;
         break;
       }
-      await page.waitForTimeout(1000); // Check every second
+      await page.waitForTimeout(1000);
     }
 
-    await takeScreenshot(page, "6-completion");
+    await takeScreenshot(page, `${phaseName.replace(/\s+/g, '-').toLowerCase()}-completion`);
 
     if (!isComplete) {
-      throw new Error("Script timed out waiting for alert response.");
+      throw new Error(`Timeout waiting for ${phaseName} response.`);
     }
 
     if (alertError) {
-      throw new Error(`Auto Robot reported an error: ${alertMessage}`);
+      throw new Error(alertMessage); // Capture raw message
     }
 
-    console.log("Auto Robot finished successfully!");
-
-  } catch (error) {
-    console.error(`Error during attempt ${attempt}:`, error.message);
-    await takeScreenshot(page, `error-attempt-${attempt}`);
-    
-    if (attempt < MAX_RETRIES) {
-      console.log(`Retrying...`);
-      await browser.close();
-      return await runAutoRobot(attempt + 1);
-    } else {
-      console.error("Max retries reached. Failing script.");
-      process.exit(1);
-    }
+    console.log(`${phaseName} succeeded!`);
+    return { success: true, message: alertMessage };
   } finally {
-    await browser.close();
+    page.off("dialog", dialogHandler);
+  }
+}
+
+async function runAutoRobot() {
+  let fetchSuccess = false;
+  let viralSuccess = false;
+  let attempt = 0;
+
+  while (attempt <= MAX_RETRIES) {
+    if (attempt > 0) {
+      console.log(`\n--- Retrying Auto Robot (Attempt ${attempt}/${MAX_RETRIES}) ---`);
+    } else {
+      console.log(`\n--- Starting Auto Robot Click ---`);
+    }
+    
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    
+    try {
+      console.log(`Opening admin panel: ${APP_URL}`);
+      await page.goto(APP_URL, { waitUntil: "networkidle" });
+      await takeScreenshot(page, `attempt-${attempt}-initial-load`);
+
+      const loginButton = await page.$("button:has-text('Login')");
+      if (loginButton) {
+        const passwordInput = await page.$("input[type='password']");
+        if (passwordInput) {
+          await passwordInput.fill(ADMIN_PASSWORD);
+          await loginButton.click();
+          console.log("Logged in.");
+          await page.waitForTimeout(5000); // Wait for dashboard loads
+        } else {
+          throw new Error("Password input not found.");
+        }
+      }
+
+      await page.waitForTimeout(3000); // Stabilize UI
+      await takeScreenshot(page, `attempt-${attempt}-dashboard-ready`);
+
+      // Partial Logic Execution
+      if (!fetchSuccess) {
+        try {
+          const res = await executePhase(page, "auto-fetch-only-btn", "Auto Fetch");
+          // If we got here, it's a success
+          fetchSuccess = true;
+          console.log("Auto Fetch succeeded", res.message);
+        } catch (e) {
+          throw new Error(`Auto Fetch Failed: ${e.message}`);
+        }
+      } else {
+        console.log("Auto Fetch already succeeded previously. Skipping.");
+      }
+
+      if (fetchSuccess && !viralSuccess) {
+        try {
+          const res = await executePhase(page, "auto-viral-only-btn", "Auto Viral Post");
+          viralSuccess = true;
+          console.log("Auto Viral succeeded", res.message);
+        } catch (e) {
+          throw new Error(`Auto Viral Failed: ${e.message}`);
+        }
+      } else if (viralSuccess) {
+        console.log("Auto Viral already succeeded previously. Skipping.");
+      }
+
+      // If we reach here, everything succeeded
+      console.log("\nAuto Robot finished successfully!");
+      await browser.close();
+      process.exit(0);
+
+    } catch (error) {
+      console.error(`\nError during attempt ${attempt}:`, error.message);
+      await takeScreenshot(page, `error-attempt-${attempt}`);
+
+      const messageLower = error.message.toLowerCase();
+      const isTemp = isTemporaryFailure(messageLower);
+
+      if (isTemp) {
+        console.log("Temporary failure detected.");
+      }
+
+      await browser.close();
+
+      if (attempt < MAX_RETRIES) {
+        const delayMs = getRetryDelayMs(attempt + 1);
+        console.log(`Retrying after ${delayMs / 60000} minutes...`);
+        // Use Promise to delay script execution since page is closed
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        attempt++;
+      } else {
+        console.error("Max retries reached. Failing script.");
+        process.exit(1);
+      }
+    }
   }
 }
 
 runAutoRobot();
+

@@ -5,9 +5,14 @@ on:
     - cron: '0 */2 * * *'
   workflow_dispatch:
 
+concurrency:
+  group: auto-robot
+  cancel-in-progress: false
+
 jobs:
   run-auto-robot:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
 
     steps:
       - name: Checkout Repository
