@@ -95,8 +95,8 @@ async function executePhase(page, buttonSelector, phaseName) {
     }
 
     console.log(`Clicking ${phaseName} button...`);
-    // Clicking hidden button might require force
-    await button.click({ force: true });
+    // Clicking hidden button with JS evaluate
+    await button.evaluate(b => b.click());
     await takeScreenshot(page, `${phaseName.replace(/\s+/g, '-').toLowerCase()}-after-click`);
 
     console.log(`Waiting for ${phaseName} completion (up to ${WAIT_TIMEOUT_MS / 1000}s)...`);
