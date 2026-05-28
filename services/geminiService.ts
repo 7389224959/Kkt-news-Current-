@@ -1375,10 +1375,10 @@ Output STRICT JSON formatting:
 {
   "theme": "<selected_theme_id>",
   "breaking_tag": "BREAKING NEWS / सावधान! / सोचने वाली बात! / etc.",
-  "headline_line_1": "<first impactful line. DO NOT use asterisks or markdown.>",
-  "headline_line_2": "<second emotional line. DO NOT use asterisks.>",
-  "subheadline": "<optional short explanation. DO NOT use asterisks.>",
-  "summary": "<REQUIRED: 1-2 sentence news summary. DO NOT use asterisks.>",
+  "headline_line_1": "<first impactful line. Enclose important keywords in *asterisks* for highlights, e.g. *बड़ा ऐलान*>",
+  "headline_line_2": "<second emotional/highlighted line. Enclose keywords in *asterisks*>",
+  "subheadline": "<optional short explanation. Enclose important keywords in *asterisks* for highlights>",
+  "summary": "<REQUIRED: 1-2 sentence news summary or key bullet points. Enclose important keywords in *asterisks* for highlights>",
   "branding": "KKT NEWS",
   "caption": "<The final news post caption following the STYLE GUIDELINES and BRANDING & LINKS rules above. This string must include the article url!>",
   "hashtags": ["#KhabarKalTak", "#tag1", "#tag2"],
@@ -1408,17 +1408,7 @@ Only generate text content for overlay.
 
   const rawText = response.text || "{}";
   const cleanedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-  const parsed = JSON.parse(cleanedText) as ViralPost;
-  
-  // Forcibly strip asterisks just in case
-  if (parsed.headline_line_1) parsed.headline_line_1 = parsed.headline_line_1.replace(/\*/g, '');
-  if (parsed.headline_line_2) parsed.headline_line_2 = parsed.headline_line_2.replace(/\*/g, '');
-  if (parsed.subheadline) parsed.subheadline = parsed.subheadline.replace(/\*/g, '');
-  if (parsed.summary) parsed.summary = parsed.summary.replace(/\*/g, '');
-  if (parsed.breaking_tag) parsed.breaking_tag = parsed.breaking_tag.replace(/\*/g, '');
-  if (parsed.caption) parsed.caption = parsed.caption.replace(/\*/g, '');
-  
-  return parsed;
+  return JSON.parse(cleanedText) as ViralPost;
 };
 
 export const generateViralImage = async (prompt: string, referenceImageBase64?: string, imageGenModel: 'gemini' | 'cloudflare' = 'gemini'): Promise<string> => {

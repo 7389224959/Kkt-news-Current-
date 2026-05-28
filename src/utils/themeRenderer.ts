@@ -127,14 +127,17 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
 
           for (let i=0; i<words.length; i++) {
               let w = words[i];
+              
               let togglesBefore = 0;
-              let togglesAfter = 0;
-              while (w.startsWith('*')) { togglesBefore++; w = w.slice(1); }
-              while (w.endsWith('*')) { togglesAfter++; w = w.slice(0, w.length-1); }
+              for (let c of w) { if (c === '*') togglesBefore++; else break; }
+              const totalAst = (w.match(/\*/g) || []).length;
+              let togglesAfter = totalAst - togglesBefore;
               
               if (togglesBefore % 2 === 1) isHl = !isHl;
               const wordHl = isHl;
               if (togglesAfter % 2 === 1) isHl = !isHl;
+
+              w = w.replace(/\*/g, '');
 
               const isLast = i === words.length - 1;
               const wText = w + (isLast ? '' : ' ');
