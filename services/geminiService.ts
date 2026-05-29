@@ -1564,38 +1564,46 @@ export const generateFullReelScript = async (articleContent: string, template: a
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
-  const limits = template.safe_limits;
-  const coords = template.coordinates;
-
+  const coords = template.coordinates || {};
   const hasHeadline = coords.headline_box && coords.headline_box !== 'hidden';
-  const hasSubtitle = coords.subtitle_box && coords.subtitle_box !== 'hidden';
   const hasTicker = coords.ticker_box && coords.ticker_box !== 'hidden';
 
-  const prompt = `You are a professional News Reel Producer. Write a highly engaging, viral Hindi/Hinglish news reel script.
-I will provide the FULL ARTICLE TEXT and the TEMPLATE LIMITS.
+  const prompt = `You are a professional News Reel Producer. Write a high-retention, viral Hindi reel script.
+Do NOT rewrite a summary-style news script.
+Use ONLY facts from the article. NEVER hallucinate names, numbers, quotes, causes, or outcomes.
 
 ARTICLE TEXT:
 ${articleContent}
 
-TEMPLATE LIMITS:
-${hasHeadline ? `- Max Headline Words: ${limits.headline_words || 10}` : ''}
-${hasSubtitle ? `- Max Subtitle Lines: ${limits.subtitle_lines || 3}\n- Words Per Subtitle Line: ${limits.words_per_line || 8}` : ''}
-${hasTicker ? `- Ticker Characters: ${limits.ticker_characters || 100}` : ''}
+Format rules for high engagement:
+0–3 sec: HOOK (Curiosity driven, e.g., "अगर आप छत्तीसगढ़ में रहते हो तो ये खबर जान लो!")
+3–12 sec: What happened (The core fact briefly)
+12–22 sec: Why important (Impact or reason)
+22–27 sec: Unexpected point
+27–30 sec: Comment CTA (e.g., "आप क्या सोचते हो?")
 
-REQUIREMENTS:
-${hasHeadline ? `1. Short Headline: Catchy, strictly under ${limits.headline_words} words.` : ''}
-${hasSubtitle ? `2. Subtitles: Break the news matter into exactly ${limits.subtitle_lines} lines, max ${limits.words_per_line} words per line.` : ''}
-${hasTicker ? `3. Ticker Text: A scrolling news update, max ${limits.ticker_characters} characters.` : ''}
-4. Visual Keywords: 3-5 keywords for searching stock footage (e.g. "police arrest", "hospital emergency").
-5. Voiceover: A professional, conversational Hindi news anchor voiceover script (~30-45 seconds to read).
+- Sentences MUST be short. 
+- Conversational Hindi only (not robotic news language).
 
-Return ONLY JSON:
+Subtitles Requirements (CRITICAL):
+- Maximum 3-5 words per subtitle chunk.
+- Break subtitles sentence-wise, timed according to natural speech.
+- Provide them as an array of strings under "subtitleChunks".
+
+Categorization & Style:
+- "reelType": Breaking News, Explainer, Debate, or Useful Update.
+- "stylePreset": breaking_news (Fast zoom, red urgency), explainer (Clean style, slower pacing), debate, useful_update.
+
+Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly escape inner quotes):
 {
-  ${hasHeadline ? '"headline": "string",' : ''}
-  ${hasSubtitle ? '"subtitles": ["string"],' : ''}
-  ${hasTicker ? '"ticker": "string",' : ''}
-  "visualKeywords": "string",
-  "voiceoverScript": "string"
+  "hookText": "Large hook text for top overlay",
+  ${hasHeadline ? '"headline": "Short top headline (if used instead of hookText)",' : ''}
+  "voiceoverScript": "Full script combining Hook... (Must read like fluent conversational Hindi)",
+  "subtitleChunks": ["रायपुर में", "बड़ा मामला", "सामने आया"],
+  ${hasTicker ? '"ticker": "Scrolling breaking news text",' : ''}
+  "reelType": "string",
+  "stylePreset": "string",
+  "visualKeywords": "3-5 keywords for searching stock footage"
 }`;
 
   try {
@@ -1608,8 +1616,29 @@ Return ONLY JSON:
     });
 
     const rawText = response.text || "{}";
-    const cleanedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(cleanedText);
+    let cleanedText = rawText;
+    
+    // Sometimes models wrap json in markdown
+    const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+       cleanedText = jsonMatch[0];
+    } else {
+       cleanedText = cleanedText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    }
+    
+    let result;
+    try {
+      result = JSON.parse(cleanedText);
+    } catch (parseError) {
+       console.error("Failed to parse JSON string:", cleanedText);
+       throw parseError;
+    }
+    
+    // Fallbacks just in case the renderer expects `subtitles`.
+    if (result.subtitleChunks && Array.isArray(result.subtitleChunks)) {
+       result.subtitles = result.subtitleChunks;
+    }
+    return result;
   } catch (error) {
     console.error("Gemini full reel script error:", error);
     throw error;

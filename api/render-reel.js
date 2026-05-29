@@ -58,7 +58,7 @@ export default async function handler(req, res) {
       await downloadFile(audioUrl, audioPath);
     }
     await downloadFile(templateMediaUrl, backgroundPath);
-    await downloadFile('https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf', fontPath);
+    await downloadFile('https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf', fontPath);
 
     // Scale factor for 720p
     const targetW = 720;
@@ -66,10 +66,15 @@ export default async function handler(req, res) {
     const scaleFactor = targetW / 1080;
     const parseAndScaleCoords = (cStr) => cStr.split(',').map(n => Math.round(Number(n) * scaleFactor));
     
-    // Get coordinates
+    // Get coordinates with fallbacks for critical reel components
     const vBox = template.coordinates.video_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.video_box) : null;
     const hBox = template.coordinates.headline_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.headline_box) : null;
-    const sBox = template.coordinates.subtitle_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.subtitle_box) : null;
+    
+    // Subtitles should always be visible in these new high-retention reels. Provide a bottom-center fallback.
+    const sBox = (template.coordinates.subtitle_box && template.coordinates.subtitle_box !== 'hidden') 
+        ? parseAndScaleCoords(template.coordinates.subtitle_box) 
+        : parseAndScaleCoords('50,900,620,200'); // Bottom center fallback
+        
     const tBox = template.coordinates.ticker_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.ticker_box) : null;
 
     // Helper for approximate word wrap based on pixel width
@@ -91,23 +96,62 @@ export default async function handler(req, res) {
       return lines.join('\n');
     };
 
-    const filterGraph = [
-      {
-        filter: 'scale',
-        options: `${targetW}:${targetH}:force_original_aspect_ratio=increase`,
-        inputs: '0:v',
-        outputs: 'bg_scaled'
-      },
-      {
-        filter: 'crop',
-        options: `${targetW}:${targetH}`,
-        inputs: 'bg_scaled',
-        outputs: 'bg_cropped'
-      }
-    ];
+    const preset = scriptData.stylePreset || '';
+    const isImage = !templateMediaUrl.match(/\.(mp4|mov|webm)$/i);
+
+    const filterGraph = [];
+
+    if (isImage) {
+        filterGraph.push(
+          { filter: 'scale', options: `${targetW}:${targetH}:force_original_aspect_ratio=increase`, inputs: '0:v', outputs: 'bg_scaled_raw' },
+          { filter: 'crop', options: `${targetW}:${targetH}`, inputs: 'bg_scaled_raw', outputs: 'bg_cropped_raw' },
+          { filter: 'boxblur', options: 'luma_radius=15:luma_power=1', inputs: 'bg_cropped_raw', outputs: 'bg_blurred' },
+          { filter: 'scale', options: `${targetW}:${targetH}:force_original_aspect_ratio=decrease`, inputs: '0:v', outputs: 'fg_scaled' },
+          { filter: 'overlay', options: '(W-w)/2:(H-h)/2', inputs: ['bg_blurred', 'fg_scaled'], outputs: 'bg_composed' }
+        );
+        
+        if (!overlayPath && (preset === 'breaking_news' || preset === 'explainer')) {
+            const zStep = preset === 'breaking_news' ? '0.0015' : '0.0005';
+            filterGraph.push({ filter: 'zoompan', options: `z='min(zoom+${zStep},1.2)':d=750:s=${targetW}x${targetH}`, inputs: 'bg_composed', outputs: 'bg_cropped' });
+        } else {
+            filterGraph.push({ filter: 'null', inputs: 'bg_composed', outputs: 'bg_cropped' });
+        }
+    } else {
+        filterGraph.push(
+          { filter: 'scale', options: `${targetW}:${targetH}:force_original_aspect_ratio=increase`, inputs: '0:v', outputs: 'bg_scaled' },
+          { filter: 'crop', options: `${targetW}:${targetH}`, inputs: 'bg_scaled', outputs: 'bg_cropped' }
+        );
+    }
 
     let currentOutput = 'bg_cropped';
     let nextInputIndex = 1;
+
+    if (scriptData.hookText) {
+      const hookFontSize = Math.round(75 * scaleFactor);
+      const hookPath = path.join(tempDir, 'hook.txt');
+      fs.writeFileSync(hookPath, wrapText(scriptData.hookText, targetW - 100, hookFontSize));
+      
+      filterGraph.push({
+        filter: 'drawtext',
+        options: {
+            fontfile: fontPath,
+            fontcolor: 'yellow',
+            fontsize: hookFontSize.toString(),
+            x: '(w-text_w)/2',
+            y: '100',
+            textfile: hookPath,
+            shadowcolor: 'black@0.9',
+            shadowx: '4',
+            shadowy: '4',
+            bordercolor: 'black',
+            borderw: '4',
+            enable: 'between(t,0,4)'
+        },
+        inputs: currentOutput,
+        outputs: 'with_hook'
+      });
+      currentOutput = 'with_hook';
+    }
 
     let overlayIndex = -1;
     if (overlayPath && vBox) {
@@ -122,8 +166,22 @@ export default async function handler(req, res) {
         filter: 'crop',
         options: `${vBox[2]}:${vBox[3]}`,
         inputs: 'ov_scaled',
-        outputs: 'ov_cropped'
+        outputs: 'ov_cropped_raw'
       });
+      
+      const isOverlayImage = !overlayMediaUrl.match(/\.(mp4|mov|webm)$/i);
+      if (isOverlayImage && (preset === 'breaking_news' || preset === 'explainer')) {
+          const zStep = preset === 'breaking_news' ? '0.0015' : '0.0005';
+          filterGraph.push({
+              filter: 'zoompan',
+              options: `z='min(zoom+${zStep},1.2)':d=750:s=${vBox[2]}x${vBox[3]}`,
+              inputs: 'ov_cropped_raw',
+              outputs: 'ov_cropped'
+          });
+      } else {
+          filterGraph.push({ filter: 'null', inputs: 'ov_cropped_raw', outputs: 'ov_cropped' });
+      }
+
       filterGraph.push({
         filter: 'overlay',
         options: `x=${vBox[0]}:y=${vBox[1]}`,
@@ -142,14 +200,16 @@ export default async function handler(req, res) {
         filter: 'drawtext',
         options: {
           fontfile: fontPath,
-          fontcolor: styleOverrides.headlineColor || 'white',
+          fontcolor: styleOverrides.headlineColor || 'yellow',
           fontsize: fontSize.toString(),
           x: `${hBox[0]}+(${hBox[2]}-text_w)/2`,
           y: `${hBox[1]}+(${hBox[3]}-text_h)/2`,
           textfile: headlinePath,
-          box: '1',
-          boxcolor: 'black@0.5',
-          boxborderw: Math.round(10 * scaleFactor).toString()
+          shadowcolor: 'black@0.9',
+          shadowx: '4',
+          shadowy: '4',
+          bordercolor: 'black',
+          borderw: '4'
         },
         inputs: currentOutput,
         outputs: 'with_headline'
@@ -198,32 +258,61 @@ export default async function handler(req, res) {
       currentOutput = 'with_ticker';
     }
 
-    if (scriptData.subtitles && sBox) {
-      const fontSize = Math.round((Number(styleOverrides.subtitleSize) || 60) * scaleFactor);
-      const subtitleLines = Array.isArray(scriptData.subtitles) ? scriptData.subtitles : [scriptData.subtitles].filter(Boolean);
-      const timePerSubtitle = 3.5; // Estimated 3.5s per line
+    if ((scriptData.subtitles || scriptData.subtitleChunks) && sBox) {
+      const fontSize = Math.round((Number(styleOverrides.subtitleSize) || 65) * scaleFactor);
+      
+      let rawLines = Array.isArray(scriptData.subtitleChunks) && scriptData.subtitleChunks.length > 0
+         ? scriptData.subtitleChunks 
+         : Array.isArray(scriptData.subtitles) && scriptData.subtitles.length > 0 ? scriptData.subtitles : null;
+         
+      if (!rawLines && scriptData.voiceoverScript) {
+         // Auto-generate chunks from full script if missed
+         rawLines = String(scriptData.voiceoverScript).split(/[,.।!?]+/).map(s => s.trim()).filter(Boolean);
+      }
+      
+      const subtitleLines = rawLines || ["Subtitle missing"];
+      
+      const totalWords = subtitleLines.join(' ').split(' ').length;
+      // In absence of exact word-level TTS timestamps, we map chunks evenly across estimated audio duration
+      // TTS usually reads at ~2.2 words per second. 
+      // If voiceoverScript exists, it might be longer than chunks, so we estimate real duration from it.
+      const voiceoverWords = scriptData.voiceoverScript ? String(scriptData.voiceoverScript).split(' ').length : totalWords;
+      const estimatedTotalAudioSecs = Math.max(10, voiceoverWords / 2.0); 
+      
+      let currentTime = 0;
 
       subtitleLines.forEach((sub, index) => {
         const nextOutput = `sub_${index}`;
         const subPath = path.join(tempDir, `sub_${index}.txt`);
         const wrappedSub = wrapText(sub, sBox[2], fontSize);
         fs.writeFileSync(subPath, wrappedSub);
-        const startT = index * timePerSubtitle;
-        const endT = (index + 1) * timePerSubtitle;
+        
+        const words = String(sub).split(' ').length;
+        // The proportion of the total text length dictates the duration this chunk is shown.
+        let duration = (words / Math.max(1, totalWords)) * estimatedTotalAudioSecs;
+        
+        // Prevent too short subtitles
+        duration = Math.max(1.0, duration);
+
+        const startT = currentTime;
+        const endT = currentTime + duration;
+        currentTime += duration;
 
         filterGraph.push({
           filter: 'drawtext',
           options: {
             fontfile: fontPath,
-            fontcolor: styleOverrides.subtitleColor || 'yellow',
+            fontcolor: styleOverrides.subtitleColor || 'white',
             fontsize: fontSize.toString(),
             x: `${sBox[0]}+(${sBox[2]}-text_w)/2`,
             y: `${sBox[1]}+(${sBox[3]}-text_h)/2`,
             textfile: subPath,
-            box: '1',
-            boxcolor: 'black@0.6',
-            boxborderw: Math.round(10 * scaleFactor).toString(),
-            enable: `between(t,${startT},${endT})` // Timeline editing to sync subtitles over audio duration
+            shadowcolor: 'black@0.9',
+            shadowx: '3',
+            shadowy: '3',
+            bordercolor: 'black',
+            borderw: '4',
+            enable: `between(t,${startT.toFixed(2)},${endT.toFixed(2)})`
           },
           inputs: currentOutput,
           outputs: nextOutput
@@ -240,7 +329,12 @@ export default async function handler(req, res) {
       command = command.input(backgroundPath).inputOptions(['-stream_loop', '-1']);
       
       if (overlayPath && vBox) {
-        command = command.input(overlayPath);
+        const isOverlayImageInfo = !overlayMediaUrl.match(/\.(mp4|mov|webm)$/i);
+        if (isOverlayImageInfo) {
+           command = command.input(overlayPath).inputOptions(['-stream_loop', '-1']);
+        } else {
+           command = command.input(overlayPath);
+        }
       }
       
       let audioIndex = -1;
@@ -264,6 +358,8 @@ export default async function handler(req, res) {
       if (audioPath) {
         outOpts = [`-map ${audioIndex}:a`, ...outOpts, '-c:a aac', '-shortest'];
       }
+
+      console.log("Filter graph:", JSON.stringify(filterGraph, null, 2));
 
       command
         .complexFilter(filterGraph)

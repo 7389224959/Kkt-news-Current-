@@ -519,6 +519,10 @@ function ReelEditorView({
     if (boxName === 'ticker_box' && customCoords.ticker) raw = customCoords.ticker;
     if (boxName === 'subtitle_box' && customCoords.subtitle) raw = customCoords.subtitle;
     if (boxName === 'video_box' && customCoords.video) raw = customCoords.video;
+    
+    // Force subtitles to always appear since they are critical for reels
+    if (boxName === 'subtitle_box' && (!raw || raw === 'hidden')) raw = '50,900,620,200';
+    
     if (!raw || raw === 'hidden') return { x:0, y:0, w:0, h:0, hidden: true };
     const [x,y,w,h] = raw.split(',').map(Number);
     return { x: isNaN(x)?0:x, y: isNaN(y)?0:y, w: isNaN(w)?100:w, h: isNaN(h)?100:h, hidden: false };
@@ -655,6 +659,20 @@ function ReelEditorView({
                </div>
              )}
              
+             {scriptData.hookText && (
+                <div 
+                  className="absolute flex items-center justify-center pointer-events-none w-full"
+                  style={{ top: '60px' }}
+                >
+                   <span className="text-center font-bold px-4" style={{
+                      color: 'white', 
+                      fontSize: `${(parseInt(styleOverrides.headlineSize || '55') * scale)}px`,
+                      textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
+                      WebkitTextStroke: '1px black'
+                   }}>{scriptData.hookText}</span>
+                </div>
+             )}
+             
              {showHeadline && !headlineBox.hidden && (
                 <div 
                   className="absolute flex items-center justify-center p-2 cursor-grab active:cursor-grabbing border-2 border-dashed border-red-400 hover:border-red-500"
@@ -713,15 +731,16 @@ function ReelEditorView({
                   style={{
                     left: subtitleBox.x * scale, top: subtitleBox.y * scale, 
                     width: subtitleBox.w * scale, height: subtitleBox.h * scale,
-                    backgroundColor: 'rgba(0,0,0,0.6)'
                   }}
                   onMouseDown={(e) => handleDragStart(e, 'subtitle_box', 'move')}
                   onTouchStart={(e) => handleDragStart(e, 'subtitle_box', 'move')}
                 >
                    <span className="text-center font-bold pointer-events-none" style={{
-                      color: styleOverrides.subtitleColor || 'yellow', 
-                      fontSize: `${(parseInt(styleOverrides.subtitleSize || '45') * scale)}px`
-                   }}>{scriptData.subtitles?.[0] || 'Subtitle prev...'}</span>
+                      color: styleOverrides.subtitleColor || 'white', 
+                      fontSize: `${(parseInt(styleOverrides.subtitleSize || '45') * scale)}px`,
+                      textShadow: '2px 2px 4px rgba(0,0,0,0.9)',
+                      WebkitTextStroke: '2px black'
+                   }}>{scriptData.subtitleChunks?.[0] || scriptData.subtitles?.[0] || 'Subtitle prev...'}</span>
                    <div 
                      className="absolute bottom-0 right-0 w-8 h-8 -mr-4 -mb-4 bg-transparent cursor-nwse-resize flex items-center justify-center pointer-events-auto"
                      onMouseDown={(e) => handleDragStart(e, 'subtitle_box', 'resize')}
