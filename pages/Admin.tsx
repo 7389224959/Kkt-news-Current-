@@ -1172,29 +1172,16 @@ const Admin: React.FC = () => {
       return;
     }
 
-    let unixScheduledTime: number | undefined = undefined;
-    if (scheduledTime) {
-      const date = new Date(scheduledTime);
-      unixScheduledTime = Math.floor(date.getTime() / 1000);
-      
-      const now = Math.floor(Date.now() / 1000);
-      const diff = unixScheduledTime - now;
-      if (diff < 10 * 60 || diff > 75 * 24 * 60 * 60) {
-        alert("Scheduled time must be between 10 minutes and 75 days from now.");
-        return;
-      }
-    }
-
     setIsPostingToFacebook(true);
     try {
       // 1. Upload the already-rendered frontend image directly to Supabase
       const overlaidImageUrl = await uploadImage(viralGeneratedImage);
 
-      // Pass published = true instead of false
-      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, unixScheduledTime, true);
+      // Force published = true, directly post to timeline. Scheduling causes FB bugs with photos.
+      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, undefined, true);
       
       if (result.success && result.id) {
-        alert(unixScheduledTime ? "Successfully scheduled post!" : "Successfully published post to Timeline!");
+        alert("Successfully published post to Timeline!");
         setShowViralModal(false);
         setScheduledTime('');
       } else {
@@ -2784,17 +2771,7 @@ const Admin: React.FC = () => {
                         className="w-full p-3 border rounded-lg h-20 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                       />
                     </div>
-                    <div className="border-t pt-4">
-                      <label className="block text-sm font-bold text-gray-700 mb-2">Schedule Post (Optional)</label>
-                      <input 
-                        type="datetime-local" 
-                        className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={scheduledTime}
-                        onChange={(e) => setScheduledTime(e.target.value)}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Leave blank to post immediately. Must be at least 10 minutes in the future.</p>
-                    </div>
-                    <div className="flex gap-4">
+                    <div className="flex gap-4 border-t pt-4">
                       <button 
                         onClick={handleRegenerateViralPost}
                         disabled={isGeneratingViral}
@@ -2809,7 +2786,7 @@ const Admin: React.FC = () => {
                         className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50"
                       >
                         {isPostingToFacebook ? <RefreshCw className="animate-spin" size={20} /> : <CheckCircle size={20} />}
-                        {isPostingToFacebook ? 'Posting...' : (scheduledTime ? 'Schedule Post' : 'Final Post')}
+                        {isPostingToFacebook ? 'Posting...' : 'Publish to Facebook'}
                       </button>
                     </div>
                   </div>

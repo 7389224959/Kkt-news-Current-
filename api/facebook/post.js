@@ -54,20 +54,21 @@ export default async function handler(req, res) {
     const body = {
       message,
       access_token: resolvedAccessToken,
+      published: true // Explicitly ensure timeline visibility
     };
-
-    if (scheduledPublishTime) {
-      body.published = false;
-      body.scheduled_publish_time = scheduledPublishTime;
-    } else if (published === false) {
-      body.published = false;
-    }
 
     if (imageUrl) {
       // If there's an image, we post to the photos endpoint instead
       fbApiUrl = `https://graph.facebook.com/v19.0/${pageId}/photos`;
       body.url = imageUrl;
     }
+
+    console.log("FB Publish Payload:", {
+      message: body.message,
+      url: body.url,
+      published: body.published,
+      endpoint: fbApiUrl
+    });
 
     const fbResponse = await fetch(fbApiUrl, {
       method: 'POST',
@@ -79,7 +80,7 @@ export default async function handler(req, res) {
 
     console.log(`Facebook API Status: ${fbResponse.status}`);
     const textData = await fbResponse.text();
-    console.log(`Facebook API Raw Response: ${textData}`);
+    console.log("FB Response:", textData);
 
     let fbData = {};
     if (textData) {
@@ -108,13 +109,17 @@ export default async function handler(req, res) {
     }
 
     // Photo API returns 'post_id'. Feed API returns 'id'.
-    // If it's unpublished, we still get an ID.
+    // We strictly use published: true so it's fully public.
     const postId = fbData.post_id || fbData.id;
+    const postUrl = `https://facebook.com/${postId}`;
+    
+    console.log("Public Post URL:", postUrl);
 
     res.status(200).json({ 
       success: true, 
       id: postId,
-      pageId: pageId 
+      pageId: pageId,
+      url: postUrl
     });
   } catch (error) {
     console.error('Error posting to Facebook:', error);
