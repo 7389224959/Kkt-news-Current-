@@ -39,7 +39,8 @@ const Footer: React.FC = () => {
               <li><a href="#" className="hover:text-red-500 transition-colors">संपादकीय टीम</a></li>
               <li><a href="#" className="hover:text-red-500 transition-colors">आचार संहिता</a></li>
               <li><a href="#" className="hover:text-red-500 transition-colors">विज्ञापन दें</a></li>
-              <li><a href="#" className="hover:text-red-500 transition-colors">गोपनीयता नीति</a></li>
+              <li><Link to="/privacy" className="hover:text-red-500 transition-colors">गोपनीयता नीति (Privacy Policy)</Link></li>
+              <li><Link to="/terms" className="hover:text-red-500 transition-colors">सेवा की शर्तें (Terms of Service)</Link></li>
             </ul>
           </div>
 
