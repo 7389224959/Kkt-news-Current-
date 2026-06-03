@@ -573,9 +573,9 @@ const Admin: React.FC = () => {
       setShowViralModal(false);
       
       if (fbResult.success && fbResult.id) {
-        alert(`Auto Viral Success: Viral post automatically saved as a Draft on Facebook! Publish via Meta Business Suite.`);
+        alert(`Auto Viral Success: Viral post automatically scheduled in Meta Business Suite (for 24 hours from now)!`);
       } else {
-        alert(`Auto Viral Error: Facebook viral draft couldn't be confirmed.`);
+        alert(`Auto Viral Error: Facebook viral post scheduling couldn't be confirmed.`);
       }
     } catch (error: any) {
       console.error("Error in Auto Viral Only:", error);
@@ -753,9 +753,9 @@ const Admin: React.FC = () => {
         setShowViralModal(false);
         
         if (fbResult.success && fbResult.id) {
-          alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically saved viral post as a draft to Facebook! Publish via Meta Business Suite.`);
+          alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically scheduled viral post to Meta Business Suite Planner!`);
         } else {
-          alert(`Successfully auto-fetched ${newArticles.length} new articles, but Facebook viral draft couldn't be confirmed.`);
+          alert(`Successfully auto-fetched ${newArticles.length} new articles, but Facebook viral post scheduling couldn't be confirmed.`);
         }
       } else {
         alert("Failed to fetch new articles or they were already posted.");
@@ -1177,15 +1177,15 @@ const Admin: React.FC = () => {
       // 1. Upload the already-rendered frontend image directly to Supabase
       const overlaidImageUrl = await uploadImage(viralGeneratedImage);
 
-      // Force published = false, to save as an unpublished draft
+      // Force published = false, to schedule the post
       const result = await postToFacebook(viralPost.caption, overlaidImageUrl, undefined, false);
       
       if (result.success && result.id) {
-        alert("Successfully saved as an unpublished draft on Facebook! You can review and publish it from Meta Business Suite.");
+        alert("Successfully scheduled in Meta Business Suite! It is scheduled for 24 hours from now. Go to Meta Business Suite -> Planner to view it, edit the time, or click 'Publish Now' to make it public immediately.");
         setShowViralModal(false);
         setScheduledTime('');
       } else {
-        alert("Created draft but could not confirm completion.");
+        alert("Sent to Meta Business Suite but could not confirm completion.");
       }
     } catch (error: any) {
       console.error("Facebook post error:", error);
@@ -2787,7 +2787,7 @@ const Admin: React.FC = () => {
                         className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50"
                       >
                         {isPostingToFacebook ? <RefreshCw className="animate-spin" size={20} /> : <CheckCircle size={20} />}
-                        {isPostingToFacebook ? 'Saving Draft...' : 'Send Draft to Facebook'}
+                        {isPostingToFacebook ? 'Scheduling...' : 'Send to Meta Business Planner'}
                       </button>
                     </div>
                   </div>

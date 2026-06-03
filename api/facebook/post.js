@@ -54,7 +54,8 @@ export default async function handler(req, res) {
     const body = {
       message,
       access_token: resolvedAccessToken,
-      published: false // Set to false to push as an unpublished draft that needs manual approval
+      published: false, // Set to false to push as an unpublished draft that needs manual approval
+      scheduled_publish_time: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // Schedule for 24 hours from now so it shows up in "Scheduled Posts"
     };
 
     if (imageUrl) {
