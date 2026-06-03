@@ -58,7 +58,9 @@ export default async function handler(req, res) {
     };
 
     if (published === false) {
-      body.unpublished_content_type = 'DRAFT';
+      // Create a Scheduled Post in Meta Business Suite Planner
+      // Scheduling for 24 hours in the future (Time must be between 10 mins and 75 days)
+      body.scheduled_publish_time = Math.floor(Date.now() / 1000) + (24 * 60 * 60);
     }
 
     if (imageUrl) {
