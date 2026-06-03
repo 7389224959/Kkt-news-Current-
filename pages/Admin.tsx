@@ -1179,11 +1179,11 @@ const Admin: React.FC = () => {
       // 1. Upload the already-rendered frontend image directly to Supabase
       const overlaidImageUrl = await uploadImage(viralGeneratedImage);
 
-      // Force published = true, directly post to timeline. Scheduling causes FB bugs with photos.
-      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, undefined, true);
+      const scheduledUnixTime = Math.floor(Date.now() / 1000) + 3600;
+      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, scheduledUnixTime, false);
       
       if (result.success && result.id) {
-        alert("Successfully published post to Timeline!");
+        alert("Successfully scheduled post to Facebook for 1 hour from now!");
         setShowViralModal(false);
         setScheduledTime('');
       } else {
@@ -2789,7 +2789,7 @@ const Admin: React.FC = () => {
                         className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50"
                       >
                         {isPostingToFacebook ? <RefreshCw className="animate-spin" size={20} /> : <CheckCircle size={20} />}
-                        {isPostingToFacebook ? 'Posting...' : 'Publish to Facebook'}
+                        {isPostingToFacebook ? 'Scheduling...' : 'Schedule on Facebook (1hr)'}
                       </button>
                     </div>
                   </div>
