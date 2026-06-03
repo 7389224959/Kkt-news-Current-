@@ -40,7 +40,7 @@ const Admin: React.FC = () => {
   const { refreshData: refreshGlobalData } = useApp();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates' | 'queue'>('articles');
+  const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates'>('articles');
   const [viralTemplateTab, setViralTemplateTab] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -567,28 +567,16 @@ const Admin: React.FC = () => {
       });
       
       const overlaidImageUrl = await uploadImage(newImageBase64);
-      
-      if (settings) {
-         const newDraft = {
-           id: crypto.randomUUID(),
-           caption: post.caption,
-           imageUrl: overlaidImageUrl,
-           createdAt: new Date().toISOString()
-         };
-         const updatedSettings = {
-           ...settings,
-           pendingFacebookPosts: [newDraft, ...(settings.pendingFacebookPosts || [])]
-         };
-         const { saveSiteSettings } = await import('../services/articleService');
-         await saveSiteSettings(updatedSettings);
-         setSiteSettings(updatedSettings);
-         alert(`Auto Viral Success: Viral post draft saved locally! You can manually publish it from the "Pending Facebook Drafts" tab.`);
-      } else {
-         alert("Could not save the draft because settings were not loaded.");
-      }
+      const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true);
       
       setShowDailyNewsModal(false);
       setShowViralModal(false);
+      
+      if (fbResult.success && fbResult.id) {
+        alert(`Auto Viral Success: Viral post automatically published to Facebook!`);
+      } else {
+        alert(`Auto Viral Error: Facebook viral post couldn't be confirmed.`);
+      }
     } catch (error: any) {
       console.error("Error in Auto Viral Only:", error);
       alert(`Auto Viral Error: ${error.message}`);
@@ -759,29 +747,16 @@ const Admin: React.FC = () => {
         });
         
         const overlaidImageUrl = await uploadImage(newImageBase64);
-        
-        if (settings) {
-           const newDraft = {
-             id: crypto.randomUUID(),
-             caption: post.caption,
-             imageUrl: overlaidImageUrl,
-             createdAt: new Date().toISOString()
-           };
-           const updatedSettings = {
-             ...settings,
-             autoTemplateIndex: settings.autoTemplateIndex, // Keep previously modified index
-             pendingFacebookPosts: [newDraft, ...(settings.pendingFacebookPosts || [])]
-           };
-           const { saveSiteSettings } = await import('../services/articleService');
-           await saveSiteSettings(updatedSettings);
-           setSiteSettings(updatedSettings);
-           alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically saved the viral post as a draft locally! View the "Pending Facebook Drafts" tab.`);
-        } else {
-           alert(`Successfully auto-fetched ${newArticles.length} new articles, but couldn't save the local draft.`);
-        }
+        const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true);
         
         setShowDailyNewsModal(false);
         setShowViralModal(false);
+        
+        if (fbResult.success && fbResult.id) {
+          alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically published viral post to Facebook!`);
+        } else {
+          alert(`Successfully auto-fetched ${newArticles.length} new articles, but Facebook viral post couldn't be confirmed.`);
+        }
       } else {
         alert("Failed to fetch new articles or they were already posted.");
       }
@@ -1202,15 +1177,15 @@ const Admin: React.FC = () => {
       // 1. Upload the already-rendered frontend image directly to Supabase
       const overlaidImageUrl = await uploadImage(viralGeneratedImage);
 
-      // Force published = false, to schedule the post
-      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, undefined, false);
+      // Force published = true, directly post to timeline. Scheduling causes FB bugs with photos.
+      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, undefined, true);
       
       if (result.success && result.id) {
-        alert("Successfully Scheduled in Meta Business Suite! Go to Meta Business Suite -> Content -> Planner to review, change the schedule, or publish immediately.");
+        alert("Successfully published post to Timeline!");
         setShowViralModal(false);
         setScheduledTime('');
       } else {
-        alert("Sent to Meta Business Suite but could not confirm completion.");
+        alert("Created post but could not confirm completion.");
       }
     } catch (error: any) {
       console.error("Facebook post error:", error);
@@ -1573,12 +1548,6 @@ const Admin: React.FC = () => {
             className={`flex items-center gap-2 px-4 py-2 rounded-md font-bold transition-colors ${activeTab === 'templates' ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
           >
             <ImageIcon size={18} /> Templates
-          </button>
-          <button 
-            onClick={() => setActiveTab('queue')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md font-bold transition-colors ${activeTab === 'queue' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-600'}`}
-          >
-            <Upload size={18} /> Pending Facebook Drafts
           </button>
         </div>
 
@@ -2417,81 +2386,6 @@ const Admin: React.FC = () => {
             )}
           </div>
         )}
-
-        {/* --- TAB: QUEUE (Pending Facebook Posts) --- */}
-        {activeTab === 'queue' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-              <div>
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <Upload className="text-blue-600" />
-                  Pending Facebook Drafts
-                </h2>
-                <p className="text-sm text-gray-500">
-                  Manually verify and publish these posts from your local draft queue. To get full organic reach, you should download the image and post it natively on Facebook.
-                </p>
-              </div>
-            </div>
-
-            {(!settings?.pendingFacebookPosts || settings.pendingFacebookPosts.length === 0) ? (
-              <div className="text-center py-12 bg-white rounded-lg shadow-sm border border-gray-100 text-gray-500">
-                No pending drafts. Auto Viral Post will save new drafts here.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {settings.pendingFacebookPosts.map((post) => (
-                  <div key={post.id} className="bg-white border rounded-lg overflow-hidden shadow-sm flex flex-col">
-                    <img src={post.imageUrl} alt="Draft preview" className="w-full aspect-[4/5] object-cover" />
-                    <div className="p-4 flex flex-col flex-1">
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap mb-4 font-mono leading-relaxed flex-1">
-                        {post.caption}
-                      </p>
-                      <div className="text-xs text-gray-400 mb-4">
-                        Created: {new Date(post.createdAt).toLocaleString()}
-                      </div>
-                      <div className="flex flex-col gap-2 border-t pt-4">
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(post.caption);
-                            const link = document.createElement('a');
-                            link.href = post.imageUrl;
-                            link.download = `fb_draft_${post.id}.jpg`;
-                            // Workaround for external image download
-                            fetch(post.imageUrl)
-                              .then(r => r.blob())
-                              .then(blob => {
-                                 const blobUrl = window.URL.createObjectURL(blob);
-                                 link.href = blobUrl;
-                                 link.click();
-                                 window.URL.revokeObjectURL(blobUrl);
-                                 window.open('https://business.facebook.com/latest/composer', '_blank');
-                              })
-                              .catch(() => window.open(post.imageUrl, '_blank'));
-                          }}
-                          className="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 flex items-center justify-center gap-2"
-                        >
-                          <CheckCircle size={16} /> Download & Post Natively
-                        </button>
-                        <button
-                          onClick={async () => {
-                            const newQueue = settings.pendingFacebookPosts!.filter((p) => p.id !== post.id);
-                            const updatedSettings = { ...settings, pendingFacebookPosts: newQueue };
-                            const { saveSiteSettings } = await import('../services/articleService');
-                            await saveSiteSettings(updatedSettings);
-                            setSiteSettings(updatedSettings);
-                          }}
-                          className="w-full bg-gray-100 text-gray-600 font-bold py-2 px-4 rounded hover:bg-red-50 hover:text-red-600 flex items-center justify-center gap-2 transition-colors"
-                        >
-                          <Trash2 size={16} /> Discard Draft
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </>
     )}
 
@@ -2893,7 +2787,7 @@ const Admin: React.FC = () => {
                         className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50"
                       >
                         {isPostingToFacebook ? <RefreshCw className="animate-spin" size={20} /> : <CheckCircle size={20} />}
-                        {isPostingToFacebook ? 'Saving to Planner...' : 'Send to Meta Business Suite Planner'}
+                        {isPostingToFacebook ? 'Posting...' : 'Publish to Facebook'}
                       </button>
                     </div>
                   </div>
