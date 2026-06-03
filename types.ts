@@ -107,6 +107,12 @@ export interface SiteSettings {
   adminPhoto?: string;
   adminDesignation?: string;
   autoTemplateIndex?: number;
+  pendingFacebookPosts?: {
+    id: string;
+    caption: string;
+    imageUrl: string;
+    createdAt: string;
+  }[];
 }
 
 export interface ViralTemplate {
