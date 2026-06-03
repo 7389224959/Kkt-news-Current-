@@ -567,15 +567,15 @@ const Admin: React.FC = () => {
       });
       
       const overlaidImageUrl = await uploadImage(newImageBase64);
-      const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true);
+      const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, false);
       
       setShowDailyNewsModal(false);
       setShowViralModal(false);
       
       if (fbResult.success && fbResult.id) {
-        alert(`Auto Viral Success: Viral post automatically published to Facebook!`);
+        alert(`Auto Viral Success: Viral post automatically saved as a Draft on Facebook! Publish via Meta Business Suite.`);
       } else {
-        alert(`Auto Viral Error: Facebook viral post couldn't be confirmed.`);
+        alert(`Auto Viral Error: Facebook viral draft couldn't be confirmed.`);
       }
     } catch (error: any) {
       console.error("Error in Auto Viral Only:", error);
@@ -747,15 +747,15 @@ const Admin: React.FC = () => {
         });
         
         const overlaidImageUrl = await uploadImage(newImageBase64);
-        const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true);
+        const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, false);
         
         setShowDailyNewsModal(false);
         setShowViralModal(false);
         
         if (fbResult.success && fbResult.id) {
-          alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically published viral post to Facebook!`);
+          alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically saved viral post as a draft to Facebook! Publish via Meta Business Suite.`);
         } else {
-          alert(`Successfully auto-fetched ${newArticles.length} new articles, but Facebook viral post couldn't be confirmed.`);
+          alert(`Successfully auto-fetched ${newArticles.length} new articles, but Facebook viral draft couldn't be confirmed.`);
         }
       } else {
         alert("Failed to fetch new articles or they were already posted.");
@@ -1177,15 +1177,15 @@ const Admin: React.FC = () => {
       // 1. Upload the already-rendered frontend image directly to Supabase
       const overlaidImageUrl = await uploadImage(viralGeneratedImage);
 
-      // Force published = true, directly post to timeline. Scheduling causes FB bugs with photos.
-      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, undefined, true);
+      // Force published = false, to save as an unpublished draft
+      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, undefined, false);
       
       if (result.success && result.id) {
-        alert("Successfully published post to Timeline!");
+        alert("Successfully saved as an unpublished draft on Facebook! You can review and publish it from Meta Business Suite.");
         setShowViralModal(false);
         setScheduledTime('');
       } else {
-        alert("Created post but could not confirm completion.");
+        alert("Created draft but could not confirm completion.");
       }
     } catch (error: any) {
       console.error("Facebook post error:", error);
@@ -2430,7 +2430,8 @@ const Admin: React.FC = () => {
               <ol className="list-decimal list-inside text-sm text-blue-700 space-y-1">
                 <li>Create a Facebook App in the <a href="https://developers.facebook.com/" target="_blank" rel="noreferrer" className="underline font-bold">Facebook Developer Portal</a>.</li>
                 <li>Add the "Facebook Login for Business" product and get a <strong>Page Access Token</strong> with <code>pages_manage_posts</code> and <code>pages_read_engagement</code> permissions.</li>
-                <li>Find your <strong>Facebook Page ID</strong>.</li>
+                <li className="text-red-700 font-bold">CRITICAL: You MUST go to "App Review &gt; Permissions and Features" and get Advanced Access for `pages_manage_posts`. If it's in Standard Access, your posts will be HIDDEN from the public!</li>
+                <li>Find your <strong>Facebook Page ID</strong> (from the Page's About section).</li>
                 <li>Add these to your environment variables as <code>FB_PAGE_ID</code> and <code>FB_PAGE_ACCESS_TOKEN</code>.</li>
               </ol>
             </div>
@@ -2786,7 +2787,7 @@ const Admin: React.FC = () => {
                         className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50"
                       >
                         {isPostingToFacebook ? <RefreshCw className="animate-spin" size={20} /> : <CheckCircle size={20} />}
-                        {isPostingToFacebook ? 'Posting...' : 'Publish to Facebook'}
+                        {isPostingToFacebook ? 'Saving Draft...' : 'Send Draft to Facebook'}
                       </button>
                     </div>
                   </div>

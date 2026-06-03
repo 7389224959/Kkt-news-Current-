@@ -54,7 +54,7 @@ export default async function handler(req, res) {
     const body = {
       message,
       access_token: resolvedAccessToken,
-      published: true // Explicitly ensure timeline visibility
+      published: false // Set to false to push as an unpublished draft that needs manual approval
     };
 
     if (imageUrl) {
