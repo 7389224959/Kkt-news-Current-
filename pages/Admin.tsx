@@ -567,13 +567,14 @@ const Admin: React.FC = () => {
       });
       
       const overlaidImageUrl = await uploadImage(newImageBase64);
-      const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true);
+      const scheduledTime = Math.floor(Date.now() / 1000) + 3600;
+      const fbResult = await postToFacebook(post.caption, overlaidImageUrl, scheduledTime, false);
       
       setShowDailyNewsModal(false);
       setShowViralModal(false);
       
       if (fbResult.success && fbResult.id) {
-        alert(`Auto Viral Success: Viral post automatically published to Facebook!`);
+        alert(`Auto Viral Success: Viral post automatically scheduled to Facebook for 1 hour from now!`);
       } else {
         alert(`Auto Viral Error: Facebook viral post couldn't be confirmed.`);
       }
@@ -747,13 +748,14 @@ const Admin: React.FC = () => {
         });
         
         const overlaidImageUrl = await uploadImage(newImageBase64);
-        const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true);
+        const scheduledTime = Math.floor(Date.now() / 1000) + 3600;
+        const fbResult = await postToFacebook(post.caption, overlaidImageUrl, scheduledTime, false);
         
         setShowDailyNewsModal(false);
         setShowViralModal(false);
         
         if (fbResult.success && fbResult.id) {
-          alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically published viral post to Facebook!`);
+          alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically scheduled viral post to Facebook for 1 hour from now!`);
         } else {
           alert(`Successfully auto-fetched ${newArticles.length} new articles, but Facebook viral post couldn't be confirmed.`);
         }
