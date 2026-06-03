@@ -573,7 +573,7 @@ const Admin: React.FC = () => {
       setShowViralModal(false);
       
       if (fbResult.success && fbResult.id) {
-        alert(`Auto Viral Success: Viral post automatically scheduled in Meta Business Suite (for 24 hours from now)!`);
+        alert(`Auto Viral Success: Viral post automatically saved to Drafts in Meta Business Suite!`);
       } else {
         alert(`Auto Viral Error: Facebook viral post scheduling couldn't be confirmed.`);
       }
@@ -753,7 +753,7 @@ const Admin: React.FC = () => {
         setShowViralModal(false);
         
         if (fbResult.success && fbResult.id) {
-          alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically scheduled viral post to Meta Business Suite Planner!`);
+          alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically saved viral post to Meta Business Suite Drafts!`);
         } else {
           alert(`Successfully auto-fetched ${newArticles.length} new articles, but Facebook viral post scheduling couldn't be confirmed.`);
         }
@@ -1181,7 +1181,7 @@ const Admin: React.FC = () => {
       const result = await postToFacebook(viralPost.caption, overlaidImageUrl, undefined, false);
       
       if (result.success && result.id) {
-        alert("Successfully scheduled in Meta Business Suite! It is scheduled for 24 hours from now. Go to Meta Business Suite -> Planner to view it, edit the time, or click 'Publish Now' to make it public immediately.");
+        alert("Successfully saved as a Draft in Meta Business Suite! Go to Meta Business Suite -> Content -> Drafts to review and publish it.");
         setShowViralModal(false);
         setScheduledTime('');
       } else {
@@ -2787,7 +2787,7 @@ const Admin: React.FC = () => {
                         className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50"
                       >
                         {isPostingToFacebook ? <RefreshCw className="animate-spin" size={20} /> : <CheckCircle size={20} />}
-                        {isPostingToFacebook ? 'Scheduling...' : 'Send to Meta Business Planner'}
+                        {isPostingToFacebook ? 'Saving Draft...' : 'Send to Meta Business Suite Drafts'}
                       </button>
                     </div>
                   </div>

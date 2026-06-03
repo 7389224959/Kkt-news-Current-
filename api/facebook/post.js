@@ -54,20 +54,53 @@ export default async function handler(req, res) {
     const body = {
       message,
       access_token: resolvedAccessToken,
-      published: false, // Set to false to push as an unpublished draft that needs manual approval
-      scheduled_publish_time: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // Schedule for 24 hours from now so it shows up in "Scheduled Posts"
+      published: published // Use the boolean passed from the frontend
     };
 
+    if (published === false) {
+      body.unpublished_content_type = 'DRAFT';
+    }
+
     if (imageUrl) {
-      // If there's an image, we post to the photos endpoint instead
-      fbApiUrl = `https://graph.facebook.com/v19.0/${pageId}/photos`;
-      body.url = imageUrl;
+      // 2-step process for photos so that it creates a proper Feed Post Draft in Meta Business Suite,
+      // instead of just dumping an unpublished photo into the page's hidden album.
+      
+      // Step 1: Upload the photo as unpublished
+      const photoPayload = {
+        url: imageUrl,
+        published: false,
+        access_token: resolvedAccessToken
+      };
+      
+      console.log("FB Photo Upload Payload:", photoPayload);
+      const photoRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/photos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(photoPayload),
+      });
+      
+      const photoTextData = await photoRes.text();
+      let photoData = {};
+      try { photoData = JSON.parse(photoTextData); } catch (e) {}
+
+      if (!photoRes.ok) {
+        console.error('Facebook Photo Upload Error:', photoData);
+        let errorMessage = photoData.error?.message || 'Failed to upload photo to Facebook';
+        if (photoData.error?.code === 190) errorMessage = 'Your Facebook Page Access Token has expired.';
+        return res.status(400).json({ error: errorMessage });
+      }
+
+      const photoId = photoData.id;
+      
+      // Step 2: Attach to the feed post
+      body.attached_media = [{ media_fbid: photoId }];
     }
 
     console.log("FB Publish Payload:", {
       message: body.message,
-      url: body.url,
+      attached_media: body.attached_media,
       published: body.published,
+      unpublished_content_type: body.unpublished_content_type,
       endpoint: fbApiUrl
     });
 
