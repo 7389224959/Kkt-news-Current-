@@ -51,7 +51,7 @@ export default async function handler(req, res) {
     }
 
     let fbApiUrl = `https://graph.facebook.com/v19.0/${pageId}/feed`;
-    const body = {
+    let body = {
       message,
       access_token: resolvedAccessToken,
       published: published !== undefined ? published : true
@@ -62,15 +62,38 @@ export default async function handler(req, res) {
     }
 
     if (imageUrl) {
-      // If there's an image, we post to the photos endpoint instead
-      fbApiUrl = `https://graph.facebook.com/v19.0/${pageId}/photos`;
-      body.url = imageUrl;
+      if (published === false && scheduledPublishTime) {
+        // Step 1: Upload photo as unpublished
+        const photoUploadRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/photos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: imageUrl,
+            published: false,
+            access_token: resolvedAccessToken
+          })
+        });
+        
+        const photoData = await photoUploadRes.json();
+        if (!photoUploadRes.ok) {
+           return res.status(400).json({ error: `Failed to upload photo for scheduling: ${photoData.error?.message || 'Unknown error'}` });
+        }
+        
+        // Step 2: Create scheduled feed post with the attached photo
+        body.attached_media = [{ media_fbid: photoData.id || photoData.post_id }];
+      } else {
+        // Directly post to photo endpoint for immediate publishing
+        fbApiUrl = `https://graph.facebook.com/v19.0/${pageId}/photos`;
+        body.url = imageUrl;
+      }
     }
 
     console.log("FB Publish Payload:", {
       message: body.message,
       url: body.url,
+      attached_media: body.attached_media,
       published: body.published,
+      scheduled_publish_time: body.scheduled_publish_time,
       endpoint: fbApiUrl
     });
 
