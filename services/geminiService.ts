@@ -1407,8 +1407,29 @@ Only generate text content for overlay.
   });
 
   const rawText = response.text || "{}";
-  const cleanedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-  return JSON.parse(cleanedText) as ViralPost;
+  let cleanedText = rawText.trim();
+  if (cleanedText.includes('```')) {
+    const match = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (match) cleanedText = match[1];
+  }
+  const firstB = cleanedText.indexOf('{');
+  const lastB = cleanedText.lastIndexOf('}');
+  if (firstB !== -1 && lastB !== -1 && lastB >= firstB) {
+    cleanedText = cleanedText.substring(firstB, lastB + 1);
+  }
+  cleanedText = cleanedText.replace(/\r?\n|\r/g, ' ').replace(/\t/g, ' ');
+  cleanedText = cleanedText.replace(/"\s*\.\s*,/g, '",');
+  cleanedText = cleanedText.replace(/"\s*।\s*,/g, '",');
+  cleanedText = cleanedText.replace(/""\s*,/g, '",');
+  cleanedText = cleanedText.replace(/,\s*}/g, '}');
+  cleanedText = cleanedText.replace(/,\s*]/g, ']');
+  try {
+    cleanedText = jsonrepair(cleanedText);
+    return JSON.parse(cleanedText) as ViralPost;
+  } catch (e) {
+    console.error("JSON Parse Error in generateViralPost:", e, "Cleaned text was:", cleanedText);
+    throw new Error("Failed to parse AI response as JSON for Viral Post.");
+  }
 };
 
 export const generateViralImage = async (prompt: string, referenceImageBase64?: string, imageGenModel: 'gemini' | 'cloudflare' = 'gemini'): Promise<string> => {
