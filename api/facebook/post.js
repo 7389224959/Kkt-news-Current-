@@ -54,8 +54,12 @@ export default async function handler(req, res) {
     const body = {
       message,
       access_token: resolvedAccessToken,
-      published: true // Explicitly ensure timeline visibility
+      published: published !== undefined ? published : true
     };
+    
+    if (scheduledPublishTime && published === false) {
+       body.scheduled_publish_time = scheduledPublishTime;
+    }
 
     if (imageUrl) {
       // If there's an image, we post to the photos endpoint instead
