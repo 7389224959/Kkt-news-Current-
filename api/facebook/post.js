@@ -62,12 +62,24 @@ export default async function handler(req, res) {
     }
 
     if (imageUrl) {
-      // Direct photo upload - this creates a native photo post in the feed
-      fbApiUrl = `https://graph.facebook.com/v19.0/${pageId}/photos`;
-      body.url = imageUrl;
-      // We don't need attached_media since we are posting directly to the photos endpoint 
-      // which automatically creates a feed story for the photo.
-      delete body.attached_media;
+      // Step 1: ALWAYS Upload photo as unpublished first
+      const photoUploadRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/photos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: imageUrl,
+          published: false,
+          access_token: resolvedAccessToken
+        })
+      });
+      
+      const photoData = await photoUploadRes.json();
+      if (!photoUploadRes.ok) {
+         return res.status(400).json({ error: `Failed to upload photo: ${photoData.error?.message || 'Unknown error'}` });
+      }
+      
+      // Step 2: Create feed post with the attached photo
+      body.attached_media = [{ media_fbid: photoData.id || photoData.post_id }];
     }
 
     console.log("FB Publish Payload:", {
