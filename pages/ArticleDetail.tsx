@@ -295,6 +295,46 @@ const ArticleDetail: React.FC = () => {
                 )}
               </div>
 
+              {/* Render Additional Images if any */}
+              {(() => {
+                let extraImages: string[] = [];
+                // Check if we have additionalImages in the article object itself
+                if ((article as any).additionalImages && Array.isArray((article as any).additionalImages)) {
+                  extraImages = (article as any).additionalImages.filter((img: string) => img !== article.image && img !== article.imageUrl);
+                } 
+                // Or try extracting from HTML comments in content
+                else {
+                  const contentStr = article.content || '';
+                  const match = contentStr.match(/<!-- additionalImages:\s*(\[.*?\])\s*-->/);
+                  if (match && match[1]) {
+                    try {
+                      const parsedArray = JSON.parse(match[1]);
+                      if (Array.isArray(parsedArray)) {
+                        extraImages = parsedArray.filter((img: string) => img !== article.image && img !== article.imageUrl);
+                      }
+                    } catch(e) {}
+                  }
+                }
+
+                if (extraImages.length > 0) {
+                  return (
+                    <div className="mb-10 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {extraImages.map((imgUrl, idx) => (
+                        <div key={idx} className="rounded-sm overflow-hidden bg-gray-100 aspect-video relative">
+                          <NewsImage 
+                            src={imgUrl} 
+                            alt={`${article.title} - Image ${idx+1}`} 
+                            className="w-full h-full object-cover" 
+                            fallbackText={article.title}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               <div className="prose prose-lg max-w-none text-bhaskar-dark leading-relaxed font-medium">
                 {article.summary && (
                   <div className="bg-gray-50 p-6 border-l-4 border-bhaskar-orange mb-8 rounded-r-sm italic text-xl text-gray-700 font-bold leading-relaxed">

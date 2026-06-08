@@ -1249,13 +1249,63 @@ const Admin: React.FC = () => {
       setReelAudioUrl(audioUrl); // Store audio just in case they just want audio
 
       // We now call the server-side API to render the reel
+      let initialVisuals = [latestArticle.image];
+      
+      // Check if we serialized additionalImages into the content
+      const contentStr = latestArticle.content || '';
+      const match = contentStr.match(/<!-- additionalImages:\s*(\[.*?\])\s*-->/);
+      if (match && match[1]) {
+         try {
+            const parsedArray = JSON.parse(match[1]);
+            if (Array.isArray(parsedArray)) {
+               initialVisuals.push(...parsedArray);
+            }
+         } catch(e) {}
+      }
+      
+      if (latestArticle.sourceUrl || latestArticle.source) {
+        try {
+          const extractRes = await fetch(`/api/extract-article?url=${encodeURIComponent((latestArticle.sourceUrl || latestArticle.source || ''))}`);
+          if (extractRes.ok) {
+            const extractData = await extractRes.json();
+            if (extractData.images && Array.isArray(extractData.images)) {
+              initialVisuals.push(...extractData.images);
+            }
+          }
+        } catch(e) {
+          console.error("Failed to extract additional images for reel", e);
+        }
+      }
+      
+      const uniqueVisuals = Array.from(new Set(initialVisuals.filter(Boolean)));
+      
+      // If we still don't have enough images, we can try to generate one AI image
+      if (uniqueVisuals.length < 2 && scriptData.voiceoverScript) {
+         setReelStatus('Generating AI Image for keywords...');
+         try {
+            const response = await fetch('/api/cloudflare-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ prompt: `Generate a realistic Indian news image about: ${latestArticle.title}` })
+            });
+            const data = await response.json();
+            if (data.base64) {
+               const { uploadImage } = await import('../services/supabase');
+               const url = await uploadImage(`data:image/jpeg;base64,${data.base64}`);
+               if (url) uniqueVisuals.push(url);
+            }
+         } catch(e) {
+            console.error("AI image gen failed on frontend", e);
+         }
+      }
+
       const renderRes = await fetch('/api/render-reel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           audioUrl: audioDataUri,
           templateMediaUrl: selectedTemplate.mediaUrl || selectedTemplate.screenshotUrl,
-          visuals: [], // We can enhance this later
+          visuals: uniqueVisuals,
           scriptData: scriptData,
           template: selectedTemplate
         })

@@ -694,6 +694,7 @@ export const fetchDailyNews = async (
   for (const item of candidateItems) {
     let fullText = "";
     let sourceImageUrl = item.image || "";
+    let additionalImages: string[] = [];
     try {
       const extractRes = await fetch(`/api/extract-article?url=${encodeURIComponent(item.link)}`);
       if (extractRes.ok) {
@@ -701,6 +702,9 @@ export const fetchDailyNews = async (
         fullText = extractData.content;
         if (extractData.image) {
           sourceImageUrl = extractData.image;
+        }
+        if (extractData.images && Array.isArray(extractData.images)) {
+          additionalImages = extractData.images;
         }
       }
     } catch (err) {
@@ -710,6 +714,7 @@ export const fetchDailyNews = async (
     extractedArticlesData.push({
       ...item,
       sourceImageUrl,
+      additionalImages,
       content: fullText || item.description || "Article content not available. Please deduce from title."
     });
   }
@@ -960,25 +965,62 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
         try {
           const dp = (a as any).imageGenerationPlan || {};
           
+          let additionalImages: string[] = [];
+          
           // Guarantee real RSS image by matching candidate data, fallback to AI output
           let realCandidateImage = null;
+          let matchedCandidate = null;
           
           if (typeof (a as any).candidateId === 'number' && extractedArticlesData[(a as any).candidateId]) {
-              realCandidateImage = extractedArticlesData[(a as any).candidateId].sourceImageUrl;
+              matchedCandidate = extractedArticlesData[(a as any).candidateId];
+              realCandidateImage = matchedCandidate.sourceImageUrl;
           }
           
           if (!realCandidateImage) {
-            realCandidateImage = extractedArticlesData.find(cad => cad.link === a.sourceUrl)?.sourceImageUrl;
+            matchedCandidate = extractedArticlesData.find(cad => cad.link === a.sourceUrl) || extractedArticlesData.find(cad => a.title.includes(cad.title.substring(0, 15)) || cad.title.includes(a.title.substring(0, 15)));
+            if (matchedCandidate) realCandidateImage = matchedCandidate.sourceImageUrl;
           }
-          if (!realCandidateImage) {
-            // Attempt fuzzy match on title if URL match failed
-            realCandidateImage = extractedArticlesData.find(cad => a.title.includes(cad.title.substring(0, 15)) || cad.title.includes(a.title.substring(0, 15)))?.sourceImageUrl;
+
+          if (matchedCandidate && matchedCandidate.additionalImages) {
+             additionalImages = [...matchedCandidate.additionalImages];
           }
           
           let heroImage = realCandidateImage && realCandidateImage !== 'none' ? realCandidateImage : null;
           if (!heroImage) {
              heroImage = (a as any).sourceImageUrl && (a as any).sourceImageUrl !== 'none' ? (a as any).sourceImageUrl : null;
           }
+          
+          if (heroImage && !additionalImages.includes(heroImage)) {
+             additionalImages.push(heroImage);
+          }
+
+          // If there's only 1 (or 0) images in additionalImages, generate an AI image based on major keywords
+          if (additionalImages.length <= 1) {
+             const imagePromptToUse = dp.englishImagePrompt || (a as any).seoTitle || a.title;
+             console.log("Only 0 or 1 image found in RSS. Generating an AI image based on keywords:", imagePromptToUse);
+             try {
+                let aiGenImg = null;
+                if (imageGenModel === 'gemini') {
+                    const base64Img = await generateAiImage(imagePromptToUse);
+                    aiGenImg = await uploadImage(base64Img);
+                } else {
+                    aiGenImg = await getStockImageUrl(imagePromptToUse, category);
+                }
+                if (aiGenImg) {
+                    additionalImages.push(aiGenImg);
+                }
+             } catch(err) {
+                console.error("Additional AI Image generation failed, fallback to Cloudflare", err);
+                try {
+                    let aiGenImg = await getStockImageUrl(imagePromptToUse, category);
+                    if (aiGenImg) additionalImages.push(aiGenImg);
+                } catch(fallbackErr) {
+                    console.error("Additional AI image fallback also failed", fallbackErr);
+                }
+             }
+          }
+          
+          (a as any).additionalImages = additionalImages;
           
           // If no heroImage found at all, fallback to Gemini or Cloudflare
           if (!heroImage) {
@@ -1058,6 +1100,11 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
         // Fix any model errors with slashes and ensure proper markdown paragraphs
         formattedContent = formattedContent.replace(/(?:\/n|\\n|\r?\n)+/g, '\n\n');
       }
+      
+      const imgsToSave = (a as any).additionalImages || [];
+      if (imgsToSave.length > 0) {
+         formattedContent += `\n\n<!-- additionalImages: ${JSON.stringify(imgsToSave)} -->`;
+      }
 
       const articleData: Omit<Article, 'id'> = {
         title: title,
@@ -1067,6 +1114,7 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
         category: category,
         author: "Sankalp Jha", // Hardcoded as requested
         image: imageUrl,
+        additionalImages: (a as any).additionalImages || [],
         featuredCollageImage: (a as any).featuredCollageImage || imageUrl,
         published_at: createdAt,
         created_at: createdAt,

@@ -138,18 +138,21 @@ export default async function handler(req, res) {
         title = titleMatch[1];
       }
       
-      let imageUrl = '';
+      let images = [];
       const imgMatch = html.match(/!\[.*?\]\((.*?)\)/);
       if (imgMatch) {
-        imageUrl = imgMatch[1];
+         images.push(imgMatch[1]);
       }
+      
+      let imageUrl = images.length > 0 ? images[0] : '';
       
       return res.status(200).json({
         title: title,
         content: html,
         length: html.length,
         excerpt: html.substring(0, 200) + "...",
-        image: imageUrl
+        image: imageUrl,
+        images: images
       });
     }
     
@@ -157,6 +160,7 @@ export default async function handler(req, res) {
     
     // Extract og:image or any primary metadata image
     let imageUrl = '';
+    const images = [];
     const ogImage = doc.window.document.querySelector('meta[property="og:image"], meta[property="og:image:secure_url"], meta[name="twitter:image"], meta[property="twitter:image"]');
     if (ogImage) {
       imageUrl = ogImage.getAttribute('content') || '';
@@ -187,6 +191,8 @@ export default async function handler(req, res) {
       }
     }
 
+    if (imageUrl) images.push(imageUrl);
+
     const reader = new Readability(doc.window.document);
     const article = reader.parse();
     
@@ -199,7 +205,8 @@ export default async function handler(req, res) {
       content: article.textContent.replace(/\s+/g, ' ').trim(),
       length: article.length,
       excerpt: article.excerpt,
-      image: imageUrl || ''
+      image: imageUrl || '',
+      images: images
     });
   } catch (error) {
     console.error('Error extracting article:', error);

@@ -45,11 +45,25 @@ export default async function handler(req, res) {
     const fontPath = path.join(tempDir, 'font.ttf');
     const outputPath = path.join(tempDir, 'output.mp4');
 
-    const { overlayMediaUrl } = req.body;
-    let overlayPath = null;
-    if (overlayMediaUrl) {
-      overlayPath = path.join(tempDir, 'overlay.mp4');
-      await downloadFile(overlayMediaUrl, overlayPath);
+    const { overlayMediaUrl, visuals = [] } = req.body;
+    let downloadedVisuals = [];
+    for (let i = 0; i < visuals.length; i++) {
+      const p = path.join(tempDir, `visual_${i}.jpg`);
+      await downloadFile(visuals[i], p);
+      downloadedVisuals.push({ file: p, url: visuals[i] });
+    }
+    if (downloadedVisuals.length === 0 && overlayMediaUrl) {
+      const p = path.join(tempDir, 'overlay.mp4');
+      await downloadFile(overlayMediaUrl, p);
+      downloadedVisuals.push({ file: p, url: overlayMediaUrl });
+    }
+    
+    // Ensure 5-6 scenes if not enough by repeating
+    if (downloadedVisuals.length > 0 && downloadedVisuals.length < 5) {
+      const original = [...downloadedVisuals];
+      while (downloadedVisuals.length < 5) {
+        downloadedVisuals.push(original[downloadedVisuals.length % original.length]);
+      }
     }
 
     let audioPath = null;
@@ -66,20 +80,15 @@ export default async function handler(req, res) {
     const scaleFactor = targetW / 1080;
     const parseAndScaleCoords = (cStr) => cStr.split(',').map(n => Math.round(Number(n) * scaleFactor));
     
-    // Get coordinates with fallbacks for critical reel components
     const vBox = template.coordinates.video_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.video_box) : null;
     const hBox = template.coordinates.headline_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.headline_box) : null;
-    
-    // Subtitles should always be visible in these new high-retention reels. Provide a bottom-center fallback.
     const sBox = (template.coordinates.subtitle_box && template.coordinates.subtitle_box !== 'hidden') 
         ? parseAndScaleCoords(template.coordinates.subtitle_box) 
-        : parseAndScaleCoords('50,900,620,200'); // Bottom center fallback
-        
+        : parseAndScaleCoords('50,900,620,200');
     const tBox = template.coordinates.ticker_box !== 'hidden' ? parseAndScaleCoords(template.coordinates.ticker_box) : null;
 
-    // Helper for approximate word wrap based on pixel width
     const wrapText = (text, maxWidth, fontSize) => {
-      const charWidth = fontSize * 0.45; // Adjusted for bold font
+      const charWidth = fontSize * 0.45;
       const maxChars = Math.max(10, Math.floor(maxWidth / charWidth));
       const words = String(text).split(' ');
       let lines = [];
@@ -107,15 +116,9 @@ export default async function handler(req, res) {
           { filter: 'crop', options: `${targetW}:${targetH}`, inputs: 'bg_scaled_raw', outputs: 'bg_cropped_raw' },
           { filter: 'boxblur', options: 'luma_radius=15:luma_power=1', inputs: 'bg_cropped_raw', outputs: 'bg_blurred' },
           { filter: 'scale', options: `${targetW}:${targetH}:force_original_aspect_ratio=decrease`, inputs: '0:v', outputs: 'fg_scaled' },
-          { filter: 'overlay', options: '(W-w)/2:(H-h)/2', inputs: ['bg_blurred', 'fg_scaled'], outputs: 'bg_composed' }
+          { filter: 'overlay', options: '(W-w)/2:(H-h)/2', inputs: ['bg_blurred', 'fg_scaled'], outputs: 'bg_composed' },
+          { filter: 'null', inputs: 'bg_composed', outputs: 'bg_cropped' }
         );
-        
-        if (!overlayPath && (preset === 'breaking_news' || preset === 'explainer')) {
-            const zStep = preset === 'breaking_news' ? '0.0015' : '0.0005';
-            filterGraph.push({ filter: 'zoompan', options: `z='min(zoom+${zStep},1.2)':d=750:s=${targetW}x${targetH}`, inputs: 'bg_composed', outputs: 'bg_cropped' });
-        } else {
-            filterGraph.push({ filter: 'null', inputs: 'bg_composed', outputs: 'bg_cropped' });
-        }
     } else {
         filterGraph.push(
           { filter: 'scale', options: `${targetW}:${targetH}:force_original_aspect_ratio=increase`, inputs: '0:v', outputs: 'bg_scaled' },
@@ -134,58 +137,95 @@ export default async function handler(req, res) {
       filterGraph.push({
         filter: 'drawtext',
         options: {
-            fontfile: fontPath,
-            fontcolor: 'yellow',
-            fontsize: hookFontSize.toString(),
-            x: '(w-text_w)/2',
-            y: '100',
-            textfile: hookPath,
-            shadowcolor: 'black@0.9',
-            shadowx: '4',
-            shadowy: '4',
-            bordercolor: 'black',
-            borderw: '4',
-            enable: 'between(t,0,4)'
+            fontfile: fontPath, fontcolor: 'yellow', fontsize: hookFontSize.toString(),
+            x: '(w-text_w)/2', y: '100', textfile: hookPath,
+            shadowcolor: 'black@0.9', shadowx: '4', shadowy: '4',
+            bordercolor: 'black', borderw: '4', enable: 'between(t,0,4)'
         },
-        inputs: currentOutput,
-        outputs: 'with_hook'
+        inputs: currentOutput, outputs: 'with_hook'
       });
       currentOutput = 'with_hook';
     }
 
-    let overlayIndex = -1;
-    if (overlayPath && vBox) {
-      overlayIndex = nextInputIndex++;
-      filterGraph.push({
-        filter: 'scale',
-        options: `${vBox[2]}:${vBox[3]}:force_original_aspect_ratio=increase`,
-        inputs: `${overlayIndex}:v`,
-        outputs: 'ov_scaled'
-      });
-      filterGraph.push({
-        filter: 'crop',
-        options: `${vBox[2]}:${vBox[3]}`,
-        inputs: 'ov_scaled',
-        outputs: 'ov_cropped_raw'
-      });
-      
-      const isOverlayImage = !overlayMediaUrl.match(/\.(mp4|mov|webm)$/i);
-      if (isOverlayImage && (preset === 'breaking_news' || preset === 'explainer')) {
-          const zStep = preset === 'breaking_news' ? '0.0015' : '0.0005';
-          filterGraph.push({
-              filter: 'zoompan',
-              options: `z='min(zoom+${zStep},1.2)':d=750:s=${vBox[2]}x${vBox[3]}`,
-              inputs: 'ov_cropped_raw',
-              outputs: 'ov_cropped'
-          });
-      } else {
-          filterGraph.push({ filter: 'null', inputs: 'ov_cropped_raw', outputs: 'ov_cropped' });
-      }
+    // Prepare text content for words counting
+    let rawLines = Array.isArray(scriptData.subtitleChunks) && scriptData.subtitleChunks.length > 0
+       ? scriptData.subtitleChunks : Array.isArray(scriptData.subtitles) && scriptData.subtitles.length > 0 ? scriptData.subtitles : null;
+    if (!rawLines && scriptData.voiceoverScript) {
+       rawLines = String(scriptData.voiceoverScript).split(/[,.।!?]+/).map(s => s.trim()).filter(Boolean);
+    }
+    const subtitleLines = rawLines || ["Subtitle missing"];
+    const totalWords = Math.max(1, subtitleLines.join(' ').split(' ').length);
+    const voiceoverWords = scriptData.voiceoverScript ? String(scriptData.voiceoverScript).split(' ').length : totalWords;
+    let exactAudioDuration = Math.max(10, voiceoverWords / 2.0);
 
+    if (audioPath) {
+      try {
+        const metadata = await new Promise((resolve, reject) => ffmpeg.ffprobe(audioPath, (err, meta) => err ? reject(err) : resolve(meta)));
+        if (metadata && metadata.format && metadata.format.duration) {
+            exactAudioDuration = parseFloat(metadata.format.duration);
+            console.log("Probed exact audio duration:", exactAudioDuration);
+        }
+      } catch(e) {
+        console.warn('Failed to probe audio', e);
+      }
+    }
+
+    let overlayInputs = [];
+    if (downloadedVisuals.length > 0 && vBox) {
+      const sceneDur = exactAudioDuration / downloadedVisuals.length;
+      const totalFrames = sceneDur * 25; // roughly the frames per scene
+      
+      const motions = [
+        `z='1+0.2*(on/${totalFrames})'`, // zoom_in continuously
+        `z='1.2-0.2*(on/${totalFrames})'`, // zoom_out continuously
+        `z=1.1:x='iw*0.05*(1-on/${totalFrames})':y='y'`, // pan_left 
+        `z=1.1:x='iw*0.05*(on/${totalFrames})':y='y'`, // pan_right
+        `z='1.1+0.1*(on/${totalFrames})':x='iw*0.05*(on/${totalFrames})':y='ih*0.05*(on/${totalFrames})'` // ken_burns
+      ];
+      
+      const transitions = ["fade", "slideleft", "slideright", "fadeblack", "dissolve"];
+      
+      for (let i = 0; i < downloadedVisuals.length; i++) {
+        const item = downloadedVisuals[i];
+        const idx = nextInputIndex++;
+        const isImgInfo = !item.url.match(/\.(mp4|mov|webm)$/i);
+        
+        filterGraph.push({ filter: 'scale', options: `${vBox[2]}:${vBox[3]}:force_original_aspect_ratio=increase`, inputs: `${idx}:v`, outputs: `vis_scaled_${i}` });
+        filterGraph.push({ filter: 'crop', options: `${vBox[2]}:${vBox[3]}`, inputs: `vis_scaled_${i}`, outputs: `vis_cropped_${i}` });
+        
+        if (isImgInfo) {
+          const motion = motions[i % motions.length];
+          filterGraph.push({
+             // d is frames = duration * fps (assume 25fps)
+             filter: 'zoompan', options: `${motion}:d=${Math.ceil(sceneDur*25)+50}:s=${vBox[2]}x${vBox[3]}`,
+             inputs: `vis_cropped_${i}`, outputs: `vis_motion_${i}`
+          });
+          filterGraph.push({ filter: 'trim', options: `duration=${sceneDur + 1.0}`, inputs: `vis_motion_${i}`, outputs: `vis_trimmed_${i}` });
+        } else {
+          filterGraph.push({ filter: 'trim', options: `duration=${sceneDur + 1.0}`, inputs: `vis_cropped_${i}`, outputs: `vis_trimmed_${i}` });
+        }
+        
+        filterGraph.push({ filter: 'setpts', options: 'PTS-STARTPTS', inputs: `vis_trimmed_${i}`, outputs: `vis_ready_${i}` });
+      }
+      
+      // xfade them together
+      let currentVis = `vis_ready_0`;
+      for (let i = 1; i < downloadedVisuals.length; i++) {
+        const trans = transitions[i % transitions.length];
+        const offset = i * sceneDur;
+        filterGraph.push({
+          filter: 'xfade',
+          options: `transition=${trans}:duration=0.5:offset=${offset}`,
+          inputs: [currentVis, `vis_ready_${i}`],
+          outputs: `xfade_${i}`
+        });
+        currentVis = `xfade_${i}`;
+      }
+      
       filterGraph.push({
         filter: 'overlay',
-        options: `x=${vBox[0]}:y=${vBox[1]}`,
-        inputs: [currentOutput, 'ov_cropped'],
+        options: `x=${vBox[0]}:y=${vBox[1]}:eof_action=pass`,
+        inputs: [currentOutput, currentVis],
         outputs: 'with_overlay'
       });
       currentOutput = 'with_overlay';
@@ -261,24 +301,6 @@ export default async function handler(req, res) {
     if ((scriptData.subtitles || scriptData.subtitleChunks) && sBox) {
       const fontSize = Math.round((Number(styleOverrides.subtitleSize) || 65) * scaleFactor);
       
-      let rawLines = Array.isArray(scriptData.subtitleChunks) && scriptData.subtitleChunks.length > 0
-         ? scriptData.subtitleChunks 
-         : Array.isArray(scriptData.subtitles) && scriptData.subtitles.length > 0 ? scriptData.subtitles : null;
-         
-      if (!rawLines && scriptData.voiceoverScript) {
-         // Auto-generate chunks from full script if missed
-         rawLines = String(scriptData.voiceoverScript).split(/[,.।!?]+/).map(s => s.trim()).filter(Boolean);
-      }
-      
-      const subtitleLines = rawLines || ["Subtitle missing"];
-      
-      const totalWords = subtitleLines.join(' ').split(' ').length;
-      // In absence of exact word-level TTS timestamps, we map chunks evenly across estimated audio duration
-      // TTS usually reads at ~2.2 words per second. 
-      // If voiceoverScript exists, it might be longer than chunks, so we estimate real duration from it.
-      const voiceoverWords = scriptData.voiceoverScript ? String(scriptData.voiceoverScript).split(' ').length : totalWords;
-      const estimatedTotalAudioSecs = Math.max(10, voiceoverWords / 2.0); 
-      
       let currentTime = 0;
 
       subtitleLines.forEach((sub, index) => {
@@ -289,10 +311,7 @@ export default async function handler(req, res) {
         
         const words = String(sub).split(' ').length;
         // The proportion of the total text length dictates the duration this chunk is shown.
-        let duration = (words / Math.max(1, totalWords)) * estimatedTotalAudioSecs;
-        
-        // Prevent too short subtitles
-        duration = Math.max(1.0, duration);
+        let duration = (words / totalWords) * exactAudioDuration;
 
         const startT = currentTime;
         const endT = currentTime + duration;
@@ -328,22 +347,38 @@ export default async function handler(req, res) {
       
       command = command.input(backgroundPath).inputOptions(['-stream_loop', '-1']);
       
-      if (overlayPath && vBox) {
-        const isOverlayImageInfo = !overlayMediaUrl.match(/\.(mp4|mov|webm)$/i);
-        if (isOverlayImageInfo) {
-           command = command.input(overlayPath).inputOptions(['-stream_loop', '-1']);
-        } else {
-           command = command.input(overlayPath);
+      if (downloadedVisuals.length > 0 && vBox) {
+        for (let i = 0; i < downloadedVisuals.length; i++) {
+           const item = downloadedVisuals[i];
+           const isOverlayImageInfo = !item.url.match(/\.(mp4|mov|webm)$/i);
+           if (isOverlayImageInfo) {
+              command = command.input(item.file).inputOptions(['-stream_loop', '-1']);
+           } else {
+              command = command.input(item.file);
+           }
         }
       }
       
       let audioIndex = -1;
+      let bgmIndex = -1;
+      let sfxIndex = -1;
+      
       if (audioPath) {
         audioIndex = nextInputIndex++;
         command = command.input(audioPath);
       }
+      
+      const sceneDur = downloadedVisuals.length > 0 ? exactAudioDuration / downloadedVisuals.length : 5;
+      
+      // Drone BGM
+      bgmIndex = nextInputIndex++;
+      command = command.input('aevalsrc=0.1*sin(2*PI*110*t)+0.05*sin(2*PI*165*t)').inputFormat('lavfi');
+      
+      // Whoosh SFX at transitions
+      sfxIndex = nextInputIndex++;
+      command = command.input(`aevalsrc='if(lt(mod(t,${sceneDur}),0.5), 0.3*sin(440*2*PI*t)*exp(-mod(t,${sceneDur})*5), 0)'`).inputFormat('lavfi');
         
-      let durationLimit = audioPath ? 60 : 15;
+      let durationLimit = audioPath ? exactAudioDuration + 0.5 : 15;
 
       let outOpts = [
           '-c:v libx264',
@@ -356,7 +391,16 @@ export default async function handler(req, res) {
       ];
       
       if (audioPath) {
-        outOpts = [`-map ${audioIndex}:a`, ...outOpts, '-c:a aac', '-shortest'];
+        // Voiceover (100%), Background Music (10-15%), Transition SFX (15-20%)
+        // amix lowers overall volume, so we boost it back after mixing.
+        filterGraph.push(
+           { filter: 'volume', options: '1.0', inputs: `${audioIndex}:a`, outputs: 'vo_mix' },
+           { filter: 'volume', options: '0.12', inputs: `${bgmIndex}:a`, outputs: 'bgm_mix' },
+           { filter: 'volume', options: '0.18', inputs: `${sfxIndex}:a`, outputs: 'sfx_mix' },
+           { filter: 'amix', options: 'inputs=3:duration=first:dropout_transition=2', inputs: ['vo_mix', 'bgm_mix', 'sfx_mix'], outputs: 'mixed_audio' },
+           { filter: 'volume', options: '3.0', inputs: 'mixed_audio', outputs: 'final_audio' }
+        );
+        outOpts = ['-map', '[final_audio]', ...outOpts, '-c:a', 'aac', '-shortest'];
       }
 
       console.log("Filter graph:", JSON.stringify(filterGraph, null, 2));

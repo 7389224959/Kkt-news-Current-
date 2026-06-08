@@ -191,6 +191,23 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
 
       if (customCoords.video) renderTemplate.coordinates.video_box = customCoords.video;
 
+      let initialVisuals = [];
+      if (finalOverlayUrl) initialVisuals.push(finalOverlayUrl);
+      if (selectedArticle?.image) initialVisuals.push(selectedArticle.image);
+      
+      const contentStr = selectedArticle?.content || '';
+      const match = contentStr.match(/<!-- additionalImages:\s*(\[.*?\])\s*-->/);
+      if (match && match[1]) {
+         try {
+            const parsedArray = JSON.parse(match[1]);
+            if (Array.isArray(parsedArray)) {
+               initialVisuals.push(...parsedArray);
+            }
+         } catch(e) {}
+      }
+      
+      const uniqueVisuals = Array.from(new Set(initialVisuals.filter(Boolean)));
+
       const renderRes = await fetch('/api/render-reel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -198,6 +215,7 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
           audioUrl: audioDataUri,
           templateMediaUrl: finalMediaUrl,
           overlayMediaUrl: finalOverlayUrl,
+          visuals: uniqueVisuals,
           scriptData: scriptData,
           template: renderTemplate,
           styleOverrides: styleOverrides
