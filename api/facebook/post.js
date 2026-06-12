@@ -62,30 +62,13 @@ export default async function handler(req, res) {
     }
 
     if (imageUrl) {
-      // Step 1: ALWAYS Upload photo as unpublished first
-      const photoUploadRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/photos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: imageUrl,
-          published: false,
-          access_token: resolvedAccessToken
-        })
-      });
-      
-      const photoData = await photoUploadRes.json();
-      if (!photoUploadRes.ok) {
-         return res.status(400).json({ error: `Failed to upload photo: ${photoData.error?.message || 'Unknown error'}` });
-      }
-      
-      // Step 2: Create feed post with the attached photo
-      body.attached_media = [{ media_fbid: photoData.id || photoData.post_id }];
+      fbApiUrl = `https://graph.facebook.com/v19.0/${pageId}/photos`;
+      body.url = imageUrl;
     }
 
     console.log("FB Publish Payload:", {
       message: body.message,
       url: body.url,
-      attached_media: body.attached_media,
       published: body.published,
       scheduled_publish_time: body.scheduled_publish_time,
       endpoint: fbApiUrl
@@ -124,6 +107,8 @@ export default async function handler(req, res) {
         errorMessage = 'Your Facebook Page Access Token has expired. I (the AI) cannot fix this for you via code. You must go to the Facebook Developer Portal, generate a new Page Access Token, and update your FB_PAGE_ACCESS_TOKEN environment variable manually.';
       } else if (errorMessage.includes('publish_actions')) {
         errorMessage = 'You are using a User Access Token instead of a Page Access Token. You MUST select your Page from the "User or Page" dropdown in the Graph API Explorer to generate a Page Access Token.';
+      } else if (errorMessage.includes('Unpublished posts must be posted to a page as the page itself') || fbData.error?.code === 200) {
+         errorMessage = 'You are using a User Access Token instead of a Page Access Token. Facebook requires a Page Access Token to post to a Page. Please generate a Page Access Token from the Facebook Developer Portal and update your FB_PAGE_ACCESS_TOKEN.';
       }
       
       return res.status(400).json({ error: errorMessage });

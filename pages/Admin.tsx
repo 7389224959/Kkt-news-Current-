@@ -566,14 +566,13 @@ const Admin: React.FC = () => {
       });
       
       const overlaidImageUrl = await uploadImage(newImageBase64);
-      const scheduledTime = Math.floor(Date.now() / 1000) + 3600;
-      const fbResult = await postToFacebook(post.caption, overlaidImageUrl, scheduledTime, false);
+      const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true);
       
       setShowDailyNewsModal(false);
       setShowViralModal(false);
       
       if (fbResult.success && fbResult.id) {
-        alert(`Auto Viral Success: Viral post automatically scheduled to Facebook for 1 hour from now!`);
+        alert(`Auto Viral Success: Viral post published directly to Facebook!`);
       } else {
         alert(`Auto Viral Error: Facebook viral post couldn't be confirmed.`);
       }
@@ -747,14 +746,13 @@ const Admin: React.FC = () => {
         });
         
         const overlaidImageUrl = await uploadImage(newImageBase64);
-        const scheduledTime = Math.floor(Date.now() / 1000) + 3600;
-        const fbResult = await postToFacebook(post.caption, overlaidImageUrl, scheduledTime, false);
+        const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true);
         
         setShowDailyNewsModal(false);
         setShowViralModal(false);
         
         if (fbResult.success && fbResult.id) {
-          alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically scheduled viral post to Facebook for 1 hour from now!`);
+          alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically published viral post to Facebook!`);
         } else {
           alert(`Successfully auto-fetched ${newArticles.length} new articles, but Facebook viral post couldn't be confirmed.`);
         }
@@ -1178,11 +1176,10 @@ const Admin: React.FC = () => {
       // 1. Upload the already-rendered frontend image directly to Supabase
       const overlaidImageUrl = await uploadImage(viralGeneratedImage);
 
-      const scheduledUnixTime = Math.floor(Date.now() / 1000) + 3600;
-      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, scheduledUnixTime, false);
+      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, undefined, true);
       
       if (result.success && result.id) {
-        alert("Successfully scheduled post to Facebook for 1 hour from now!");
+        alert("Successfully published post to Facebook!");
         setShowViralModal(false);
         setScheduledTime('');
       } else {
