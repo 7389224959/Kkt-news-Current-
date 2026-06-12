@@ -24,7 +24,8 @@ export default async function handler(req, res) {
 
       for (const proxy of proxies) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const timeoutId = setTimeout(() => controller.abort(), 4000); // Wait at most 4 seconds per proxy instead of 15 seconds to prevent 2 minute crawls
+
         
         try {
           let fetchUrl = targetUrl;

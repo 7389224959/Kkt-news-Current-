@@ -65,7 +65,7 @@ const getAiClient = () => {
         }
         
         if (retry < maxRetries - 1) {
-            const delayMs = Math.pow(2, retry) * 5000; // 5s, 10s backoff
+            const delayMs = 1500; // Fast retry instead of huge exponential backoff to prevent hanging
             console.log(`Retrying API call after ${delayMs}ms due to temporary error or quota... (Attempt ${retry+2}/${maxRetries})`);
             await new Promise(resolve => setTimeout(resolve, delayMs));
         }
@@ -1354,7 +1354,7 @@ INPUT:
 Title: ${article.title}
 Summary/Excerpt: ${article.summary || article.content.substring(0, 300)}
 ${options.cachedSeoInfo?.facebookCaption ? `Pre-drafted Facebook Caption (USE IT AS INSPIRATION FOR "caption" field): ${options.cachedSeoInfo.facebookCaption}` : ""}
-Description: ${article.content}
+Description: ${article.content.substring(0, 800)}
 Category Section: ${sectionName}
 Article Link: ${articleUrl}
 
@@ -1554,7 +1554,7 @@ IMPORTANT: If a reference image is provided, you MUST match the face of the pers
 
     if (!ai) throw new Error("API Key missing");
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'models/imagen-3.0-generate-002', // Use stable imagen alias
       contents: { parts },
     });
 
