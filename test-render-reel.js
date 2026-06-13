@@ -248,7 +248,7 @@ export default async function handler(req, res) {
         command = command.input(audioPath);
       }
         
-      let durationLimit = audioPath ? 60 : 15;
+      let durationLimit = audioPath ? exactAudioDuration : 15;
 
       let outOpts = [
           '-c:v libx264',

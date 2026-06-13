@@ -3,82 +3,146 @@ import { OpenRouter } from "@openrouter/sdk";
 import { Article, Category, ViralPost } from "../types";
 import { generateSlug } from "../newsUtils";
 import { supabase } from "./supabase";
-import { jsonrepair } from 'jsonrepair';
+import { jsonrepair } from "jsonrepair";
 
 const getAiClient = () => {
   let k1, k2, k3, k4, k5;
   // Try to read from Vite env
-  try { k1 = (import.meta as any).env.VITE_GEMINI_API_KEY || (import.meta as any).env.GEMINI_API_KEY; } catch(e) {}
-  try { k2 = (import.meta as any).env.VITE_GEMINI_API_KEY_2 || (import.meta as any).env.GEMINI_API_KEY_2; } catch(e) {}
-  try { k3 = (import.meta as any).env.VITE_GEMINI_API_KEY_3 || (import.meta as any).env.GEMINI_API_KEY_3; } catch(e) {}
-  try { k4 = (import.meta as any).env.VITE_GEMINI_API_KEY_4 || (import.meta as any).env.GEMINI_API_KEY_4; } catch(e) {}
-  try { k5 = (import.meta as any).env.VITE_GEMINI_API_KEY_5 || (import.meta as any).env.GEMINI_API_KEY_5; } catch(e) {}
+  try {
+    k1 =
+      (import.meta as any).env.VITE_GEMINI_API_KEY ||
+      (import.meta as any).env.GEMINI_API_KEY;
+  } catch (e) {}
+  try {
+    k2 =
+      (import.meta as any).env.VITE_GEMINI_API_KEY_2 ||
+      (import.meta as any).env.GEMINI_API_KEY_2;
+  } catch (e) {}
+  try {
+    k3 =
+      (import.meta as any).env.VITE_GEMINI_API_KEY_3 ||
+      (import.meta as any).env.GEMINI_API_KEY_3;
+  } catch (e) {}
+  try {
+    k4 =
+      (import.meta as any).env.VITE_GEMINI_API_KEY_4 ||
+      (import.meta as any).env.GEMINI_API_KEY_4;
+  } catch (e) {}
+  try {
+    k5 =
+      (import.meta as any).env.VITE_GEMINI_API_KEY_5 ||
+      (import.meta as any).env.GEMINI_API_KEY_5;
+  } catch (e) {}
 
   // Try to read from process.env (Node / Vite define)
-  try { if (!k1) k1 = process.env.GEMINI_API_KEY; } catch(e) {}
-  try { if (!k2) k2 = process.env.GEMINI_API_KEY_2; } catch(e) {}
-  try { if (!k3) k3 = process.env.GEMINI_API_KEY_3; } catch(e) {}
-  try { if (!k4) k4 = process.env.GEMINI_API_KEY_4; } catch(e) {}
-  try { if (!k5) k5 = process.env.GEMINI_API_KEY_5; } catch(e) {}
+  try {
+    if (!k1) k1 = process.env.GEMINI_API_KEY;
+  } catch (e) {}
+  try {
+    if (!k2) k2 = process.env.GEMINI_API_KEY_2;
+  } catch (e) {}
+  try {
+    if (!k3) k3 = process.env.GEMINI_API_KEY_3;
+  } catch (e) {}
+  try {
+    if (!k4) k4 = process.env.GEMINI_API_KEY_4;
+  } catch (e) {}
+  try {
+    if (!k5) k5 = process.env.GEMINI_API_KEY_5;
+  } catch (e) {}
 
-  const keys = [k1, k2, k3, k4, k5].filter(key => !!key);
+  const keys = [k1, k2, k3, k4, k5].filter((key) => !!key);
 
   if (keys.length === 0) {
     console.warn("API Keys are missing. Please ensure GEMINI_API_KEY is set.");
     return null;
   }
-  
+
   const baseClient = new GoogleGenAI({ apiKey: keys[0] as string });
-  
+
   baseClient.models.generateContent = async (config: any) => {
     let lastError;
     const maxRetries = 3;
-    
-    for (let retry = 0; retry < maxRetries; retry++) {
-        for (let i = 0; i < keys.length; i++) {
-            try {
-                const client = new GoogleGenAI({ apiKey: keys[i] as string });
-                return await client.models.generateContent(config);
-            } catch (error: any) {
-                lastError = error;
-                const status = error?.status || error?.response?.status;
-                const msg = typeof error?.message === 'string' ? error.message : JSON.stringify(error?.message || '');
-                const stringifiedError = JSON.stringify(error);
-                
-                const isQuotaError = status === 429 || msg.includes('429') || Math.floor(status) === 429 || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('exhausted') || msg.includes('RATE_LIMIT_EXCEEDED') || stringifiedError.includes('429') || stringifiedError.toLowerCase().includes('quota') || stringifiedError.toLowerCase().includes('exhausted');
-                
-                const isTempError = status >= 500 || msg.includes('Internal error') || msg.toLowerCase().includes('internal') || msg.includes('500') || msg.includes('503') || stringifiedError.includes('500') || stringifiedError.includes('503');
 
-                if (isQuotaError) {
-                    if (i < keys.length - 1) {
-                        console.warn(`[Gemini API Key ${i + 1}] Quota exceeded or rate limited. Falling back to key ${i + 2}.`);
-                        continue;
-                    }
-                } else if (isTempError) {
-                    console.warn(`[Gemini API Key ${i + 1}] Temporary error encountered (${status || 'unknown'}). Triggering retry...`);
-                    break; // Break inner keys loop to trigger outer delay + retry
-                } else {
-                    // Non-retryable error (e.g. 400 Bad Request, Authentication failed, etc.)
-                    throw error;
-                }
+    for (let retry = 0; retry < maxRetries; retry++) {
+      for (let i = 0; i < keys.length; i++) {
+        try {
+          const client = new GoogleGenAI({ apiKey: keys[i] as string });
+          return await client.models.generateContent(config);
+        } catch (error: any) {
+          lastError = error;
+          const status = error?.status || error?.response?.status;
+          const msg =
+            typeof error?.message === "string"
+              ? error.message
+              : JSON.stringify(error?.message || "");
+          const stringifiedError = JSON.stringify(error);
+
+          const isQuotaError =
+            status === 429 ||
+            msg.includes("429") ||
+            Math.floor(status) === 429 ||
+            msg.toLowerCase().includes("quota") ||
+            msg.toLowerCase().includes("exhausted") ||
+            msg.includes("RATE_LIMIT_EXCEEDED") ||
+            stringifiedError.includes("429") ||
+            stringifiedError.toLowerCase().includes("quota") ||
+            stringifiedError.toLowerCase().includes("exhausted");
+
+          const isTempError =
+            status >= 500 ||
+            msg.includes("Internal error") ||
+            msg.toLowerCase().includes("internal") ||
+            msg.includes("500") ||
+            msg.includes("503") ||
+            stringifiedError.includes("500") ||
+            stringifiedError.includes("503");
+
+          if (isQuotaError) {
+            if (i < keys.length - 1) {
+              console.warn(
+                `[Gemini API Key ${i + 1}] Quota exceeded or rate limited. Falling back to key ${i + 2}.`,
+              );
+              continue;
             }
+          } else if (isTempError) {
+            console.warn(
+              `[Gemini API Key ${i + 1}] Temporary error encountered (${status || "unknown"}). Triggering retry...`,
+            );
+            break; // Break inner keys loop to trigger outer delay + retry
+          } else {
+            // Non-retryable error (e.g. 400 Bad Request, Authentication failed, etc.)
+            throw error;
+          }
         }
-        
-        if (retry < maxRetries - 1) {
-            const delayMs = 1500; // Fast retry instead of huge exponential backoff to prevent hanging
-            console.log(`Retrying API call after ${delayMs}ms due to temporary error or quota... (Attempt ${retry+2}/${maxRetries})`);
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-        }
+      }
+
+      if (retry < maxRetries - 1) {
+        const delayMs = 1500; // Fast retry instead of huge exponential backoff to prevent hanging
+        console.log(
+          `Retrying API call after ${delayMs}ms due to temporary error or quota... (Attempt ${retry + 2}/${maxRetries})`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
     }
-    
-    const finalMsg = typeof lastError?.message === 'string' ? lastError.message : JSON.stringify(lastError?.message || '');
-    if (finalMsg.toLowerCase().includes('quota') || finalMsg.includes('429') || finalMsg.toLowerCase().includes('exhausted')) {
-       throw new Error(`Quota limit reached across ${keys.length} API key(s) after retries. Please add more keys. Original Error: ${finalMsg}`);
+
+    const finalMsg =
+      typeof lastError?.message === "string"
+        ? lastError.message
+        : JSON.stringify(lastError?.message || "");
+    if (
+      finalMsg.toLowerCase().includes("quota") ||
+      finalMsg.includes("429") ||
+      finalMsg.toLowerCase().includes("exhausted")
+    ) {
+      throw new Error(
+        `Quota limit reached across ${keys.length} API key(s) after retries. Please add more keys. Original Error: ${finalMsg}`,
+      );
     }
-    
+
     throw lastError;
   };
-  
+
   return baseClient;
 };
 
@@ -94,68 +158,87 @@ export interface NewsDraft {
   facebookCaption?: string;
 }
 
-export const getStockImageUrl = async (keywords: string, category?: Category): Promise<string> => {
-  if (typeof keywords !== 'string') {
-    keywords = String(keywords || '');
+export const getStockImageUrl = async (
+  keywords: string,
+  category?: Category,
+): Promise<string> => {
+  if (typeof keywords !== "string") {
+    keywords = String(keywords || "");
   }
-  
+
   // Create a safe English representation for the background generation to prevent weird AI generations
-  const safeCategory = String(category || 'news').toLowerCase().replace(/[^a-z]/g, '');
+  const safeCategory = String(category || "news")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
 
   const contextMap: Record<string, string> = {
-    'politics': 'real political rally parliament crowd event photo',
-    'national': 'real government announcement event photo',
-    'state': 'real regional town hall breaking event photo',
-    'crime': 'real police intervention raid scene blur',
-    'international': 'real international summit global event background',
-    'sports': 'real sports stadium event background',
-    'entertainment': 'real red carpet press conference event',
-    'lifestyle': 'real lifestyle authentic daily life scene'
+    politics: "real political rally parliament crowd event photo",
+    national: "real government announcement event photo",
+    state: "real regional town hall breaking event photo",
+    crime: "real police intervention raid scene blur",
+    international: "real international summit global event background",
+    sports: "real sports stadium event background",
+    entertainment: "real red carpet press conference event",
+    lifestyle: "real lifestyle authentic daily life scene",
   };
-  const categoryContext = contextMap[safeCategory] || 'real breaking news event photo';
+  const categoryContext =
+    contextMap[safeCategory] || "real breaking news event photo";
 
   const cleanKeywords = keywords
-    .replace(/[^\p{L}\p{M}\p{N}\s,]/gu, '')
+    .replace(/[^\p{L}\p{M}\p{N}\s,]/gu, "")
     .split(/[\s,]+/)
     .filter(Boolean)
     .slice(0, 6)
-    .join(' ');
+    .join(" ");
 
   const prompt = `Realistic Indian news report photography about: ${cleanKeywords}. Professional editorial journalism photography. Must be highly relevant to the topic. Do not generate generic monuments or random landscapes unless specifically mentioned. No text or watermarks.`;
 
   try {
-    const fetchUrl = typeof window !== 'undefined' 
-      ? '/api/cloudflare-image' 
-      : (process.env.VITE_SITE_URL ? `${process.env.VITE_SITE_URL}/api/cloudflare-image` : 'http://localhost:3000/api/cloudflare-image');
-      
+    const fetchUrl =
+      typeof window !== "undefined"
+        ? "/api/cloudflare-image"
+        : process.env.VITE_SITE_URL
+          ? `${process.env.VITE_SITE_URL}/api/cloudflare-image`
+          : "http://localhost:3000/api/cloudflare-image";
+
     const cfReq = await fetch(fetchUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, model: "@cf/black-forest-labs/flux-1-schnell" })
+      body: JSON.stringify({
+        prompt,
+        model: "@cf/black-forest-labs/flux-1-schnell",
+      }),
     });
-    
+
     if (cfReq.ok) {
-        const resData = await cfReq.json();
-        if (resData.base64) {
-          const b64 = `data:image/jpeg;base64,${resData.base64}`;
-          const { uploadImage } = await import('./supabase');
-          return await uploadImage(b64);
-        }
+      const resData = await cfReq.json();
+      if (resData.base64) {
+        const b64 = `data:image/jpeg;base64,${resData.base64}`;
+        const { uploadImage } = await import("./supabase");
+        return await uploadImage(b64);
+      }
     } else {
-        console.error("Cloudflare fallback image generation failed:", await cfReq.text());
+      console.error(
+        "Cloudflare fallback image generation failed:",
+        await cfReq.text(),
+      );
     }
   } catch (e) {
-      console.error("Cloudflare fallback image fetch failed", e);
+    console.error("Cloudflare fallback image fetch failed", e);
   }
   return "";
 };
 
-import { compressImage } from '../src/utils/imageUtils';
+import { compressImage } from "../src/utils/imageUtils";
 
 /**
  * Generates a high-quality AI image using Gemini 2.5 Flash Image
  */
-export const generateAiImage = async (prompt: string, specificInstructions?: string, referenceImageBase64?: string): Promise<string> => {
+export const generateAiImage = async (
+  prompt: string,
+  specificInstructions?: string,
+  referenceImageBase64?: string,
+): Promise<string> => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
@@ -174,18 +257,18 @@ NEGATIVE:
 No cartoon, no illustration, no glamour portrait, no cinematic lighting, no fantasy, no AI-art look, no jewelry focus, no close-up faces, no text, no watermark.
 
 IMPORTANT: If a reference image is provided, you MUST match the face of the person exactly.`;
-    
-    const finalPrompt = specificInstructions 
-      ? `${basePrompt} ADDITIONAL ADMIN SPECIFICATIONS to strictly follow: ${specificInstructions}` 
+
+    const finalPrompt = specificInstructions
+      ? `${basePrompt} ADDITIONAL ADMIN SPECIFICATIONS to strictly follow: ${specificInstructions}`
       : basePrompt;
 
-    const parts: any[] = [
-      { text: finalPrompt }
-    ];
+    const parts: any[] = [{ text: finalPrompt }];
 
     if (referenceImageBase64) {
-      const base64Data = referenceImageBase64.split(',')[1] || referenceImageBase64;
-      const mimeType = referenceImageBase64.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+      const base64Data =
+        referenceImageBase64.split(",")[1] || referenceImageBase64;
+      const mimeType =
+        referenceImageBase64.match(/data:(.*?);base64/)?.[1] || "image/jpeg";
       parts.unshift({
         inlineData: {
           data: base64Data,
@@ -195,7 +278,7 @@ IMPORTANT: If a reference image is provided, you MUST match the face of the pers
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: "gemini-2.5-flash-image",
       contents: { parts },
     });
 
@@ -206,7 +289,7 @@ IMPORTANT: If a reference image is provided, you MUST match the face of the pers
         return await compressImage(base64);
       }
     }
-    
+
     throw new Error("No image data in response");
   } catch (error) {
     console.error("AI Image Generation Error:", error);
@@ -222,7 +305,11 @@ export interface DraftNewsOptions {
   wordLimit?: number;
 }
 
-export const rewriteArticle = async (content: string, category: string, retries = 1): Promise<NewsDraft | string> => {
+export const rewriteArticle = async (
+  content: string,
+  category: string,
+  retries = 1,
+): Promise<NewsDraft | string> => {
   const ai = getAiClient();
   if (!ai) return "Error: API Key missing. Cannot generate report.";
 
@@ -257,7 +344,8 @@ ${content}`;
             },
             content: {
               type: Type.STRING,
-              description: "The full rewritten article in Hindi, formatted with HTML tags (<p>, <h2>, <strong>, etc.) for readability.",
+              description:
+                "The full rewritten article in Hindi, formatted with HTML tags (<p>, <h2>, <strong>, etc.) for readability.",
             },
             imageKeywords: {
               type: Type.STRING,
@@ -281,7 +369,16 @@ ${content}`;
               description: "A 2-line viral Facebook caption.",
             },
           },
-          required: ["title", "excerpt", "content", "imageKeywords", "tags", "seoTitle", "metaDescription", "facebookCaption"],
+          required: [
+            "title",
+            "excerpt",
+            "content",
+            "imageKeywords",
+            "tags",
+            "seoTitle",
+            "metaDescription",
+            "facebookCaption",
+          ],
         },
       },
     });
@@ -294,12 +391,12 @@ ${content}`;
       }
       throw new Error("Empty response from AI");
     }
-    
+
     const result = JSON.parse(jsonStr);
-    
+
     // Ensure category is passed through
     result.category = category;
-    
+
     return result as NewsDraft;
   } catch (error: any) {
     console.error("AI Rewrite Error:", error);
@@ -310,8 +407,16 @@ ${content}`;
     return `Failed to rewrite article: ${error.message}`;
   }
 };
-export const draftNewsReport = async (options: DraftNewsOptions): Promise<NewsDraft | string> => {
-  const { rawNotes, location, sourceUrl, sourceImageBase64, wordLimit = 400 } = options;
+export const draftNewsReport = async (
+  options: DraftNewsOptions,
+): Promise<NewsDraft | string> => {
+  const {
+    rawNotes,
+    location,
+    sourceUrl,
+    sourceImageBase64,
+    wordLimit = 400,
+  } = options;
   const ai = getAiClient();
   if (!ai) return "Error: API Key missing. Cannot generate report.";
 
@@ -320,9 +425,9 @@ export const draftNewsReport = async (options: DraftNewsOptions): Promise<NewsDr
       You are a professional Indian news journalist writing for a fast-growing Hindi news website.
       Write a 100% SEO-optimized, fact-based, human-like Hindi news article (450–650 words) based on the following information:
       
-      Location: ${location || 'Not specified'}
-      Raw Notes / Topic: "${rawNotes || 'None provided'}"
-      ${sourceUrl ? `Source URL: ${sourceUrl}` : ''}
+      Location: ${location || "Not specified"}
+      Raw Notes / Topic: "${rawNotes || "None provided"}"
+      ${sourceUrl ? `Source URL: ${sourceUrl}` : ""}
       
       Follow these strict rules:
       1. Headline
@@ -381,8 +486,9 @@ export const draftNewsReport = async (options: DraftNewsOptions): Promise<NewsDr
     const parts: any[] = [{ text: prompt }];
 
     if (sourceImageBase64) {
-      const base64Data = sourceImageBase64.split(',')[1] || sourceImageBase64;
-      const mimeType = sourceImageBase64.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+      const base64Data = sourceImageBase64.split(",")[1] || sourceImageBase64;
+      const mimeType =
+        sourceImageBase64.match(/data:(.*?);base64/)?.[1] || "image/jpeg";
       parts.unshift({
         inlineData: {
           data: base64Data,
@@ -397,23 +503,29 @@ export const draftNewsReport = async (options: DraftNewsOptions): Promise<NewsDr
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: "gemini-2.5-flash",
       contents: { parts },
       config: {
         responseMimeType: "application/json",
         tools: tools.length > 0 ? tools : undefined,
-      }
+      },
     });
 
     const rawText = response.text || "{}";
-    let cleanedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-    
+    let cleanedText = rawText
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+
     try {
       cleanedText = jsonrepair(cleanedText);
       const draft = JSON.parse(cleanedText);
-      let formattedContent = draft.content || '';
-      if (typeof formattedContent === 'string') {
-        formattedContent = formattedContent.replace(/(?:\/n|\\n|\r?\n)+/g, '\n\n');
+      let formattedContent = draft.content || "";
+      if (typeof formattedContent === "string") {
+        formattedContent = formattedContent.replace(
+          /(?:\/n|\\n|\r?\n)+/g,
+          "\n\n",
+        );
       }
       return {
         title: draft.title || "",
@@ -424,7 +536,7 @@ export const draftNewsReport = async (options: DraftNewsOptions): Promise<NewsDr
         category: draft.category || "",
         seoTitle: draft.seoTitle || "",
         metaDescription: draft.metaDescription || "",
-        facebookCaption: draft.facebookCaption || ""
+        facebookCaption: draft.facebookCaption || "",
       };
     } catch (e) {
       console.error("JSON Parse Error in draftNewsReport:", e);
@@ -432,7 +544,7 @@ export const draftNewsReport = async (options: DraftNewsOptions): Promise<NewsDr
     }
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    return `Error: Failed to connect to the news desk AI. ${error?.message || 'Please try again later.'}`;
+    return `Error: Failed to connect to the news desk AI. ${error?.message || "Please try again later."}`;
   }
 };
 
@@ -440,7 +552,9 @@ export const draftNewsReport = async (options: DraftNewsOptions): Promise<NewsDr
  * Fetches real-world trending news keywords using Google Search grounding.
  * It also attempts to link them to existing articles if a match is found.
  */
-export const fetchTrendingKeywords = async (): Promise<{ label: string, articleSlug: string }[]> => {
+export const fetchTrendingKeywords = async (): Promise<
+  { label: string; articleSlug: string }[]
+> => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
@@ -478,12 +592,15 @@ export const fetchTrendingKeywords = async (): Promise<{ label: string, articleS
     });
 
     const rawText = response.text || "[]";
-    const cleanedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const cleanedText = rawText
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
     const keywords: string[] = JSON.parse(cleanedText);
-    
-    return keywords.map(kw => ({
+
+    return keywords.map((kw) => ({
       label: kw,
-      articleSlug: ""
+      articleSlug: "",
     }));
   } catch (error) {
     console.error("AI Trending Keywords Error:", error);
@@ -491,14 +608,20 @@ export const fetchTrendingKeywords = async (): Promise<{ label: string, articleS
   }
 };
 
-import { createArticle, getArticles, getSiteSettings } from './articleService';
-import { uploadImage } from './supabase';
+import { createArticle, getArticles, getSiteSettings } from "./articleService";
+import { uploadImage } from "./supabase";
 
-async function extractArticleLinks(url: string): Promise<{title: string, link: string, content?: string}[]> {
+async function extractArticleLinks(
+  url: string,
+): Promise<{ title: string; link: string; content?: string }[]> {
   try {
-    const response = await fetch(`/api/extract-links?url=${encodeURIComponent(url)}`);
+    const response = await fetch(
+      `/api/extract-links?url=${encodeURIComponent(url)}`,
+    );
     if (!response.ok) {
-      console.error(`Failed to fetch links from ${url}: ${response.statusText}`);
+      console.error(
+        `Failed to fetch links from ${url}: ${response.statusText}`,
+      );
       return [];
     }
     const data = await response.json();
@@ -509,9 +632,11 @@ async function extractArticleLinks(url: string): Promise<{title: string, link: s
   }
 }
 
-import { getWikipediaImage } from './wikipediaService';
+import { getWikipediaImage } from "./wikipediaService";
 
-export const checkDailyNewsStatus = async (rssSources: { url: string, category: string }[]) => {
+export const checkDailyNewsStatus = async (
+  rssSources: { url: string; category: string }[],
+) => {
   if (!rssSources || rssSources.length === 0) {
     return [];
   }
@@ -520,30 +645,39 @@ export const checkDailyNewsStatus = async (rssSources: { url: string, category: 
   let existingTitles: string[] = [];
   try {
     const { data: recentArticles } = await getArticles(1, 20); // Check past 20 articles
-    existingSourceUrls = recentArticles.map(a => a.sourceUrl || a.source).filter(Boolean) as string[];
-    existingTitles = recentArticles.map(a => a.title);
+    existingSourceUrls = recentArticles
+      .map((a) => a.sourceUrl || a.source)
+      .filter(Boolean) as string[];
+    existingTitles = recentArticles.map((a) => a.title);
   } catch (e) {
     console.warn("Failed to fetch existing articles for deduplication:", e);
   }
 
   const now = new Date();
-  const getWords = (str: string) => str.toLowerCase().replace(/[.,:;'"()!?\-।]/g, '').split(/\s+/).filter(w => w.length > 2);
+  const getWords = (str: string) =>
+    str
+      .toLowerCase()
+      .replace(/[.,:;'"()!?\-।]/g, "")
+      .split(/\s+/)
+      .filter((w) => w.length > 2);
   const cleanUrl = (url: string) => {
     try {
       const u = new URL(url);
       return u.origin + u.pathname;
     } catch {
-      return url.split('?')[0].trim().toLowerCase();
+      return url.split("?")[0].trim().toLowerCase();
     }
   };
-  
+
   const normalizedExistingUrls = existingSourceUrls.map(cleanUrl);
-  
+
   const statusPromises = rssSources.map(async (source) => {
     try {
-      const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.url)}&api_key=`);
+      const res = await fetch(
+        `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.url)}&api_key=`,
+      );
       if (!res.ok) {
-        return { source, freshCount: 0, error: 'Failed to fetch RSS' };
+        return { source, freshCount: 0, error: "Failed to fetch RSS" };
       }
       const data = await res.json();
       const items = data.items || [];
@@ -553,9 +687,11 @@ export const checkDailyNewsStatus = async (rssSources: { url: string, category: 
         // Strict duplicate check using URL
         const itemUrl = cleanUrl(item.link);
         const isDuplicateUrl = normalizedExistingUrls.includes(itemUrl);
-        
+
         let isDuplicateTitle = false;
-        if (existingTitles.some(et => et.includes(item.title.substring(0, 15)))) {
+        if (
+          existingTitles.some((et) => et.includes(item.title.substring(0, 15)))
+        ) {
           isDuplicateTitle = true;
         } else {
           const itemWords = getWords(item.title);
@@ -567,21 +703,22 @@ export const checkDailyNewsStatus = async (rssSources: { url: string, category: 
               if (etWords.includes(w)) overlap++;
             }
             const ratio = overlap / Math.min(itemWords.length, etWords.length);
-            if (ratio >= 0.35) { // Stricter threshold for check status
+            if (ratio >= 0.35) {
+              // Stricter threshold for check status
               isDuplicateTitle = true;
               break;
             }
           }
         }
-        
+
         let hoursDiff = 0;
         if (item.pubDate) {
-          const pubDate = new Date(item.pubDate.replace(/-/g, '/'));
+          const pubDate = new Date(item.pubDate.replace(/-/g, "/"));
           if (!isNaN(pubDate.getTime())) {
             hoursDiff = (now.getTime() - pubDate.getTime()) / (1000 * 60 * 60);
           }
         }
-        
+
         // Ensure not duplicate and published within last 24 hours
         if (!isDuplicateUrl && !isDuplicateTitle && hoursDiff <= 24) {
           freshCount++;
@@ -589,7 +726,7 @@ export const checkDailyNewsStatus = async (rssSources: { url: string, category: 
       }
       return { source, freshCount, success: true };
     } catch (e: any) {
-      return { source, freshCount: 0, error: e.message || 'Error occurred' };
+      return { source, freshCount: 0, error: e.message || "Error occurred" };
     }
   });
 
@@ -597,13 +734,13 @@ export const checkDailyNewsStatus = async (rssSources: { url: string, category: 
 };
 
 export const fetchDailyNews = async (
-  rssSources: { url: string, category: string }[], 
-  aiModel: 'gemini' | 'openrouter' = 'gemini',
-  imageStrategy: 'auto' | 'manual' = 'auto',
-  imageGenModel: 'gemini' | 'cloudflare' = 'gemini'
+  rssSources: { url: string; category: string }[],
+  aiModel: "gemini" | "openrouter" = "gemini",
+  imageStrategy: "auto" | "manual" = "auto",
+  imageGenModel: "gemini" | "cloudflare" = "gemini",
 ): Promise<Article[]> => {
   const ai = getAiClient();
-  if (aiModel === 'gemini' && !ai) throw new Error("API Key missing");
+  if (aiModel === "gemini" && !ai) throw new Error("API Key missing");
 
   if (!rssSources || rssSources.length === 0) {
     throw new Error("No RSS URLs provided for daily news fetch.");
@@ -614,25 +751,32 @@ export const fetchDailyNews = async (
   let existingTitles: string[] = [];
   try {
     const { data: recentArticles } = await getArticles(1, 30);
-    existingSourceUrls = recentArticles.map(a => a.sourceUrl || a.source).filter(Boolean) as string[];
-    existingTitles = recentArticles.map(a => a.title);
+    existingSourceUrls = recentArticles
+      .map((a) => a.sourceUrl || a.source)
+      .filter(Boolean) as string[];
+    existingTitles = recentArticles.map((a) => a.title);
   } catch (e) {
     console.warn("Failed to fetch existing articles for deduplication:", e);
   }
 
   const now = new Date();
-  const today = now.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const currentTime = now.toLocaleTimeString('en-IN', { hour12: false });
-  
+  const today = now.toLocaleDateString("en-IN", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const currentTime = now.toLocaleTimeString("en-IN", { hour12: false });
+
   // Shuffle rssSources to pick random category/source instead of always the first one
   const shuffledSources = [...rssSources].sort(() => 0.5 - Math.random());
-  
+
   const cleanUrl = (url: string) => {
     try {
       const u = new URL(url);
       return u.origin + u.pathname;
     } catch {
-      return url.split('?')[0].trim().toLowerCase();
+      return url.split("?")[0].trim().toLowerCase();
     }
   };
   const normalizedExistingUrls = existingSourceUrls.map(cleanUrl);
@@ -643,7 +787,9 @@ export const fetchDailyNews = async (
   for (const source of shuffledSources) {
     let sourceCandidates = 0;
     try {
-      const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.url)}&api_key=`);
+      const res = await fetch(
+        `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.url)}&api_key=`,
+      );
       if (!res.ok) continue;
       const data = await res.json();
       const items = data.items || [];
@@ -651,15 +797,15 @@ export const fetchDailyNews = async (
       for (const item of items) {
         const itemUrl = cleanUrl(item.link);
         const isDuplicateUrl = normalizedExistingUrls.includes(itemUrl);
-        
+
         let hoursDiff = 0;
         if (item.pubDate) {
-          const pubDate = new Date(item.pubDate.replace(/-/g, '/'));
+          const pubDate = new Date(item.pubDate.replace(/-/g, "/"));
           if (!isNaN(pubDate.getTime())) {
             hoursDiff = (now.getTime() - pubDate.getTime()) / (1000 * 60 * 60);
           }
         }
-        
+
         // If not explicitly a URL duplicate, and within 48 hours, add as candidate
         // We relax the hours condition slightly so AI has candidates to choose from
         if (!isDuplicateUrl && hoursDiff <= 48) {
@@ -669,25 +815,28 @@ export const fetchDailyNews = async (
             link: item.link,
             pubDate: item.pubDate,
             description: item.description,
-            image: item.thumbnail || (item.enclosure && item.enclosure.link) || ""
+            image:
+              item.thumbnail || (item.enclosure && item.enclosure.link) || "",
           });
           sourceCandidates++;
         }
-        
+
         // Take up to 3 candidates per source so we check multiple sources
         if (sourceCandidates >= 3) break;
       }
     } catch (e) {
       console.error(`Failed to fetch RSS for ${source.url}:`, e);
     }
-    
+
     if (candidateItems.length >= 15) {
-       break;
+      break;
     }
   }
 
   if (candidateItems.length === 0) {
-    throw new Error("No fresh news found (all recent RSS items seem to have matching URLs or are older).");
+    throw new Error(
+      "No fresh news found (all recent RSS items seem to have matching URLs or are older).",
+    );
   }
 
   const extractedArticlesData = [];
@@ -696,7 +845,9 @@ export const fetchDailyNews = async (
     let sourceImageUrl = item.image || "";
     let additionalImages: string[] = [];
     try {
-      const extractRes = await fetch(`/api/extract-article?url=${encodeURIComponent(item.link)}`);
+      const extractRes = await fetch(
+        `/api/extract-article?url=${encodeURIComponent(item.link)}`,
+      );
       if (extractRes.ok) {
         const extractData = await extractRes.json();
         fullText = extractData.content;
@@ -708,28 +859,41 @@ export const fetchDailyNews = async (
         }
       }
     } catch (err) {
-      console.warn("Failed to extract full text, reading RSS summary instead:", err);
+      console.warn(
+        "Failed to extract full text, reading RSS summary instead:",
+        err,
+      );
     }
 
     extractedArticlesData.push({
       ...item,
       sourceImageUrl,
       additionalImages,
-      content: fullText || item.description || "Article content not available. Please deduce from title."
+      content:
+        fullText ||
+        item.description ||
+        "Article content not available. Please deduce from title.",
     });
   }
 
-  const promptContext = extractedArticlesData.map((data, index) => `
+  const promptContext = extractedArticlesData
+    .map(
+      (data, index) => `
     CANDIDATE ID: ${index}
     - Category: ${data.category}
     - Original Title: ${data.title}
     - Source Link: ${data.link}
-    - Source Image URL: ${data.sourceImageUrl || 'none'}
+    - Source Image URL: ${data.sourceImageUrl || "none"}
     - Published Date: ${data.pubDate}
     - Extracted Content: ${data.content.substring(0, 3000)}
-  `).join('\n\n');
+  `,
+    )
+    .join("\n\n");
 
-  const recentTitlesList = existingTitles.slice(0, 30).map(t => `- ${t}`).join('\n');
+  const recentTitlesList = existingTitles
+    .slice(0, 30)
+    .map((t) => `- ${t}`)
+    .join("\n");
 
   try {
     const prompt = `
@@ -819,12 +983,16 @@ export const fetchDailyNews = async (
 
     let rawText = "[]";
 
-    if (aiModel === 'openrouter') {
-      const openRouterKey = (import.meta as any).env?.VITE_OPENROUTER_API_KEY || (typeof process !== 'undefined' ? process.env.OPENROUTER_API_KEY : '');
+    if (aiModel === "openrouter") {
+      const openRouterKey =
+        (import.meta as any).env?.VITE_OPENROUTER_API_KEY ||
+        (typeof process !== "undefined" ? process.env.OPENROUTER_API_KEY : "");
       if (!openRouterKey) {
-        throw new Error("OpenRouter API Key is missing. Please set VITE_OPENROUTER_API_KEY in the environment.");
+        throw new Error(
+          "OpenRouter API Key is missing. Please set VITE_OPENROUTER_API_KEY in the environment.",
+        );
       }
-      
+
       const hindiQualityPrompt = `
 निम्न समाचार को शुद्ध, स्पष्ट और स्वाभाविक हिंदी में दोबारा लिखो।
 
@@ -842,47 +1010,65 @@ export const fetchDailyNews = async (
 CRITICAL: आउटपुट देने से पहले, एक बार अपने द्वारा लिखे गए वाक्यों को दोबारा पढ़ें और जाँचें कि कहीं कोई वर्तनी की अशुद्धि (Spelling mistake) या व्याकरण की गलती (Grammar error) तो नहीं है।
 `;
 
-      const promptWithFormatInstruction = prompt + "\n\n" + hindiQualityPrompt + "\n\nCRITICAL: Respond ONLY with valid JSON array, starting with [ and ending with ]. Do NOT wrap it in ```json\n...\n``` blocks. Do NOT include any conversational text before or after the JSON. Ensure there is no punctuation (like . or ।) outside of the double quotes. Valid JSON ONLY. Do NOT use double quotes inside your string values (use single quotes for quotes within text).";
+      const promptWithFormatInstruction =
+        prompt +
+        "\n\n" +
+        hindiQualityPrompt +
+        "\n\nCRITICAL: Respond ONLY with valid JSON array, starting with [ and ending with ]. Do NOT wrap it in ```json\n...\n``` blocks. Do NOT include any conversational text before or after the JSON. Ensure there is no punctuation (like . or ।) outside of the double quotes. Valid JSON ONLY. Do NOT use double quotes inside your string values (use single quotes for quotes within text).";
 
-      let response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${openRouterKey.trim()}`,
-          "HTTP-Referer": typeof window !== 'undefined' ? window.location.href : "https://myapp.com",
-          "X-Title": "News Applet",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "openai/gpt-oss-120b:free",
-          messages: [
-            {
-              role: "user",
-              content: promptWithFormatInstruction
-            }
-          ]
-        })
-      });
-
-      if (!response.ok) {
-        console.warn(`Primary OpenRouter model failed with status ${response.status}. Falling back to openrouter/free...`);
-        response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      let response = await fetch(
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${openRouterKey.trim()}`,
-            "HTTP-Referer": typeof window !== 'undefined' ? window.location.href : "https://myapp.com",
+            Authorization: `Bearer ${openRouterKey.trim()}`,
+            "HTTP-Referer":
+              typeof window !== "undefined"
+                ? window.location.href
+                : "https://myapp.com",
             "X-Title": "News Applet",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "openrouter/free",
+            model: "openai/gpt-oss-120b:free",
             messages: [
               {
                 role: "user",
-                content: promptWithFormatInstruction
-              }
-            ]
-          })
-        });
+                content: promptWithFormatInstruction,
+              },
+            ],
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        console.warn(
+          `Primary OpenRouter model failed with status ${response.status}. Falling back to openrouter/free...`,
+        );
+        response = await fetch(
+          "https://openrouter.ai/api/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${openRouterKey.trim()}`,
+              "HTTP-Referer":
+                typeof window !== "undefined"
+                  ? window.location.href
+                  : "https://myapp.com",
+              "X-Title": "News Applet",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "openrouter/free",
+              messages: [
+                {
+                  role: "user",
+                  content: promptWithFormatInstruction,
+                },
+              ],
+            }),
+          },
+        );
       }
 
       if (!response.ok) {
@@ -892,198 +1078,261 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
       console.log("OpenRouter Response received...");
       const data = await response.json();
       rawText = data.choices?.[0]?.message?.content || "[]";
-      
+
       console.log("OpenRouter request complete.");
       // Because we initialized rawText to "[]", if it returned something valid we don't need to strip anything, but typically we want to replace the `let rawText = "[]"` with the real content. Wait, `rawText` starts as `"[]"`. By overwriting it with `data.choices[...].content`, the previous `"[]"` is discarded.
-
     } else {
       // Use Gemini
-      const promptWithFormatInstruction = prompt + "\n\nCRITICAL: Respond ONLY with valid JSON array, starting with [ and ending with ]. Do NOT wrap it in ```json\n...\n``` blocks. Do NOT include any conversational text before or after the JSON. Ensure there is no punctuation (like . or ।) outside of the double quotes. Valid JSON ONLY. Do NOT use double quotes inside your string values (use single quotes for quotes within text).";
+      const promptWithFormatInstruction =
+        prompt +
+        "\n\nCRITICAL: Respond ONLY with valid JSON array, starting with [ and ending with ]. Do NOT wrap it in ```json\n...\n``` blocks. Do NOT include any conversational text before or after the JSON. Ensure there is no punctuation (like . or ।) outside of the double quotes. Valid JSON ONLY. Do NOT use double quotes inside your string values (use single quotes for quotes within text).";
 
       const response = await ai!.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: "gemini-2.5-flash",
         contents: promptWithFormatInstruction,
         config: {
           responseMimeType: "application/json",
           temperature: 0.7,
-        }
+        },
       });
 
       console.log("AI Response received");
       rawText = response.text || "[]";
     }
-    
+
     let cleanedText = rawText.trim();
-    if (cleanedText.includes('```')) {
+    if (cleanedText.includes("```")) {
       const match = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (match) cleanedText = match[1];
     }
 
-    const firstB = cleanedText.indexOf('[');
-    const lastB = cleanedText.lastIndexOf(']');
+    const firstB = cleanedText.indexOf("[");
+    const lastB = cleanedText.lastIndexOf("]");
     if (firstB !== -1 && lastB !== -1 && lastB >= firstB) {
       cleanedText = cleanedText.substring(firstB, lastB + 1);
     }
-    
+
     // Replace all actual newlines with spaces to avoid control character errors in strings
-    cleanedText = cleanedText.replace(/\r?\n|\r/g, ' ').replace(/\t/g, ' ');
-    
+    cleanedText = cleanedText.replace(/\r?\n|\r/g, " ").replace(/\t/g, " ");
+
     // Fix common JSON errors models sometimes make
     cleanedText = cleanedText.replace(/"\s*\.\s*,/g, '",'); // Fixes "...".,
     cleanedText = cleanedText.replace(/"\s*।\s*,/g, '",'); // Fixes "..."।, (Hindi full stop)
     cleanedText = cleanedText.replace(/""\s*,/g, '",'); // Fixes trailing double quotes "...",
-    cleanedText = cleanedText.replace(/,\s*}/g, '}'); // Fixes trailing commas in objects
-    cleanedText = cleanedText.replace(/,\s*]/g, ']'); // Fixes trailing commas in arrays
-    
+    cleanedText = cleanedText.replace(/,\s*}/g, "}"); // Fixes trailing commas in objects
+    cleanedText = cleanedText.replace(/,\s*]/g, "]"); // Fixes trailing commas in arrays
+
     let rawArticles;
     try {
       cleanedText = jsonrepair(cleanedText);
       rawArticles = JSON.parse(cleanedText);
     } catch (parseError) {
-      console.error("JSON Parse Error:", parseError, "Cleaned text was:", cleanedText.substring(0, 500) + "...");
+      console.error(
+        "JSON Parse Error:",
+        parseError,
+        "Cleaned text was:",
+        cleanedText.substring(0, 500) + "...",
+      );
       throw new Error("Failed to parse AI response as JSON.");
     }
 
     if (!Array.isArray(rawArticles)) {
       throw new Error("AI response is not an array.");
     }
-    
+
     // Helper for delay
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-    
+    const delay = (ms: number) =>
+      new Promise((resolve) => setTimeout(resolve, ms));
+
     const articles: Article[] = [];
-    
+
     // Process articles sequentially to avoid rate limits
     for (const a of rawArticles) {
       const category = mapCategory(a.category);
       let imageUrl = "";
-      
+
       console.log(`Processing article: ${a.title}`);
-      
+
       // Try to generate high-quality AI collage or fallback to standard logic
-      if (imageStrategy === 'auto') {
+      if (imageStrategy === "auto") {
         try {
           const dp = (a as any).imageGenerationPlan || {};
-          
+
           let additionalImages: string[] = [];
-          
+
           // Guarantee real RSS image by matching candidate data, fallback to AI output
           let realCandidateImage = null;
           let matchedCandidate = null;
-          
-          if (typeof (a as any).candidateId === 'number' && extractedArticlesData[(a as any).candidateId]) {
-              matchedCandidate = extractedArticlesData[(a as any).candidateId];
-              realCandidateImage = matchedCandidate.sourceImageUrl;
+
+          if (
+            typeof (a as any).candidateId === "number" &&
+            extractedArticlesData[(a as any).candidateId]
+          ) {
+            matchedCandidate = extractedArticlesData[(a as any).candidateId];
+            realCandidateImage = matchedCandidate.sourceImageUrl;
           }
-          
+
           if (!realCandidateImage) {
-            matchedCandidate = extractedArticlesData.find(cad => cad.link === a.sourceUrl) || extractedArticlesData.find(cad => a.title.includes(cad.title.substring(0, 15)) || cad.title.includes(a.title.substring(0, 15)));
-            if (matchedCandidate) realCandidateImage = matchedCandidate.sourceImageUrl;
+            matchedCandidate =
+              extractedArticlesData.find((cad) => cad.link === a.sourceUrl) ||
+              extractedArticlesData.find(
+                (cad) =>
+                  a.title.includes(cad.title.substring(0, 15)) ||
+                  cad.title.includes(a.title.substring(0, 15)),
+              );
+            if (matchedCandidate)
+              realCandidateImage = matchedCandidate.sourceImageUrl;
           }
 
           if (matchedCandidate && matchedCandidate.additionalImages) {
-             additionalImages = [...matchedCandidate.additionalImages];
+            additionalImages = [...matchedCandidate.additionalImages];
           }
-          
-          let heroImage = realCandidateImage && realCandidateImage !== 'none' ? realCandidateImage : null;
+
+          let heroImage =
+            realCandidateImage && realCandidateImage !== "none"
+              ? realCandidateImage
+              : null;
           if (!heroImage) {
-             heroImage = (a as any).sourceImageUrl && (a as any).sourceImageUrl !== 'none' ? (a as any).sourceImageUrl : null;
+            heroImage =
+              (a as any).sourceImageUrl && (a as any).sourceImageUrl !== "none"
+                ? (a as any).sourceImageUrl
+                : null;
           }
-          
+
           if (heroImage && !additionalImages.includes(heroImage)) {
-             additionalImages.push(heroImage);
+            additionalImages.push(heroImage);
           }
 
           // If there's only 1 (or 0) images in additionalImages, generate an AI image based on major keywords
           if (additionalImages.length <= 1) {
-             const imagePromptToUse = dp.englishImagePrompt || (a as any).seoTitle || a.title;
-             console.log("Only 0 or 1 image found in RSS. Generating an AI image based on keywords:", imagePromptToUse);
-             try {
-                let aiGenImg = null;
-                if (imageGenModel === 'gemini') {
-                    const base64Img = await generateAiImage(imagePromptToUse);
-                    aiGenImg = await uploadImage(base64Img);
-                } else {
-                    aiGenImg = await getStockImageUrl(imagePromptToUse, category);
-                }
-                if (aiGenImg) {
-                    additionalImages.push(aiGenImg);
-                }
-             } catch(err) {
-                console.error("Additional AI Image generation failed, fallback to Cloudflare", err);
-                try {
-                    let aiGenImg = await getStockImageUrl(imagePromptToUse, category);
-                    if (aiGenImg) additionalImages.push(aiGenImg);
-                } catch(fallbackErr) {
-                    console.error("Additional AI image fallback also failed", fallbackErr);
-                }
-             }
+            const imagePromptToUse =
+              dp.englishImagePrompt || (a as any).seoTitle || a.title;
+            console.log(
+              "Only 0 or 1 image found in RSS. Generating an AI image based on keywords:",
+              imagePromptToUse,
+            );
+            try {
+              let aiGenImg = null;
+              if (imageGenModel === "gemini") {
+                const base64Img = await generateAiImage(imagePromptToUse);
+                aiGenImg = await uploadImage(base64Img);
+              } else {
+                aiGenImg = await getStockImageUrl(imagePromptToUse, category);
+              }
+              if (aiGenImg) {
+                additionalImages.push(aiGenImg);
+              }
+            } catch (err) {
+              console.error(
+                "Additional AI Image generation failed, fallback to Cloudflare",
+                err,
+              );
+              try {
+                let aiGenImg = await getStockImageUrl(
+                  imagePromptToUse,
+                  category,
+                );
+                if (aiGenImg) additionalImages.push(aiGenImg);
+              } catch (fallbackErr) {
+                console.error(
+                  "Additional AI image fallback also failed",
+                  fallbackErr,
+                );
+              }
+            }
           }
-          
+
           (a as any).additionalImages = additionalImages;
-          
+
           // If no heroImage found at all, fallback to Gemini or Cloudflare
           if (!heroImage) {
-             const imagePromptToUse = dp.englishImagePrompt || (a as any).seoTitle || a.title;
-             console.log("No RSS image found. Falling back to AI Image generation with prompt:", imagePromptToUse);
-             
-             try {
-                if (imageGenModel === 'gemini') {
-                    console.log("Generating AI hero image with Gemini...");
-                    const base64Img = await generateAiImage(imagePromptToUse);
-                    heroImage = await uploadImage(base64Img);
-                } else {
-                    console.log("Generating AI hero image with Cloudflare...");
-                    heroImage = await getStockImageUrl(imagePromptToUse, category);
-                }
-             } catch(err) {
-                console.error("Image generation failed, fallback to Cloudflare", err);
+            const imagePromptToUse =
+              dp.englishImagePrompt || (a as any).seoTitle || a.title;
+            console.log(
+              "No RSS image found. Falling back to AI Image generation with prompt:",
+              imagePromptToUse,
+            );
+
+            try {
+              if (imageGenModel === "gemini") {
+                console.log("Generating AI hero image with Gemini...");
+                const base64Img = await generateAiImage(imagePromptToUse);
+                heroImage = await uploadImage(base64Img);
+              } else {
+                console.log("Generating AI hero image with Cloudflare...");
                 heroImage = await getStockImageUrl(imagePromptToUse, category);
-             }
+              }
+            } catch (err) {
+              console.error(
+                "Image generation failed, fallback to Cloudflare",
+                err,
+              );
+              heroImage = await getStockImageUrl(imagePromptToUse, category);
+            }
           }
 
           if (heroImage) {
-            console.log("Found source/primary image, creating premium editorial collage layout...");
-            
+            console.log(
+              "Found source/primary image, creating premium editorial collage layout...",
+            );
+
             // The frontend rendering engine uses the SAME image for both foreground and blurred background
             const contextImageUrl = null;
-            
-            let host = typeof window !== 'undefined' ? window.location.origin : '';
+
+            let host =
+              typeof window !== "undefined" ? window.location.origin : "";
             if (!host) {
-              if (process.env.VERCEL_URL) host = `https://${process.env.VERCEL_URL}`;
-              else if (process.env.URL) host = process.env.URL; // Netlify
+              if (process.env.VERCEL_URL)
+                host = `https://${process.env.VERCEL_URL}`;
+              else if (process.env.URL)
+                host = process.env.URL; // Netlify
               else host = `http://localhost:${process.env.PORT || 3000}`;
             }
-            
+
             let finalHeroImageUrl = heroImage;
-            
+
             try {
-              if (typeof window !== 'undefined') {
-                const { createCollageOnFrontend } = await import('../src/utils/frontendCollage');
-                console.log("Generating premium collage entirely on frontend canvas...");
-                const base64Collage = await createCollageOnFrontend(finalHeroImageUrl, contextImageUrl, host);
-                
-                const { uploadImage } = await import('./supabase');
+              if (typeof window !== "undefined") {
+                const { createCollageOnFrontend } =
+                  await import("../src/utils/frontendCollage");
+                console.log(
+                  "Generating premium collage entirely on frontend canvas...",
+                );
+                const base64Collage = await createCollageOnFrontend(
+                  finalHeroImageUrl,
+                  contextImageUrl,
+                  host,
+                );
+
+                const { uploadImage } = await import("./supabase");
                 const uploadedUrl = await uploadImage(base64Collage);
                 if (uploadedUrl) {
                   imageUrl = uploadedUrl;
                   (a as any).featuredCollageImage = imageUrl;
                 } else {
-                  console.warn("Frontend Collage created but upload failed. Using raw heroImage.");
+                  console.warn(
+                    "Frontend Collage created but upload failed. Using raw heroImage.",
+                  );
                   imageUrl = finalHeroImageUrl;
                 }
               } else {
-                 throw new Error("Not in browser environment, cannot use canvas.");
+                throw new Error(
+                  "Not in browser environment, cannot use canvas.",
+                );
               }
             } catch (err: any) {
-               console.error("Frontend Collage generation failed:", err);
-               imageUrl = finalHeroImageUrl;
+              console.error("Frontend Collage generation failed:", err);
+              imageUrl = finalHeroImageUrl;
             }
           }
         } catch (e) {
-          console.warn("AI Image generation/upload failed, falling back to stock:", e);
+          console.warn(
+            "AI Image generation/upload failed, falling back to stock:",
+            e,
+          );
           const dp = (a as any).imageGenerationPlan || {};
-          const imagePromptToUse = dp.englishImagePrompt || a.imagePrompt || a.title;
+          const imagePromptToUse =
+            dp.englishImagePrompt || a.imagePrompt || a.title;
           imageUrl = await getStockImageUrl(imagePromptToUse, category);
         }
       } else {
@@ -1094,19 +1343,22 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
       const title = a.title;
       const excerpt = a.excerpt;
       const createdAt = new Date().toISOString();
-      
-      let formattedContent = a.content || '';
-      if (typeof formattedContent === 'string') {
+
+      let formattedContent = a.content || "";
+      if (typeof formattedContent === "string") {
         // Fix any model errors with slashes and ensure proper markdown paragraphs
-        formattedContent = formattedContent.replace(/(?:\/n|\\n|\r?\n)+/g, '\n\n');
-      }
-      
-      const imgsToSave = (a as any).additionalImages || [];
-      if (imgsToSave.length > 0) {
-         formattedContent += `\n\n<!-- additionalImages: ${JSON.stringify(imgsToSave)} -->`;
+        formattedContent = formattedContent.replace(
+          /(?:\/n|\\n|\r?\n)+/g,
+          "\n\n",
+        );
       }
 
-      const articleData: Omit<Article, 'id'> = {
+      const imgsToSave = (a as any).additionalImages || [];
+      if (imgsToSave.length > 0) {
+        formattedContent += `\n\n<!-- additionalImages: ${JSON.stringify(imgsToSave)} -->`;
+      }
+
+      const articleData: Omit<Article, "id"> = {
         title: title,
         slug: generateSlug(title),
         summary: excerpt,
@@ -1124,28 +1376,35 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
         tags: a.tags || [],
         seoTitle: a.seoTitle,
         metaDescription: a.metaDescription,
-        facebookCaption: a.facebookCaption
+        facebookCaption: a.facebookCaption,
       };
 
       // Save to Supabase Database
       const savedArticle = await createArticle(articleData);
       articles.push(savedArticle);
-      
+
       // Cache SEO fields in localStorage for viral post generator
       try {
-        if (typeof window !== 'undefined' && savedArticle.slug && (a.seoTitle || a.facebookCaption)) {
-          localStorage.setItem(`seo_cache_${savedArticle.slug}`, JSON.stringify({
-            seoTitle: a.seoTitle,
-            metaDescription: a.metaDescription,
-            facebookCaption: a.facebookCaption
-          }));
+        if (
+          typeof window !== "undefined" &&
+          savedArticle.slug &&
+          (a.seoTitle || a.facebookCaption)
+        ) {
+          localStorage.setItem(
+            `seo_cache_${savedArticle.slug}`,
+            JSON.stringify({
+              seoTitle: a.seoTitle,
+              metaDescription: a.metaDescription,
+              facebookCaption: a.facebookCaption,
+            }),
+          );
         }
       } catch (e) {
         console.error("Failed to cache SEO info locally:", e);
       }
-      
+
       console.log(`Published: ${savedArticle.title}`);
-      
+
       // Cooldown to avoid rate limits
       if (rawArticles.indexOf(a) < rawArticles.length - 1) {
         console.log("Cooldown for 5 seconds...");
@@ -1154,63 +1413,95 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
     }
 
     return articles;
-
   } catch (error: any) {
     console.error("Daily News Fetch Error:", error);
     throw new Error(`Failed to fetch daily news: ${error.message}`);
   }
 };
 
-export const fetchTickerHeadlines = async (category: 'national' | 'state' | 'mixed' | 'sports' | 'bollywood' | 'viral' | 'warroom' = 'mixed'): Promise<{id: string, text: string}[]> => {
+export const fetchTickerHeadlines = async (
+  category:
+    | "national"
+    | "state"
+    | "mixed"
+    | "sports"
+    | "bollywood"
+    | "viral"
+    | "warroom" = "mixed",
+): Promise<{ id: string; text: string }[]> => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
   // Fetch existing breaking news to avoid duplicates
   let existingHeadlines: string[] = [];
   try {
-    const { data } = await supabase.from('breaking_news').select('text').limit(20);
+    const { data } = await supabase
+      .from("breaking_news")
+      .select("text")
+      .limit(20);
     if (data) existingHeadlines = data.map((h: any) => h.text);
   } catch (e) {
     console.warn("Failed to fetch existing headlines for deduplication:", e);
   }
 
   const now = new Date();
-  const today = now.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const formattedDate = now.toISOString().split('T')[0];
+  const today = now.toLocaleDateString("en-IN", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const formattedDate = now.toISOString().split("T")[0];
 
   let stateNewsContext = "";
-  if (category === 'state' || category === 'mixed') {
-    let stateLinks = await extractArticleLinks(`https://dprcg.gov.in/news/date-wise-news/${formattedDate}`);
+  if (category === "state" || category === "mixed") {
+    let stateLinks = await extractArticleLinks(
+      `https://dprcg.gov.in/news/date-wise-news/${formattedDate}`,
+    );
     if (stateLinks.length === 0) {
       // Try yesterday's date
       const yesterday = new Date(now);
       yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayFormatted = yesterday.toISOString().split('T')[0];
-      stateLinks = await extractArticleLinks(`https://dprcg.gov.in/news/date-wise-news/${yesterdayFormatted}`);
+      const yesterdayFormatted = yesterday.toISOString().split("T")[0];
+      stateLinks = await extractArticleLinks(
+        `https://dprcg.gov.in/news/date-wise-news/${yesterdayFormatted}`,
+      );
     }
-    
+
     if (stateLinks.length > 0) {
-      stateNewsContext = "Here is the latest news from Chhattisgarh (DPRCG):\n" + stateLinks.map(item => `Title: ${item.title}\nLink: ${item.link}\nContent: ${item.content || 'Content not available'}`).join('\n\n');
+      stateNewsContext =
+        "Here is the latest news from Chhattisgarh (DPRCG):\n" +
+        stateLinks
+          .map(
+            (item) =>
+              `Title: ${item.title}\nLink: ${item.link}\nContent: ${item.content || "Content not available"}`,
+          )
+          .join("\n\n");
     }
   }
 
   let promptContext = "";
-  if (category === 'national') {
-    promptContext = "Generate 5 unique, short National India news headlines from Reuters India or PTI News. Use Google Search to find the latest news published within the last 24-48 hours.";
-  } else if (category === 'state') {
+  if (category === "national") {
+    promptContext =
+      "Generate 5 unique, short National India news headlines from Reuters India or PTI News. Use Google Search to find the latest news published within the last 24-48 hours.";
+  } else if (category === "state") {
     if (stateNewsContext) {
       promptContext = `Generate 5 unique, short Chhattisgarh state news headlines using the following extracted news data:\n\n${stateNewsContext}\n\nYou MUST use this provided data to generate the headlines. DO NOT hallucinate news.`;
     } else {
       promptContext = `Generate 5 unique, short Chhattisgarh state news headlines. Use Google Search to find the latest news published within the last 24-48 hours.`;
     }
-  } else if (category === 'sports') {
-    promptContext = "Generate 5 unique, short Sports news headlines from PTI Sports or Google News Sports. Use Google Search to find the latest news published within the last 24-48 hours.";
-  } else if (category === 'bollywood') {
-    promptContext = "Generate 5 unique, short Entertainment news headlines. Use Google Search to find the latest news published within the last 24-48 hours.";
-  } else if (category === 'viral') {
-    promptContext = "Generate 5 unique, short Viral/Trending news headlines from social media and internet buzz. Use Google Search to find the latest news published within the last 24-48 hours.";
-  } else if (category === 'warroom') {
-    promptContext = "Generate 5 unique, short Defense/Geopolitics news headlines (Military, Conflicts, Strategy). Use Google Search to find the latest news published within the last 24-48 hours.";
+  } else if (category === "sports") {
+    promptContext =
+      "Generate 5 unique, short Sports news headlines from PTI Sports or Google News Sports. Use Google Search to find the latest news published within the last 24-48 hours.";
+  } else if (category === "bollywood") {
+    promptContext =
+      "Generate 5 unique, short Entertainment news headlines. Use Google Search to find the latest news published within the last 24-48 hours.";
+  } else if (category === "viral") {
+    promptContext =
+      "Generate 5 unique, short Viral/Trending news headlines from social media and internet buzz. Use Google Search to find the latest news published within the last 24-48 hours.";
+  } else if (category === "warroom") {
+    promptContext =
+      "Generate 5 unique, short Defense/Geopolitics news headlines (Military, Conflicts, Strategy). Use Google Search to find the latest news published within the last 24-48 hours.";
   } else {
     if (stateNewsContext) {
       promptContext = `Generate 5 unique, short news headlines: 2 State and 2 National, plus 1 Sports. \n\nFor State news, use the following extracted data:\n${stateNewsContext}\n\nFor National and Sports, use Google Search to find the latest news published within the last 24-48 hours.`;
@@ -1219,9 +1510,10 @@ export const fetchTickerHeadlines = async (category: 'national' | 'state' | 'mix
     }
   }
 
-  const avoidList = existingHeadlines.length > 0 
-    ? `\n      DO NOT GENERATE THESE HEADLINES (Already exists):\n      ${existingHeadlines.slice(0, 15).join('\n      ')}`
-    : "";
+  const avoidList =
+    existingHeadlines.length > 0
+      ? `\n      DO NOT GENERATE THESE HEADLINES (Already exists):\n      ${existingHeadlines.slice(0, 15).join("\n      ")}`
+      : "";
 
   try {
     const prompt = `
@@ -1247,30 +1539,35 @@ export const fetchTickerHeadlines = async (category: 'national' | 'state' | 'mix
     const toolsConfig: any[] = [{ googleSearch: {} }];
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         tools: toolsConfig,
         responseMimeType: "application/json",
         temperature: 0.9,
-      }
+      },
     });
 
     const rawText = response.text || "[]";
-    
+
     // More robust JSON extraction
     let cleanedText = rawText.trim();
-    if (cleanedText.includes('```')) {
+    if (cleanedText.includes("```")) {
       const match = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (match) cleanedText = match[1];
     }
-    
+
     let rawHeadlines;
     try {
       cleanedText = jsonrepair(cleanedText);
       rawHeadlines = JSON.parse(cleanedText);
     } catch (parseError) {
-      console.error("JSON Parse Error in Ticker:", parseError, "Raw text:", rawText);
+      console.error(
+        "JSON Parse Error in Ticker:",
+        parseError,
+        "Raw text:",
+        rawText,
+      );
       // Fallback: try to find anything that looks like a JSON array
       const arrayMatch = rawText.match(/\[\s*".*?"\s*(?:,\s*".*?"\s*)*\]/s);
       if (arrayMatch) {
@@ -1287,12 +1584,14 @@ export const fetchTickerHeadlines = async (category: 'national' | 'state' | 'mix
     if (!Array.isArray(rawHeadlines)) {
       throw new Error("AI response is not an array of headlines.");
     }
-    
-    return rawHeadlines.map((text: string) => ({
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ticker-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-      text: text
-    }));
 
+    return rawHeadlines.map((text: string) => ({
+      id:
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `ticker-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+      text: text,
+    }));
   } catch (error: any) {
     console.error("Ticker Fetch Error:", error);
     throw new Error(`Failed to fetch ticker headlines: ${error.message}`);
@@ -1300,11 +1599,13 @@ export const fetchTickerHeadlines = async (category: 'national' | 'state' | 'mix
 };
 
 export const mapCategory = (cat: string): Category => {
-  if (cat.includes("State") || cat.includes("Chhattisgarh")) return Category.STATE;
+  if (cat.includes("State") || cat.includes("Chhattisgarh"))
+    return Category.STATE;
   if (cat.includes("Politics")) return Category.POLITICS;
   if (cat.includes("Crime")) return Category.CRIME;
   if (cat.includes("Sports") || cat.includes("Cricket")) return Category.SPORTS;
-  if (cat.includes("Bollywood") || cat.includes("Entertainment")) return Category.BOLLYWOOD;
+  if (cat.includes("Bollywood") || cat.includes("Entertainment"))
+    return Category.BOLLYWOOD;
   if (cat.includes("Lifestyle")) return Category.LIFESTYLE;
   if (cat.includes("Viral")) return Category.VIRAL;
   if (cat.includes("War")) return Category.WAR_ROOM;
@@ -1323,27 +1624,29 @@ export interface ViralPostOptions {
   };
 }
 
-export const generateViralPost = async (options: ViralPostOptions): Promise<ViralPost> => {
+export const generateViralPost = async (
+  options: ViralPostOptions,
+): Promise<ViralPost> => {
   const { article, customInstructions, previousPost, feedback } = options;
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
   // Map categories to specific section names
   const categoryMap: Record<string, string> = {
-    'Entertainment': 'Entertainment Hub',
-    'State News': 'Chhattisgarh',
-    'Politics': 'Politics',
-    'Local/District': 'Local News',
-    'Jobs & Careers': 'Jobs & Careers',
-    'Crime': 'Crime',
-    'RTI & Legal': 'RTI & Legal',
-    'Video News': 'Video News',
-    'Sports': 'Sports Arena',
-    'Lifestyle': 'Lifestyle',
-    'Viral Today': 'Viral Trends',
-    'War Room': 'War Room',
+    Entertainment: "Entertainment Hub",
+    "State News": "Chhattisgarh",
+    Politics: "Politics",
+    "Local/District": "Local News",
+    "Jobs & Careers": "Jobs & Careers",
+    Crime: "Crime",
+    "RTI & Legal": "RTI & Legal",
+    "Video News": "Video News",
+    Sports: "Sports Arena",
+    Lifestyle: "Lifestyle",
+    "Viral Today": "Viral Trends",
+    "War Room": "War Room",
   };
-  
+
   const sectionName = categoryMap[article.category] || article.category;
   const articleUrl = `https://kktnews.vercel.app/article/${article.slug || article.id}`;
 
@@ -1447,45 +1750,54 @@ Only generate text content for overlay.
   }
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: "gemini-2.5-flash",
     contents: prompt,
     config: {
       responseMimeType: "application/json",
-    }
+    },
   });
 
   const rawText = response.text || "{}";
   let cleanedText = rawText.trim();
-  if (cleanedText.includes('```')) {
+  if (cleanedText.includes("```")) {
     const match = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     if (match) cleanedText = match[1];
   }
-  const firstB = cleanedText.indexOf('{');
-  const lastB = cleanedText.lastIndexOf('}');
+  const firstB = cleanedText.indexOf("{");
+  const lastB = cleanedText.lastIndexOf("}");
   if (firstB !== -1 && lastB !== -1 && lastB >= firstB) {
     cleanedText = cleanedText.substring(firstB, lastB + 1);
   }
-  cleanedText = cleanedText.replace(/\r?\n|\r/g, ' ').replace(/\t/g, ' ');
+  cleanedText = cleanedText.replace(/\r?\n|\r/g, " ").replace(/\t/g, " ");
   cleanedText = cleanedText.replace(/"\s*\.\s*,/g, '",');
   cleanedText = cleanedText.replace(/"\s*।\s*,/g, '",');
   cleanedText = cleanedText.replace(/""\s*,/g, '",');
-  cleanedText = cleanedText.replace(/,\s*}/g, '}');
-  cleanedText = cleanedText.replace(/,\s*]/g, ']');
+  cleanedText = cleanedText.replace(/,\s*}/g, "}");
+  cleanedText = cleanedText.replace(/,\s*]/g, "]");
   try {
     cleanedText = jsonrepair(cleanedText);
     return JSON.parse(cleanedText) as ViralPost;
   } catch (e) {
-    console.error("JSON Parse Error in generateViralPost:", e, "Cleaned text was:", cleanedText);
+    console.error(
+      "JSON Parse Error in generateViralPost:",
+      e,
+      "Cleaned text was:",
+      cleanedText,
+    );
     throw new Error("Failed to parse AI response as JSON for Viral Post.");
   }
 };
 
-export const generateViralImage = async (prompt: string, referenceImageBase64?: string, imageGenModel: 'gemini' | 'cloudflare' = 'gemini'): Promise<string> => {
+export const generateViralImage = async (
+  prompt: string,
+  referenceImageBase64?: string,
+  imageGenModel: "gemini" | "cloudflare" = "gemini",
+): Promise<string> => {
   const ai = getAiClient();
-  if (imageGenModel === 'gemini' && !ai) throw new Error("API Key missing");
+  if (imageGenModel === "gemini" && !ai) throw new Error("API Key missing");
 
   try {
-    if (imageGenModel === 'cloudflare') {
+    if (imageGenModel === "cloudflare") {
       const cfPrompt = `Generate an ultra-realistic Indian news image about: ${prompt}
 
 STRICT RULES:
@@ -1498,16 +1810,16 @@ Authentic newspaper photo, documentary journalism, photorealistic, natural light
 
 NEGATIVE:
 No cartoon, no illustration, no glamour portrait, no cinematic lighting, no fantasy, no AI-art look, no jewelry focus, no close-up faces, no text, no watermark.`;
-      
-      const cfReq = await fetch('/api/cloudflare-image', {
+
+      const cfReq = await fetch("/api/cloudflare-image", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           prompt: cfPrompt,
-          model: "@cf/black-forest-labs/flux-1-schnell" // Flux creates much better realistic photos and typically costs fewer steps/tokens.
-        })
+          model: "@cf/black-forest-labs/flux-1-schnell", // Flux creates much better realistic photos and typically costs fewer steps/tokens.
+        }),
       });
       if (cfReq.ok) {
         const resData = await cfReq.json();
@@ -1542,8 +1854,10 @@ IMPORTANT: If a reference image is provided, you MUST match the face of the pers
     ];
 
     if (referenceImageBase64) {
-      const base64Data = referenceImageBase64.split(',')[1] || referenceImageBase64;
-      const mimeType = referenceImageBase64.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+      const base64Data =
+        referenceImageBase64.split(",")[1] || referenceImageBase64;
+      const mimeType =
+        referenceImageBase64.match(/data:(.*?);base64/)?.[1] || "image/jpeg";
       parts.unshift({
         inlineData: {
           data: base64Data,
@@ -1554,7 +1868,7 @@ IMPORTANT: If a reference image is provided, you MUST match the face of the pers
 
     if (!ai) throw new Error("API Key missing");
     const response = await ai.models.generateContent({
-      model: 'models/imagen-3.0-generate-002', // Use stable imagen alias
+      model: "models/imagen-3.0-generate-002", // Use stable imagen alias
       contents: { parts },
     });
 
@@ -1564,7 +1878,7 @@ IMPORTANT: If a reference image is provided, you MUST match the face of the pers
         return await compressImage(base64);
       }
     }
-    
+
     throw new Error("No image data in response");
   } catch (error) {
     console.error("AI Viral Image Generation Error:", error);
@@ -1578,7 +1892,9 @@ export interface ReelScript {
   fullScript: string;
 }
 
-export const generateReelScript = async (articleContent: string): Promise<ReelScript> => {
+export const generateReelScript = async (
+  articleContent: string,
+): Promise<ReelScript> => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
@@ -1613,15 +1929,18 @@ OUTPUT OBLIGATIONS (JSON ONLY):
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
-      }
+      },
     });
 
     const text = response.text || "{}";
-    const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    const cleanedText = text
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
     return JSON.parse(cleanedText) as ReelScript;
   } catch (error) {
     console.error("Reel script generation failed", error);
@@ -1629,34 +1948,36 @@ OUTPUT OBLIGATIONS (JSON ONLY):
   }
 };
 
-export const generateFullReelScript = async (articleContent: string, template: any) => {
+export const generateFullReelScript = async (
+  articleContent: string,
+  template: any,
+) => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
   const coords = template.coordinates || {};
-  const hasHeadline = coords.headline_box && coords.headline_box !== 'hidden';
-  const hasTicker = coords.ticker_box && coords.ticker_box !== 'hidden';
+  const hasHeadline = coords.headline_box && coords.headline_box !== "hidden";
+  const hasTicker = coords.ticker_box && coords.ticker_box !== "hidden";
 
-  const prompt = `You are a professional News Reel Producer. Write a high-retention, viral Hindi reel script.
-Do NOT rewrite a summary-style news script.
+  const prompt = `You are a professional TV News Anchor. Write a high-retention, professional Hindi news script.
 Use ONLY facts from the article. NEVER hallucinate names, numbers, quotes, causes, or outcomes.
 
 ARTICLE TEXT:
 ${articleContent}
 
 Format rules for high engagement:
-0–3 sec: HOOK (Curiosity driven, e.g., "अगर आप छत्तीसगढ़ में रहते हो तो ये खबर जान लो!")
-3–12 sec: What happened (The core fact briefly)
-12–22 sec: Why important (Impact or reason)
-22–27 sec: Unexpected point
-27–30 sec: Comment CTA (e.g., "आप क्या सोचते हो?")
+0–3 sec: HOOK (Authoritative News Hook, e.g., "इस वक्त की बड़ी खबर..." or "आज की सबसे बड़ी खबर...")
+3–12 sec: What happened (The core fact delivered with professional urgency)
+12–22 sec: Why important (Impact and details)
+22–27 sec: Supporting context
+27–30 sec: Professional Sign-off (e.g., "ज़्यादा अपडेट्स के लिए जुड़े रहें हमारे साथ।")
 
-- Sentences MUST be short. 
-- Conversational Hindi only (not robotic news language).
+- Sentences MUST be short and punchy.
+- Tone MUST be like a professional TV news anchor (authoritative, clear, formal Hindi).
 
 Subtitles Requirements (CRITICAL):
-- Maximum 3-5 words per subtitle chunk.
-- Break subtitles sentence-wise, timed according to natural speech.
+- Break the ENTIRE voiceoverScript into chunks of maximum 3-5 words.
+- The combination of ALL subtitleChunks MUST match the EXACT word-for-word text of the voiceoverScript without skipping or summarizing anything.
 - Provide them as an array of strings under "subtitleChunks".
 
 Categorization & Style:
@@ -1666,10 +1987,10 @@ Categorization & Style:
 Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly escape inner quotes):
 {
   "hookText": "Large hook text for top overlay",
-  ${hasHeadline ? '"headline": "Short top headline (if used instead of hookText)",' : ''}
+  ${hasHeadline ? '"headline": "Short top headline (if used instead of hookText)",' : ""}
   "voiceoverScript": "Full script combining Hook... (Must read like fluent conversational Hindi)",
   "subtitleChunks": ["रायपुर में", "बड़ा मामला", "सामने आया"],
-  ${hasTicker ? '"ticker": "Scrolling breaking news text",' : ''}
+  ${hasTicker ? '"ticker": "Scrolling breaking news text",' : ""}
   "reelType": "string",
   "stylePreset": "string",
   "visualKeywords": "3-5 keywords for searching stock footage"
@@ -1677,35 +1998,38 @@ Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly 
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
-      }
+      },
     });
 
     const rawText = response.text || "{}";
     let cleanedText = rawText;
-    
+
     // Sometimes models wrap json in markdown
     const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-       cleanedText = jsonMatch[0];
+      cleanedText = jsonMatch[0];
     } else {
-       cleanedText = cleanedText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      cleanedText = cleanedText
+        .replace(/```json/gi, "")
+        .replace(/```/g, "")
+        .trim();
     }
-    
+
     let result;
     try {
       result = JSON.parse(cleanedText);
     } catch (parseError) {
-       console.error("Failed to parse JSON string:", cleanedText);
-       throw parseError;
+      console.error("Failed to parse JSON string:", cleanedText);
+      throw parseError;
     }
-    
+
     // Fallbacks just in case the renderer expects `subtitles`.
     if (result.subtitleChunks && Array.isArray(result.subtitleChunks)) {
-       result.subtitles = result.subtitleChunks;
+      result.subtitles = result.subtitleChunks;
     }
     return result;
   } catch (error) {
@@ -1736,13 +2060,14 @@ ${script}
         responseModalities: ["AUDIO"],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' }, // Kore is a good female voice option
+            prebuiltVoiceConfig: { voiceName: "Puck" }, // Professional news anchor voice
           },
         },
       },
     } as any);
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    const base64Audio =
+      response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (!base64Audio) throw new Error("No audio data returned from TTS API");
 
     return base64Audio;
@@ -1752,7 +2077,11 @@ ${script}
   }
 };
 
-export const editReelScriptWithAI = async (scriptData: any, styleOverrides: any, editPrompt: string) => {
+export const editReelScriptWithAI = async (
+  scriptData: any,
+  styleOverrides: any,
+  editPrompt: string,
+) => {
   const client = getAiClient();
   if (!client) throw new Error("Gemini API client not configured.");
 
@@ -1777,7 +2106,7 @@ Please return the updated Data and Styles in JSON format matching this schema. N
       },
     });
 
-    return JSON.parse(response.text || '{}');
+    return JSON.parse(response.text || "{}");
   } catch (error) {
     console.error("Failed to edit reel script with AI", error);
     throw error;
@@ -1835,25 +2164,26 @@ Return a JSON object with this exact structure (if an element is not present, ma
 `;
 
   try {
-    let base64Data = '';
-    let mimeType = 'image/jpeg';
+    let base64Data = "";
+    let mimeType = "image/jpeg";
 
-    if (imageUrlOrBase64.startsWith('http')) {
+    if (imageUrlOrBase64.startsWith("http")) {
       const resp = await fetch(imageUrlOrBase64);
       const blob = await resp.blob();
       mimeType = blob.type;
-      
+
       base64Data = await new Promise((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           const res = reader.result as string;
-          resolve(res.split(',')[1] || res);
+          resolve(res.split(",")[1] || res);
         };
         reader.readAsDataURL(blob);
       });
     } else {
-      base64Data = imageUrlOrBase64.split(',')[1] || imageUrlOrBase64;
-      mimeType = imageUrlOrBase64.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+      base64Data = imageUrlOrBase64.split(",")[1] || imageUrlOrBase64;
+      mimeType =
+        imageUrlOrBase64.match(/data:(.*?);base64/)?.[1] || "image/jpeg";
     }
 
     const response = await ai.models.generateContent({
@@ -1877,7 +2207,7 @@ Return a JSON object with this exact structure (if an element is not present, ma
       },
     });
 
-    return JSON.parse(response.text || '{}');
+    return JSON.parse(response.text || "{}");
   } catch (error) {
     console.error("Error analyzing viral template:", error);
     throw error;
@@ -1888,14 +2218,15 @@ export const analyzeTemplateImprovement = async (
   previewImageUrl: string,
   templateConfigStr: string,
   newsCategory: string,
-  appliedFixes: string[]
+  appliedFixes: string[],
 ): Promise<any> => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
   // Since previewImageUrl might be a data URL, extract the base64 part
-  const base64Data = previewImageUrl.split(',')[1] || previewImageUrl;
-  const mimeType = previewImageUrl.match(/data:(.*?);base64/)?.[1] || 'image/png';
+  const base64Data = previewImageUrl.split(",")[1] || previewImageUrl;
+  const mimeType =
+    previewImageUrl.match(/data:(.*?);base64/)?.[1] || "image/png";
 
   const prompt = `You are a Senior Creative Director of a Premium Hindi News Brand focused on virality + trustworthiness.
 Analyze the CURRENT generated auto viral post preview image along with its current template configuration JSON.
