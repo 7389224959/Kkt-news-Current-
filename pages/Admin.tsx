@@ -151,7 +151,7 @@ const Admin: React.FC = () => {
   const [isPostingToFacebook, setIsPostingToFacebook] = useState(false);
   const [viralCustomPrompt, setViralCustomPrompt] = useState('');
   const [viralRegeneratePrompt, setViralRegeneratePrompt] = useState('');
-  const [viralSelectedTheme, setViralSelectedTheme] = useState<string>('breaking_red');
+  const [viralSelectedTheme, setViralSelectedTheme] = useState<string>('pro_news_left');
   const [scheduledTime, setScheduledTime] = useState<string>('');
   
   // Daily News states
@@ -423,7 +423,7 @@ const Admin: React.FC = () => {
       } catch(e){}
 
       const defaultThemes = [
-        'breaking_red', 'kkt_premium_breaking', 'kkt_exclusive'
+        'pro_news_left', 'pro_news_center', 'pro_news_bold_red', 'pro_news_glass'
       ];
 
       let customThemes: string[] = [];
@@ -608,7 +608,7 @@ const Admin: React.FC = () => {
         } catch(e){}
 
         const defaultThemes = [
-          'breaking_red', 'kkt_premium_breaking', 'kkt_exclusive'
+          'pro_news_left', 'pro_news_center', 'pro_news_bold_red', 'pro_news_glass'
         ];
 
         let customThemes: string[] = [];
@@ -2545,10 +2545,15 @@ const Admin: React.FC = () => {
                     onChange={e => setViralSelectedTheme(e.target.value)}
                     className="w-full p-2 border rounded-lg"
                   >
+                    <optgroup label="Professional News Themes">
+                      <option value="pro_news_left">📰 1. Professional Left-Aligned</option>
+                      <option value="pro_news_center">📰 2. Professional Center-Aligned</option>
+                      <option value="pro_news_bold_red">📰 3. Professional Bold Red Bar</option>
+                      <option value="pro_news_glass">📰 4. Professional Glassmorphism</option>
+                    </optgroup>
                     <optgroup label="Default Themes">
                       <option value="kkt_premium_breaking">🔥 KKT Premium Breaking (HD)</option>
                       <option value="kkt_exclusive">⭐ KKT Exclusive Report (HD)</option>
-                      <option value="breaking_red">1. Default Breaking News</option>
                       <option value="question_hook">2. Question Hook</option>
                       <option value="shock_yellow">3. Shocking News</option>
                       <option value="story_dark">4. Narrative Hook</option>

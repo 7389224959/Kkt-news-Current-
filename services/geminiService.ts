@@ -1698,29 +1698,12 @@ STEP 2: BACKGROUND IMAGE PROMPT
 - CRITICAL: DO NOT GENERATE ANY TEXT, WORDS, OR LETTERS IN THE IMAGE. The image must be a clean background ONLY. Text will be added later via overlay.
 
 STEP 3: SELECT THEME & OUTPUT FORMAT (STRICT JSON)
-Choose one of these 19 themes based on the news type:
-If it's a "Standard/Breaking News" post, randomly rotate through these 10 so it's not robotic:
-1. "breaking_classic": Classic red breaking news.
-2. "breaking_modern": Minimal solid red bar.
-3. "breaking_cinematic": Cinema widescreen bars.
-4. "breaking_bold_center": Everything centered, huge presence.
-5. "breaking_yellow_flare": Yellow hazard highlights.
-6. "breaking_glassmorphism": Semi-transparent dark boxes.
-7. "breaking_split_box": Distinct floating text boxes.
-8. "breaking_magazine": Right-aligned, editorial layout.
-9. "breaking_ticker": News ticker style.
-10. "breaking_gradient_pop": Dark red/purple premium fade.
+Choose one of these 4 highly professional, bottom-heavy news themes based on the news type. These themes are designed to leave the top 60% of the image completely clear for visual impact:
 
-For specific topics, use these:
-11. "question_hook": Asking a question (e.g. "क्या आपके गांव में भी ऐसा हो सकता है?")
-12. "shock_yellow": Shocking news (e.g. "शादी की दावत बनी खतरा!")
-13. "story_dark": Narrative hook (e.g. "आखिर क्या हुआ वहाँ?")
-14. "fact_light": Informational bullet points
-15. "warning_alert": Cautionary alert (e.g. "सावधान!")
-16. "step_by_step": Sequential story
-17. "video_reel": Video style hook (e.g. "पूरी कहानी जानिए इस वीडियो में...")
-18. "minimal_white": Clean, minimal text
-19. "opinion_poll": Asking for opinion (e.g. "आप क्या सोचते हैं?")
+1. "pro_news_left": Left-aligned, bold, bottom-heavy text. Good for most news.
+2. "pro_news_center": Center-aligned, bottom-heavy text. Good for impactful one-liners.
+3. "pro_news_bold_red": Includes a distinct red background bar for the breaking tag at the bottom.
+4. "pro_news_glass": Dark semi-transparent bottom pane, highly legible text.
 
 Output STRICT JSON formatting:
 {

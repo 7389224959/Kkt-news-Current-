@@ -426,9 +426,118 @@ export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number,
   }
 
   // Theme logic starts here
-  let currentY = height - 100;
-  const theme = data.theme || 'breaking_red';
+  const theme = data.theme || 'pro_news_left';
 
+  // HELPER: Bottom-heavy Gradient
+  const drawBottomGradient = () => {
+      const gradient = ctx.createLinearGradient(0, height * 0.55, 0, height);
+      gradient.addColorStop(0, 'rgba(0,0,0,0)');
+      gradient.addColorStop(0.35, 'rgba(0,0,0,0.85)');
+      gradient.addColorStop(1, 'rgba(0,0,0,0.95)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, height * 0.55, width, height * 0.45);
+  };
+
+  if (theme.startsWith('pro_news_')) {
+      const isCenter = theme === 'pro_news_center';
+      const isRedBar = theme === 'pro_news_bold_red';
+      const isGlass = theme === 'pro_news_glass';
+      
+      if (isGlass) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+          ctx.beginPath();
+          ctx.roundRect(width * 0.05, height * 0.65, width * 0.9, height * 0.32, 16);
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+          ctx.stroke();
+      } else {
+          drawBottomGradient();
+      }
+
+      drawBranding('light');
+
+      let currentY = height - Math.max(30, height * 0.04); // bottom margin
+      ctx.textAlign = isCenter ? 'center' : 'left';
+      ctx.textBaseline = 'bottom';
+      const alignX = isCenter ? width / 2 : width * 0.08;
+
+      if (data.subheadline) {
+         let fontSize = Math.max(22, height * 0.038);
+         ctx.font = `normal ${fontSize}px ${hindiFontStack}`;
+         const lines = wrapText(data.subheadline, width * 0.84);
+         ctx.fillStyle = '#E5E7EB'; // Light Gray
+         for (let i = lines.length - 1; i >= 0; i--) {
+             ctx.fillText(lines[i], alignX, currentY);
+             currentY -= fontSize * 1.35;
+         }
+         currentY -= Math.max(5, height * 0.01);
+      }
+
+      if (data.headline_line_2) {
+         let fontSize = Math.max(46, height * 0.075);
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+         const lines = wrapText(data.headline_line_2, width * 0.84);
+         ctx.fillStyle = '#FBBF24'; // Bright News Yellow
+         ctx.shadowColor = 'rgba(0,0,0,0.9)';
+         ctx.shadowBlur = 8;
+         ctx.shadowOffsetY = 4;
+         for (let i = lines.length - 1; i >= 0; i--) {
+             ctx.fillText(lines[i], alignX, currentY);
+             currentY -= fontSize * 1.25;
+         }
+         ctx.shadowBlur = 0;
+         ctx.shadowOffsetY = 0;
+         currentY -= Math.max(5, height * 0.01);
+      }
+
+      if (data.headline_line_1) {
+         let fontSize = Math.max(38, height * 0.06);
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+         const lines = wrapText(data.headline_line_1, width * 0.84);
+         ctx.fillStyle = '#FFFFFF';
+         ctx.shadowColor = 'rgba(0,0,0,0.9)';
+         ctx.shadowBlur = 8;
+         ctx.shadowOffsetY = 4;
+         for (let i = lines.length - 1; i >= 0; i--) {
+             ctx.fillText(lines[i], alignX, currentY);
+             currentY -= fontSize * 1.25;
+         }
+         ctx.shadowBlur = 0;
+         ctx.shadowOffsetY = 0;
+         currentY -= Math.max(15, height * 0.02);
+      }
+
+      if (data.breaking_tag) {
+         let fontSize = Math.max(26, height * 0.04);
+         ctx.font = `bold ${fontSize}px ${hindiFontStack}`;
+         const tagText = data.breaking_tag.toUpperCase();
+         const textWidth = ctx.measureText(tagText).width;
+         const tagHeight = fontSize * 1.6;
+
+         if (isRedBar) {
+             ctx.fillStyle = '#DC2626';
+             ctx.fillRect(0, currentY - tagHeight, width, tagHeight);
+             ctx.fillStyle = '#FFFFFF';
+             ctx.textAlign = 'left';
+             ctx.textBaseline = 'middle';
+             ctx.fillText(tagText, width * 0.08, currentY - tagHeight / 2 + 2);
+         } else {
+             const startX = isCenter ? (width - textWidth - 40) / 2 : width * 0.08;
+             ctx.fillStyle = '#DC2626';
+             ctx.beginPath();
+             ctx.roundRect(startX, currentY - tagHeight, textWidth + 40, tagHeight, 6);
+             ctx.fill();
+             ctx.fillStyle = '#FFFFFF';
+             ctx.textAlign = 'center';
+             ctx.textBaseline = 'middle';
+             ctx.fillText(tagText, startX + (textWidth + 40) / 2, currentY - tagHeight / 2 + 2);
+         }
+      }
+      return;
+  }
+  
+  let currentY = height - 100;
   if (theme === 'minimal_white') {
      ctx.fillStyle = 'white';
      ctx.fillRect(0, 0, width, height);
