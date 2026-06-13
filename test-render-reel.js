@@ -1,11 +1,13 @@
 export const maxDuration = 300;
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
+import ffprobeStatic from 'ffprobe-static';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
 ffmpeg.setFfmpegPath(ffmpegStatic);
+ffmpeg.setFfprobePath(ffprobeStatic.path);
 
 const downloadFile = async (url, dest) => {
   if (!url) throw new Error('URL is missing');
@@ -248,7 +250,7 @@ export default async function handler(req, res) {
         command = command.input(audioPath);
       }
         
-      let durationLimit = audioPath ? exactAudioDuration : 15;
+      let durationLimit = audioPath ? 60 : 15;
 
       let outOpts = [
           '-c:v libx264',

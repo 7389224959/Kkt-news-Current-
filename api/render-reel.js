@@ -1,11 +1,13 @@
 export const maxDuration = 300;
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
+import ffprobeStatic from "ffprobe-static";
 import fs from "fs";
 import path from "path";
 import os from "os";
 
 ffmpeg.setFfmpegPath(ffmpegStatic);
+ffmpeg.setFfprobePath(ffprobeStatic.path);
 
 const downloadFile = async (url, dest) => {
   if (!url) throw new Error("URL is missing");
