@@ -62,13 +62,12 @@ export default async function handler(req, res) {
     }
 
     if (imageUrl) {
-      fbApiUrl = `https://graph.facebook.com/v19.0/${pageId}/photos`;
-      body.url = imageUrl;
+      body.link = imageUrl;
     }
 
     console.log("FB Publish Payload:", {
       message: body.message,
-      url: body.url,
+      link: body.link,
       published: body.published,
       scheduled_publish_time: body.scheduled_publish_time,
       endpoint: fbApiUrl
