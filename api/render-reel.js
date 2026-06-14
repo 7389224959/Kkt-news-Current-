@@ -91,7 +91,7 @@ export default async function handler(req, res) {
     }
     await downloadFile(templateMediaUrl, backgroundPath);
     await downloadFile(
-      "https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf",
+      "https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Bold.ttf",
       fontPath,
     );
 
