@@ -1941,6 +1941,7 @@ export const generateFullReelScript = async (
   const coords = template.coordinates || {};
   const hasHeadline = coords.headline_box && coords.headline_box !== "hidden";
   const hasTicker = coords.ticker_box && coords.ticker_box !== "hidden";
+  const hasSubtitles = coords.subtitle_box && coords.subtitle_box !== "hidden";
 
   const prompt = `You are a professional TV News Anchor. Write a high-retention, professional Hindi news script.
 Use ONLY facts from the article. NEVER hallucinate names, numbers, quotes, causes, or outcomes.
@@ -1957,11 +1958,11 @@ Format rules for high engagement:
 
 - Sentences MUST be short and punchy.
 - Tone MUST be like a professional TV news anchor (authoritative, clear, formal Hindi).
-
+${hasSubtitles ? `
 Subtitles Requirements (CRITICAL):
 - Break the ENTIRE voiceoverScript into chunks of maximum 3-5 words.
 - The combination of ALL subtitleChunks MUST match the EXACT word-for-word text of the voiceoverScript without skipping or summarizing anything.
-- Provide them as an array of strings under "subtitleChunks".
+- Provide them as an array of strings under "subtitleChunks".` : ""}
 
 Categorization & Style:
 - "reelType": Breaking News, Explainer, Debate, or Useful Update.
@@ -1969,10 +1970,9 @@ Categorization & Style:
 
 Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly escape inner quotes):
 {
-  "hookText": "Large hook text for top overlay",
-  ${hasHeadline ? '"headline": "Short top headline (if used instead of hookText)",' : ""}
+  ${hasHeadline ? '"headline": "Short top headline",' : ""}
   "voiceoverScript": "Full script combining Hook... (Must read like fluent conversational Hindi)",
-  "subtitleChunks": ["रायपुर में", "बड़ा मामला", "सामने आया"],
+  ${hasSubtitles ? '"subtitleChunks": ["रायपुर में", "बड़ा मामला", "सामने आया"],' : ""}
   ${hasTicker ? '"ticker": "Scrolling breaking news text",' : ""}
   "reelType": "string",
   "stylePreset": "string",

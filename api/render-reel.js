@@ -103,20 +103,20 @@ export default async function handler(req, res) {
       cStr.split(",").map((n) => Math.round(Number(n) * scaleFactor));
 
     const vBox =
-      template.coordinates.video_box !== "hidden"
+      template.coordinates.video_box && template.coordinates.video_box !== "hidden"
         ? parseAndScaleCoords(template.coordinates.video_box)
         : null;
     const hBox =
-      template.coordinates.headline_box !== "hidden"
+      template.coordinates.headline_box && template.coordinates.headline_box !== "hidden"
         ? parseAndScaleCoords(template.coordinates.headline_box)
         : null;
     const sBox =
       template.coordinates.subtitle_box &&
       template.coordinates.subtitle_box !== "hidden"
         ? parseAndScaleCoords(template.coordinates.subtitle_box)
-        : parseAndScaleCoords("50,900,620,200");
+        : null;
     const tBox =
-      template.coordinates.ticker_box !== "hidden"
+      template.coordinates.ticker_box && template.coordinates.ticker_box !== "hidden"
         ? parseAndScaleCoords(template.coordinates.ticker_box)
         : null;
 
@@ -197,38 +197,9 @@ export default async function handler(req, res) {
       );
     }
 
+
     let currentOutput = "bg_cropped";
     let nextInputIndex = 1;
-
-    if (scriptData.hookText) {
-      const hookFontSize = Math.round(75 * scaleFactor);
-      const hookPath = path.join(tempDir, "hook.txt");
-      fs.writeFileSync(
-        hookPath,
-        wrapText(scriptData.hookText, targetW - 100, hookFontSize),
-      );
-
-      filterGraph.push({
-        filter: "drawtext",
-        options: {
-          fontfile: fontPath,
-          fontcolor: "yellow",
-          fontsize: hookFontSize.toString(),
-          x: "(w-text_w)/2",
-          y: "100",
-          textfile: hookPath,
-          shadowcolor: "black@0.9",
-          shadowx: "4",
-          shadowy: "4",
-          bordercolor: "black",
-          borderw: "4",
-          enable: "between(t,0,4)",
-        },
-        inputs: currentOutput,
-        outputs: "with_hook",
-      });
-      currentOutput = "with_hook";
-    }
 
     // Prepare text content for words counting
     let rawLines =

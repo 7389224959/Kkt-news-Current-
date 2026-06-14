@@ -51,6 +51,9 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
         subtitle: first.coordinates?.subtitle_box || '',
         video: first.coordinates?.video_box || ''
       });
+      setShowHeadline(first.coordinates?.headline_box && first.coordinates.headline_box !== 'hidden');
+      setShowTicker(first.coordinates?.ticker_box && first.coordinates.ticker_box !== 'hidden');
+      setShowSubtitles(first.coordinates?.subtitle_box && first.coordinates.subtitle_box !== 'hidden');
     }
   }, [activeTemplates, selectedTemplateId]);
 
@@ -64,6 +67,9 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
         subtitle: t.coordinates?.subtitle_box || '',
         video: t.coordinates?.video_box || ''
       });
+      setShowHeadline(t.coordinates?.headline_box && t.coordinates.headline_box !== 'hidden');
+      setShowTicker(t.coordinates?.ticker_box && t.coordinates.ticker_box !== 'hidden');
+      setShowSubtitles(t.coordinates?.subtitle_box && t.coordinates.subtitle_box !== 'hidden');
     }
   };
 
@@ -538,9 +544,6 @@ function ReelEditorView({
     if (boxName === 'subtitle_box' && customCoords.subtitle) raw = customCoords.subtitle;
     if (boxName === 'video_box' && customCoords.video) raw = customCoords.video;
     
-    // Force subtitles to always appear since they are critical for reels
-    if (boxName === 'subtitle_box' && (!raw || raw === 'hidden')) raw = '50,900,620,200';
-    
     if (!raw || raw === 'hidden') return { x:0, y:0, w:0, h:0, hidden: true };
     const [x,y,w,h] = raw.split(',').map(Number);
     return { x: isNaN(x)?0:x, y: isNaN(y)?0:y, w: isNaN(w)?100:w, h: isNaN(h)?100:h, hidden: false };
@@ -675,20 +678,6 @@ function ReelEditorView({
                    <div className="w-4 h-4 bg-white border border-gray-400"></div>
                  </div>
                </div>
-             )}
-             
-             {scriptData.hookText && (
-                <div 
-                  className="absolute flex items-center justify-center pointer-events-none w-full"
-                  style={{ top: '60px' }}
-                >
-                   <span className="text-center font-bold px-4" style={{
-                      color: 'white', 
-                      fontSize: `${(parseInt(styleOverrides.headlineSize || '55') * scale)}px`,
-                      textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
-                      WebkitTextStroke: '1px black'
-                   }}>{scriptData.hookText}</span>
-                </div>
              )}
              
              {showHeadline && !headlineBox.hidden && (
