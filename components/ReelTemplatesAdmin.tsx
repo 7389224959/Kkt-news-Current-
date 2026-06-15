@@ -322,7 +322,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
     }
   };
   
-  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetField: 'mediaUrl' | 'introMediaUrl' | 'outroMediaUrl' | 'bgmUrl') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -336,7 +336,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
         // if file.type.startsWith('video/'), you might want to upload natively. 
         // For now let's assume images.
         const uploadedUrl = await uploadImage(base64);
-        setTemplate(prev => ({ ...prev, mediaUrl: uploadedUrl }));
+        setTemplate(prev => ({ ...prev, [targetField]: uploadedUrl }));
       };
       reader.readAsDataURL(file);
     } catch (err) {
@@ -535,7 +535,37 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
                  Using custom media.
                </div>
              )}
-             <input type="file" accept="image/*,video/mp4" onChange={handleMediaUpload} disabled={isUploading} className="text-sm" />
+             <input type="file" accept="image/*,video/mp4" onChange={(e) => handleMediaUpload(e, 'mediaUrl')} disabled={isUploading} className="text-sm" />
+          </div>
+
+          <div className="bg-purple-50 p-4 rounded border border-purple-100">
+             <label className="block text-sm font-bold text-purple-900 mb-2">Intro Video (Optional)</label>
+             {template.introMediaUrl && (
+               <div className="mb-2 text-sm text-green-600 font-bold break-all">
+                 Using intro video.
+               </div>
+             )}
+             <input type="file" accept="video/mp4" onChange={(e) => handleMediaUpload(e, 'introMediaUrl')} disabled={isUploading} className="text-sm" />
+          </div>
+
+          <div className="bg-purple-50 p-4 rounded border border-purple-100">
+             <label className="block text-sm font-bold text-purple-900 mb-2">Outro Video (Optional)</label>
+             {template.outroMediaUrl && (
+               <div className="mb-2 text-sm text-green-600 font-bold break-all">
+                 Using outro video.
+               </div>
+             )}
+             <input type="file" accept="video/mp4" onChange={(e) => handleMediaUpload(e, 'outroMediaUrl')} disabled={isUploading} className="text-sm" />
+          </div>
+
+          <div className="bg-purple-50 p-4 rounded border border-purple-100">
+             <label className="block text-sm font-bold text-purple-900 mb-2">Background Music (Optional)</label>
+             {template.bgmUrl && (
+               <div className="mb-2 text-sm text-green-600 font-bold break-all">
+                 Using custom BGM.
+               </div>
+             )}
+             <input type="file" accept="audio/*" onChange={(e) => handleMediaUpload(e, 'bgmUrl')} disabled={isUploading} className="text-sm border-purple-200" />
           </div>
 
           <div className="bg-blue-50 p-4 rounded border border-blue-100">

@@ -62,6 +62,9 @@ export interface ReelTemplate {
   category: string;
   mediaUrl: string; // Background MP4 or Image
   screenshotUrl: string;
+  introMediaUrl?: string;
+  outroMediaUrl?: string;
+  bgmUrl?: string;
   coordinates: {
     video_box: string;
     headline_box: string;

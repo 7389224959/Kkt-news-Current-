@@ -59,7 +59,28 @@ export default async function handler(req, res) {
 
     const backgroundPath = path.join(tempDir, "background.mp4");
     const fontPath = path.join(tempDir, "font.ttf");
-    const outputPath = path.join(tempDir, "output.mp4");
+    const middlePath = path.join(tempDir, "middle.mp4");
+
+    const introMediaUrl = template.introMediaUrl;
+    const outroMediaUrl = template.outroMediaUrl;
+    const bgmUrl = template.bgmUrl;
+
+    let introPath = null;
+    let outroPath = null;
+    let bgmPath = null;
+
+    if (introMediaUrl) {
+      introPath = path.join(tempDir, "intro.mp4");
+      await downloadFile(introMediaUrl, introPath);
+    }
+    if (outroMediaUrl) {
+      outroPath = path.join(tempDir, "outro.mp4");
+      await downloadFile(outroMediaUrl, outroPath);
+    }
+    if (bgmUrl) {
+      bgmPath = path.join(tempDir, "bgm.mp3");
+      await downloadFile(bgmUrl, bgmPath);
+    }
 
     const { overlayMediaUrl, visuals = [] } = req.body;
     let downloadedVisuals = [];
@@ -497,11 +518,15 @@ export default async function handler(req, res) {
           ? exactAudioDuration / downloadedVisuals.length
           : 5;
 
-      // Drone BGM
+      // Custom BGM or Drone BGM
       bgmIndex = nextInputIndex++;
-      command = command
-        .input("aevalsrc=0.1*sin(2*PI*110*t)+0.05*sin(2*PI*165*t)")
-        .inputFormat("lavfi");
+      if (bgmPath) {
+        command = command.input(bgmPath).inputOptions(["-stream_loop", "-1"]);
+      } else {
+        command = command
+          .input("aevalsrc=0.1*sin(2*PI*110*t)+0.05*sin(2*PI*165*t)")
+          .inputFormat("lavfi");
+      }
 
       // Whoosh SFX at transitions
       sfxIndex = nextInputIndex++;
@@ -532,13 +557,13 @@ export default async function handler(req, res) {
         filterGraph.push(
           {
             filter: "volume",
-            options: "1.0",
+            options: "0.8",
             inputs: `${audioIndex}:a`,
             outputs: "vo_mix",
           },
           {
             filter: "volume",
-            options: "0.12",
+            options: bgmPath ? "0.2" : "0.12",
             inputs: `${bgmIndex}:a`,
             outputs: "bgm_mix",
           },
@@ -577,12 +602,58 @@ export default async function handler(req, res) {
         .complexFilter(filterGraph)
         .map(currentOutput)
         .outputOptions(outOpts)
-        .save(outputPath)
+        .save(middlePath)
         .on("end", () => resolve())
         .on("error", (err) => reject(err));
     });
 
-    const outputBuffer = fs.readFileSync(outputPath);
+    let finalPath = middlePath;
+    if (introPath || outroPath) {
+      finalPath = path.join(tempDir, "final.mp4");
+      await new Promise((resolve, reject) => {
+        let concatCommand = ffmpeg();
+        let filterParts = [];
+        let concatInputs = [];
+        
+        let fileIdx = 0;
+        
+        // Ensure all inputs have audio or fake audio to prevent concat failure
+        // We use aevalsrc for dummy audio if an input might not have it.
+        const addPart = (fPath) => {
+          concatCommand = concatCommand.input(fPath);
+          // Scale to 720:1280 standard aspect ratio
+          filterParts.push(`[${fileIdx}:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,format=yuv420p[v${fileIdx}];[${fileIdx}:a]afifo[a${fileIdx}]`);
+          concatInputs.push(`[v${fileIdx}][a${fileIdx}]`);
+          fileIdx++;
+        };
+
+        if (introPath) addPart(introPath);
+        addPart(middlePath);
+        if (outroPath) addPart(outroPath);
+
+        const complexFilterStr = filterParts.join(';') + ';' + concatInputs.join('') + `concat=n=${fileIdx}:v=1:a=1[outv][outa]`;
+
+        console.log("Concat filter graph:", complexFilterStr);
+
+        concatCommand
+          .complexFilter(complexFilterStr)
+          .map('[outv]')
+          .map('[outa]')
+          .outputOptions([
+             "-c:v libx264",
+             "-preset ultrafast",
+             "-crf 32",
+             "-pix_fmt yuv420p",
+             "-r 24",
+             "-c:a aac"
+          ])
+          .save(finalPath)
+          .on("end", () => resolve())
+          .on("error", (err) => reject(err));
+      });
+    }
+
+    const outputBuffer = fs.readFileSync(finalPath);
     fs.rmSync(tempDir, { recursive: true, force: true });
 
     res.setHeader("Content-Type", "video/mp4");
