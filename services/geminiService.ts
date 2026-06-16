@@ -158,81 +158,10 @@ export interface NewsDraft {
   facebookCaption?: string;
 }
 
-export const getStockImageUrl = async (
-  keywords: string,
-  category?: Category,
-): Promise<string> => {
-  if (typeof keywords !== "string") {
-    keywords = String(keywords || "");
-  }
-
-  // Create a safe English representation for the background generation to prevent weird AI generations
-  const safeCategory = String(category || "news")
-    .toLowerCase()
-    .replace(/[^a-z]/g, "");
-
-  const contextMap: Record<string, string> = {
-    politics: "real political rally parliament crowd event photo",
-    national: "real government announcement event photo",
-    state: "real regional town hall breaking event photo",
-    crime: "real police intervention raid scene blur",
-    international: "real international summit global event background",
-    sports: "real sports stadium event background",
-    entertainment: "real red carpet press conference event",
-    lifestyle: "real lifestyle authentic daily life scene",
-  };
-  const categoryContext =
-    contextMap[safeCategory] || "real breaking news event photo";
-
-  const cleanKeywords = keywords
-    .replace(/[^\p{L}\p{M}\p{N}\s,]/gu, "")
-    .split(/[\s,]+/)
-    .filter(Boolean)
-    .slice(0, 6)
-    .join(" ");
-
-  const prompt = `Realistic Indian news report photography about: ${cleanKeywords}. Professional editorial journalism photography. Must be highly relevant to the topic. Do not generate generic monuments or random landscapes unless specifically mentioned. No text or watermarks.`;
-
-  try {
-    const fetchUrl =
-      typeof window !== "undefined"
-        ? "/api/cloudflare-image"
-        : process.env.VITE_SITE_URL
-          ? `${process.env.VITE_SITE_URL}/api/cloudflare-image`
-          : "http://localhost:3000/api/cloudflare-image";
-
-    const cfReq = await fetch(fetchUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt,
-        model: "@cf/black-forest-labs/flux-1-schnell",
-      }),
-    });
-
-    if (cfReq.ok) {
-      const resData = await cfReq.json();
-      if (resData.base64) {
-        const b64 = `data:image/jpeg;base64,${resData.base64}`;
-        const { uploadImage } = await import("./supabase");
-        return await uploadImage(b64);
-      }
-    } else {
-      console.error(
-        "Cloudflare fallback image generation failed:",
-        await cfReq.text(),
-      );
-    }
-  } catch (e) {
-    console.error("Cloudflare fallback image fetch failed", e);
-  }
-  return "";
-};
-
 import { compressImage } from "../src/utils/imageUtils";
 
 /**
- * Generates a high-quality AI image using Gemini 2.5 Flash Image
+ * Generates a high-quality AI image using Gemini 3.1 Flash Image
  */
 export const generateAiImage = async (
   prompt: string,
@@ -243,12 +172,14 @@ export const generateAiImage = async (
   if (!ai) throw new Error("API Key missing");
 
   try {
-    const basePrompt = `Generate an ultra-realistic Indian news image about: ${prompt}
+    const basePrompt = `Generate an ultra-realistic local Indian news image about: ${prompt}
 
 STRICT RULES:
-Understand the news topic first and generate a relevant real-world scene or object related to it.
-Avoid random human portraits unless necessary.
-Prefer environments, places, objects, government offices, roads, farms, weather, police, technology, crowds, or activities matching the news.
+1. Understand the news topic first and generate a relevant real-world scene or object related to it.
+2. Ensure the image has a highly local, grounded Indian feel (e.g. realistic Indian streets, local offices, villages, or typical Indian environment). 
+3. EXTREMELY IMPORTANT: Do NOT just generate generic iconic monuments like the Taj Mahal unless the news is explicitly about them. 
+4. Avoid random human portraits unless necessary.
+5. Prefer environments, places, objects, government offices, roads, farms, weather, police, technology, crowds, or activities matching the news.
 
 Style:
 Authentic newspaper photo, documentary journalism, photorealistic, natural lighting.
@@ -278,7 +209,7 @@ IMPORTANT: If a reference image is provided, you MUST match the face of the pers
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-image",
+      model: "gemini-3.1-flash-image",
       contents: { parts },
     });
 
@@ -1217,28 +1148,17 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
                 const base64Img = await generateAiImage(imagePromptToUse);
                 aiGenImg = await uploadImage(base64Img);
               } else {
-                aiGenImg = await getStockImageUrl(imagePromptToUse, category);
+                const base64Img = await generateAiImage(imagePromptToUse);
+                aiGenImg = await uploadImage(base64Img);
               }
               if (aiGenImg) {
                 additionalImages.push(aiGenImg);
               }
             } catch (err) {
               console.error(
-                "Additional AI Image generation failed, fallback to Cloudflare",
+                "Additional AI Image generation failed",
                 err,
               );
-              try {
-                let aiGenImg = await getStockImageUrl(
-                  imagePromptToUse,
-                  category,
-                );
-                if (aiGenImg) additionalImages.push(aiGenImg);
-              } catch (fallbackErr) {
-                console.error(
-                  "Additional AI image fallback also failed",
-                  fallbackErr,
-                );
-              }
             }
           }
 
@@ -1254,20 +1174,14 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
             );
 
             try {
-              if (imageGenModel === "gemini") {
-                console.log("Generating AI hero image with Gemini...");
-                const base64Img = await generateAiImage(imagePromptToUse);
-                heroImage = await uploadImage(base64Img);
-              } else {
-                console.log("Generating AI hero image with Cloudflare...");
-                heroImage = await getStockImageUrl(imagePromptToUse, category);
-              }
+              console.log("Generating AI hero image with Gemini...");
+              const base64Img = await generateAiImage(imagePromptToUse);
+              heroImage = await uploadImage(base64Img);
             } catch (err) {
               console.error(
-                "Image generation failed, fallback to Cloudflare",
+                "Image generation failed",
                 err,
               );
-              heroImage = await getStockImageUrl(imagePromptToUse, category);
             }
           }
 
@@ -1327,13 +1241,9 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
           }
         } catch (e) {
           console.warn(
-            "AI Image generation/upload failed, falling back to stock:",
+            "AI Image generation/upload failed:",
             e,
           );
-          const dp = (a as any).imageGenerationPlan || {};
-          const imagePromptToUse =
-            dp.englishImagePrompt || a.imagePrompt || a.title;
-          imageUrl = await getStockImageUrl(imagePromptToUse, category);
         }
       } else {
         console.log(`Manual image override for: ${a.title}`);
