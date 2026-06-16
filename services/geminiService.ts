@@ -166,6 +166,22 @@ export const getStockImageUrl = async (
     keywords = String(keywords || "");
   }
 
+  // Translate to English if Hindi text is detected, as Flux/image models struggle with it
+  if (/[\u0900-\u097F]/.test(keywords)) {
+    try {
+      const ai = getAiClient();
+      if (ai) {
+        const transRes = await ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: `Translate this Hindi news headline into a highly visual, 1-sentence English image prompt. Describe the scene or objects. Do not include names or text strings. Keyword: ${keywords}`,
+        });
+        if (transRes.text) keywords = transRes.text.trim();
+      }
+    } catch (e) {
+      console.warn("Translation failed, proceeding with original", e);
+    }
+  }
+
   // Create a safe English representation for the background generation to prevent weird AI generations
   const safeCategory = String(category || "news")
     .toLowerCase()
@@ -243,7 +259,20 @@ export const generateAiImage = async (
   if (!ai) throw new Error("API Key missing");
 
   try {
-    const basePrompt = `Generate an ultra-realistic Indian news image about: ${prompt}
+    let cleanPrompt = prompt;
+    if (/[\u0900-\u097F]/.test(cleanPrompt)) {
+      try {
+        const transRes = await ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: `Translate this Hindi news headline into a highly visual, 1-sentence English image prompt. Describe the scene or objects. Do not include names or text strings. Keyword: ${cleanPrompt}`,
+        });
+        if (transRes.text) cleanPrompt = transRes.text.trim();
+      } catch (e) {
+        console.warn("Translation failed, proceeding with original", e);
+      }
+    }
+
+    const basePrompt = `Generate an ultra-realistic Indian news image about: ${cleanPrompt}
 
 STRICT RULES:
 Understand the news topic first and generate a relevant real-world scene or object related to it.
@@ -280,6 +309,11 @@ IMPORTANT: If a reference image is provided, you MUST match the face of the pers
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-image",
       contents: { parts },
+      config: {
+        imageConfig: {
+          aspectRatio: "16:9",
+        },
+      },
     });
 
     for (const part of response.candidates?.[0]?.content?.parts || []) {
