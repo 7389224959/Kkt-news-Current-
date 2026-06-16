@@ -19,7 +19,7 @@ import {
   deleteOldArticles
 } from '../services/articleService';
 import { uploadImage } from '../services/supabase';
-import { draftNewsReport, generateAiImage, mapCategory, fetchTrendingKeywords, generateViralPost, generateViralImage } from '../services/geminiService';
+import { draftNewsReport, getStockImageUrl, generateAiImage, mapCategory, fetchTrendingKeywords, generateViralPost, generateViralImage } from '../services/geminiService';
 import { postToFacebook, publishFacebookPost } from '../services/facebookService';
 import { compressImage, overlayTextOnImage } from '../src/utils/imageUtils';
 import { 
@@ -789,15 +789,7 @@ const Admin: React.FC = () => {
 
       // Use centralized stock image helper
       const category = draft.category ? mapCategory(draft.category) : currentArticle.category;
-      
-      let imageUrl = "";
-      try {
-        const base64Img = await generateAiImage(draft.imageKeywords || draft.title || "news");
-        const { uploadImage } = await import('../services/supabase');
-        imageUrl = await uploadImage(base64Img) || "";
-      } catch (e) {
-        console.error("AI Image Generation failed", e);
-      }
+      const imageUrl = await getStockImageUrl(draft.imageKeywords || "news", category);
       
       setCurrentArticle(prev => ({
         ...prev,
