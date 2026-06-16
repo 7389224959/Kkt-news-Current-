@@ -201,13 +201,11 @@ export const getStockImageUrl = async (
     contextMap[safeCategory] || "real breaking news event photo";
 
   const cleanKeywords = keywords
-    .replace(/[^\p{L}\p{M}\p{N}\s,]/gu, "")
-    .split(/[\s,]+/)
-    .filter(Boolean)
-    .slice(0, 6)
-    .join(" ");
+    .replace(/[^\p{L}\p{M}\p{N}\s,]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  const prompt = `Realistic Indian news report photography about: ${cleanKeywords}. Professional editorial journalism photography. Must be highly relevant to the topic. Do not generate generic monuments or random landscapes unless specifically mentioned. No text or watermarks.`;
+  const prompt = `Realistic Indian news report photography about: ${cleanKeywords}. Professional editorial journalism photography, ${categoryContext}. Must be highly relevant to the topic. No text or watermarks.`;
 
   try {
     const fetchUrl =
