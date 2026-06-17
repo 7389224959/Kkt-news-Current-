@@ -2052,6 +2052,7 @@ const Admin: React.FC = () => {
                    </button>
                    <button id="auto-fetch-only-btn" data-testid="auto-fetch-only" onClick={handleAutoFetchOnly} className="hidden" />
                    <button id="auto-viral-only-btn" data-testid="auto-viral-only" onClick={handleAutoViralOnly} className="hidden" />
+                   <button id="auto-reel-only-btn" data-testid="auto-reel-only" onClick={handleOpenReelModalAuto} className="hidden" />
                    <button 
                      onClick={() => setShowDailyNewsModal(true)}
                      className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-all"

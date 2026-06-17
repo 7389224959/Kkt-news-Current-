@@ -20,7 +20,7 @@ if (!ADMIN_PASSWORD) {
 }
 
 const MAX_RETRIES = 4;
-const WAIT_TIMEOUT_MS = 5 * 60 * 1000;
+const WAIT_TIMEOUT_MS = 8 * 60 * 1000;
 
 async function takeScreenshot(page, stepName) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -132,6 +132,7 @@ async function executePhase(page, buttonSelector, phaseName) {
 async function runAutoRobot() {
   let fetchSuccess = false;
   let viralSuccess = false;
+  let reelSuccess = false;
   let attempt = 0;
 
   while (attempt <= MAX_RETRIES) {
@@ -189,6 +190,18 @@ async function runAutoRobot() {
         }
       } else if (viralSuccess) {
         console.log("Auto Viral already succeeded previously. Skipping.");
+      }
+
+      if (fetchSuccess && viralSuccess && !reelSuccess) {
+        try {
+          const res = await executePhase(page, "auto-reel-only-btn", "Auto Reel");
+          reelSuccess = true;
+          console.log("Auto Reel succeeded", res.message);
+        } catch (e) {
+          throw new Error(`Auto Reel Failed: ${e.message}`);
+        }
+      } else if (reelSuccess) {
+        console.log("Auto Reel already succeeded previously. Skipping.");
       }
 
       // If we reach here, everything succeeded
