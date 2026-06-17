@@ -30,6 +30,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
   const [customCoords, setCustomCoords] = useState({ headline: '', ticker: '', subtitle: '', video: '' });
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [status, setStatus] = useState('');
 
   const activeTemplates = settings?.reelTemplates?.filter((t: any) => t.isActive) || [];
@@ -109,6 +110,58 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
     }
   };
 
+  const doPublishReel = async (blob: Blob, message: string) => {
+    setIsPublishing(true);
+    setStatus('Preparing video upload...');
+    try {
+      let finalVideoUrl = '';
+      let payloadVideo = '';
+      
+      try {
+         setStatus('Uploading video to storage (bypassing limits)...');
+         const fileToUpload = new File([blob], `reel-${Date.now()}.mp4`, { type: 'video/mp4' });
+         finalVideoUrl = await uploadImage(fileToUpload);
+         setStatus('Publishing to Facebook...');
+      } catch (uploadErr: any) {
+         console.warn('Storage upload failed, falling back to direct base64 transfer...', uploadErr);
+         const rawBase64 = await new Promise<string>((res, rej) => { 
+            const reader = new FileReader(); 
+            reader.onloadend = () => res(reader.result as string); 
+            reader.onerror = rej; 
+            reader.readAsDataURL(blob); 
+         });
+         payloadVideo = rawBase64;
+         setStatus('Publishing to Facebook...');
+      }
+
+      const res = await fetch('/api/facebook/post-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+           message, 
+           videoUrl: finalVideoUrl || undefined,
+           videoBase64: finalVideoUrl ? undefined : payloadVideo
+        }),
+      });
+      if (!res.ok) {
+         let errMsg = await res.text();
+         try { errMsg = JSON.parse(errMsg).error; } catch(e){}
+         throw new Error(errMsg || 'Failed to post reel to Facebook');
+      }
+      const data = await res.json();
+      alert('Successfully published reel to Facebook!\nURL: ' + data.url);
+      
+      if (autoStart) {
+        onClose(); // Automatically close wizard on success if autoStart is true
+      }
+    } catch (e: any) {
+      alert('Error publishing reel: ' + e.message);
+    } finally {
+      setIsPublishing(false);
+      setStatus('');
+    }
+  };
+
   const handleAutoAllSteps = async (article: Article, templateId: string) => {
     setIsGenerating(true);
     try {
@@ -176,7 +229,14 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       const blob = await renderRes.blob();
       const objectUrl = URL.createObjectURL(blob);
       setVideoBase64(objectUrl);
-      setStep(4);
+      
+      if (autoStart) {
+         setStatus('Step 4/4: Publishing to Facebook...');
+         const fbMessage = updatedScriptData.headline || article.title || 'Check out our latest reel!';
+         await doPublishReel(blob, fbMessage);
+      } else {
+         setStep(4);
+      }
     } catch(e: any) {
       console.error(e);
       alert('1-Click Auto failed: ' + e.message);
@@ -583,6 +643,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
 
       {step === 4 && (
         <ReelEditorView 
+            isPublishing={isPublishing}
+            doPublishReel={doPublishReel}
             onClose={onClose} 
             templateId={selectedTemplateId} 
             activeTemplates={activeTemplates}
@@ -611,14 +673,13 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
 }
 
 function ReelEditorView({
-  onClose, templateId, activeTemplates, scriptData, setScriptData,
+  isPublishing, doPublishReel, onClose, templateId, activeTemplates, scriptData, setScriptData,
   visualMode, customMediaUrl, overlayMode, overlayMediaUrl, selectedArticle, showHeadline, showTicker, showSubtitles,
   customCoords, setCustomCoords, setStep, handleRender, videoBase64, isGenerating, setStatus, audioUrl
 }: any) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [activeBox, setActiveBox] = useState<string | null>(null);
   const [dragAction, setDragAction] = useState<'move' | 'resize' | null>(null);
-  const [isPublishing, setIsPublishing] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [startCoords, setStartCoords] = useState<{x:number,y:number,w:number,h:number} | null>(null);
 
@@ -735,64 +796,17 @@ function ReelEditorView({
 
   const handlePublishReel = async () => {
     if (!videoBase64) return;
-    setIsPublishing(true);
-    setStatus('Preparing video upload...');
-    try {
-      let finalVideoUrl = '';
-      let payloadVideo = '';
-      
-      const fbMessage = scriptData.headline || selectedArticle?.title || 'Check out our latest reel!';
-
-      // Get Blob
-      let blob;
-      if (videoBase64.startsWith('blob:')) {
-         blob = await fetch(videoBase64).then(r => r.blob());
-      } else {
-         const d = videoBase64.startsWith('data:') ? videoBase64 : `data:video/mp4;base64,${videoBase64}`;
-         blob = await fetch(d).then(r => r.blob());
-      }
-
-      try {
-         setStatus('Uploading video to storage (bypassing limits)...');
-         // Use a .mp4 extension explicitly so Supabase knows it's a video
-         const fileToUpload = new File([blob], `reel-${Date.now()}.mp4`, { type: 'video/mp4' });
-         finalVideoUrl = await uploadImage(fileToUpload);
-         setStatus('Publishing to Facebook...');
-      } catch (uploadErr: any) {
-         console.warn('Storage upload failed, falling back to direct base64 transfer...', uploadErr);
-         // Fallback to base64 if Supabase is not configured or fails
-         const rawBase64 = await new Promise<string>((res, rej) => { 
-            const reader = new FileReader(); 
-            reader.onloadend = () => res(reader.result as string); 
-            reader.onerror = rej; 
-            reader.readAsDataURL(blob); 
-         });
-         payloadVideo = rawBase64;
-         setStatus('Publishing to Facebook...');
-      }
-
-      const res = await fetch('/api/facebook/post-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-           message: fbMessage, 
-           videoUrl: finalVideoUrl || undefined,
-           videoBase64: finalVideoUrl ? undefined : payloadVideo
-        }),
-      });
-      if (!res.ok) {
-         let errMsg = await res.text();
-         try { errMsg = JSON.parse(errMsg).error; } catch(e){}
-         throw new Error(errMsg || 'Failed to post reel to Facebook');
-      }
-      const data = await res.json();
-      alert('Successfully published reel to Facebook!\nURL: ' + data.url);
-    } catch (e: any) {
-      alert('Error publishing reel: ' + e.message);
-    } finally {
-      setIsPublishing(false);
-      setStatus('');
+    
+    let blob;
+    if (videoBase64.startsWith('blob:')) {
+       blob = await fetch(videoBase64).then(r => r.blob());
+    } else {
+       const d = videoBase64.startsWith('data:') ? videoBase64 : `data:video/mp4;base64,${videoBase64}`;
+       blob = await fetch(d).then(r => r.blob());
     }
+    
+    const fbMessage = scriptData.headline || selectedArticle?.title || 'Check out our latest reel!';
+    await doPublishReel(blob, fbMessage);
   };
 
   return (
