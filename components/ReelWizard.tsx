@@ -3,6 +3,7 @@ import { RefreshCw, Zap, X, Image as ImageIcon, Video, Upload, Settings, Chevron
 import { Article } from '../types';
 import { generateFullReelScript, generateReelAudio, generateAiImage } from '../services/geminiService';
 import { pcmBase64ToWavUrl, pcmBase64ToWavDataUri } from '../src/utils/audioUtils';
+import { uploadImage } from '../services/supabase';
 
 export default function ReelWizard({ articles, settings, onClose, autoStart = false }: { articles: Article[], settings: any, onClose: () => void, autoStart?: boolean }) {
   const [step, setStep] = useState(1);
@@ -735,11 +736,31 @@ function ReelEditorView({
   const handlePublishReel = async () => {
     if (!videoBase64) return;
     setIsPublishing(true);
-    setStatus('Publishing to Facebook...');
+    setStatus('Preparing video upload...');
     try {
-      let payloadVideo = videoBase64;
+      let finalVideoUrl = '';
+      let payloadVideo = '';
+      
+      const fbMessage = scriptData.headline || selectedArticle?.title || 'Check out our latest reel!';
+
+      // Get Blob
+      let blob;
       if (videoBase64.startsWith('blob:')) {
-         const blob = await fetch(videoBase64).then(r => r.blob());
+         blob = await fetch(videoBase64).then(r => r.blob());
+      } else {
+         const d = videoBase64.startsWith('data:') ? videoBase64 : `data:video/mp4;base64,${videoBase64}`;
+         blob = await fetch(d).then(r => r.blob());
+      }
+
+      try {
+         setStatus('Uploading video to storage (bypassing limits)...');
+         // Use a .mp4 extension explicitly so Supabase knows it's a video
+         const fileToUpload = new File([blob], `reel-${Date.now()}.mp4`, { type: 'video/mp4' });
+         finalVideoUrl = await uploadImage(fileToUpload);
+         setStatus('Publishing to Facebook...');
+      } catch (uploadErr: any) {
+         console.warn('Storage upload failed, falling back to direct base64 transfer...', uploadErr);
+         // Fallback to base64 if Supabase is not configured or fails
          const rawBase64 = await new Promise<string>((res, rej) => { 
             const reader = new FileReader(); 
             reader.onloadend = () => res(reader.result as string); 
@@ -747,15 +768,17 @@ function ReelEditorView({
             reader.readAsDataURL(blob); 
          });
          payloadVideo = rawBase64;
-      } else if (!videoBase64.startsWith('data:')) {
-         payloadVideo = `data:video/mp4;base64,${videoBase64}`;
+         setStatus('Publishing to Facebook...');
       }
-      
-      const fbMessage = scriptData.headline || selectedArticle?.title || 'Check out our latest reel!';
+
       const res = await fetch('/api/facebook/post-video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: fbMessage, videoBase64: payloadVideo }),
+        body: JSON.stringify({ 
+           message: fbMessage, 
+           videoUrl: finalVideoUrl || undefined,
+           videoBase64: finalVideoUrl ? undefined : payloadVideo
+        }),
       });
       if (!res.ok) {
          let errMsg = await res.text();

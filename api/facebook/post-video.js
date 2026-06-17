@@ -4,9 +4,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { message, videoBase64 } = req.body;
+    const { message, videoBase64, videoUrl } = req.body;
     
-    if (!videoBase64) {
+    if (!videoBase64 && !videoUrl) {
       return res.status(400).json({ error: 'Video is required.' });
     }
     
@@ -30,18 +30,22 @@ export default async function handler(req, res) {
 
     const fbApiUrl = `https://graph.facebook.com/v19.0/${pageId}/videos`;
     
-    // Extract base64 data
-    const matches = videoBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    if (!matches || matches.length !== 3) {
-      return res.status(400).json({ error: 'Invalid base64 string' });
-    }
-    const buffer = Buffer.from(matches[2], 'base64');
-    
-    // Using native FormData to upload the video
+    // Using native FormData to upload the video or URL
     const form = new FormData();
     form.append('access_token', resolvedAccessToken);
     form.append('description', message || '');
-    form.append('source', new Blob([buffer], { type: 'video/mp4' }), 'reel.mp4');
+
+    if (videoUrl) {
+      form.append('file_url', videoUrl);
+    } else if (videoBase64) {
+      // Extract base64 data
+      const matches = videoBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (!matches || matches.length !== 3) {
+        return res.status(400).json({ error: 'Invalid base64 string' });
+      }
+      const buffer = Buffer.from(matches[2], 'base64');
+      form.append('source', new Blob([buffer], { type: 'video/mp4' }), 'reel.mp4');
+    }
 
     console.log("Starting FB Video Upload...");
 
