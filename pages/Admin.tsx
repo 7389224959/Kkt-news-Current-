@@ -170,6 +170,7 @@ const Admin: React.FC = () => {
 
   // --- Reel Generation State ---
   const [showReelModal, setShowReelModal] = useState(false);
+  const [reelAutoStart, setReelAutoStart] = useState(false);
   const [isGeneratingReel, setIsGeneratingReel] = useState(false);
   const [reelStatus, setReelStatus] = useState('');
   const [reelScriptData, setReelScriptData] = useState<any>(null);
@@ -1194,6 +1195,15 @@ const Admin: React.FC = () => {
   };
 
   const handleOpenReelModal = () => {
+    setReelAutoStart(false);
+    setShowReelModal(true);
+    setReelScriptData(null);
+    setReelAudioUrl(null);
+    setReelStatus('');
+  };
+
+  const handleOpenReelModalAuto = () => {
+    setReelAutoStart(true);
     setShowReelModal(true);
     setReelScriptData(null);
     setReelAudioUrl(null);
@@ -2057,11 +2067,18 @@ const Admin: React.FC = () => {
                      Auto Viral Post
                    </button>
                    <button 
+                     onClick={handleOpenReelModalAuto}
+                     className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-all"
+                   >
+                     <Wand2 size={18} />
+                     Auto Reel (Complete)
+                   </button>
+                   <button 
                      onClick={handleOpenReelModal}
                      className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-all"
                    >
                      <Zap size={18} />
-                     Auto Reel
+                     Reel Wizard
                    </button>
                    <button 
                      onClick={handleDeleteOldArticles}
@@ -2854,7 +2871,7 @@ const Admin: React.FC = () => {
       {showReelModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowReelModal(false)}>
           <div className="w-full max-w-4xl" onClick={e => e.stopPropagation()}>
-            <ReelWizard articles={articles} settings={settings} onClose={() => setShowReelModal(false)} />
+            <ReelWizard articles={articles} settings={settings} onClose={() => setShowReelModal(false)} autoStart={reelAutoStart} />
           </div>
         </div>
       )}

@@ -4,7 +4,7 @@ import { Article } from '../types';
 import { generateFullReelScript, generateReelAudio, generateAiImage } from '../services/geminiService';
 import { pcmBase64ToWavUrl, pcmBase64ToWavDataUri } from '../src/utils/audioUtils';
 
-export default function ReelWizard({ articles, settings, onClose }: { articles: Article[], settings: any, onClose: () => void }) {
+export default function ReelWizard({ articles, settings, onClose, autoStart = false }: { articles: Article[], settings: any, onClose: () => void, autoStart?: boolean }) {
   const [step, setStep] = useState(1);
   const [selectedArticleId, setSelectedArticleId] = useState<string>('latest');
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
@@ -107,6 +107,94 @@ export default function ReelWizard({ articles, settings, onClose }: { articles: 
       setStatus('');
     }
   };
+
+  const handleAutoAllSteps = async (article: Article, templateId: string) => {
+    setIsGenerating(true);
+    try {
+      setStatus('Step 1/3: Generating full script & text...');
+      const template = activeTemplates.find((t: any) => t.id === templateId) || activeTemplates[0];
+      const articleContent = `${article.title}\n\n${article.content}`;
+      
+      const modifiedTemplate = JSON.parse(JSON.stringify(template));
+      if (!showHeadline) modifiedTemplate.coordinates.headline_box = 'hidden';
+      if (!showTicker) modifiedTemplate.coordinates.ticker_box = 'hidden';
+      if (!showSubtitles) modifiedTemplate.coordinates.subtitle_box = 'hidden';
+
+      const result = await generateFullReelScript(articleContent, modifiedTemplate);
+      const updatedScriptData = {
+        ...result,
+        headline: showHeadline ? result.headline : '',
+        ticker: showTicker ? result.ticker : '',
+        subtitles: showSubtitles ? result.subtitles : [],
+        fullScript: result.voiceoverScript
+      };
+      setScriptData(updatedScriptData);
+
+      setStatus('Step 2/3: Generating voiceover...');
+      const base64Audio = await generateReelAudio(updatedScriptData.fullScript || updatedScriptData.voiceoverScript);
+      const newAudioUrl = pcmBase64ToWavUrl(base64Audio);
+      const newAudioDataUri = pcmBase64ToWavDataUri(base64Audio);
+      setAudioUrl(newAudioUrl);
+      setAudioDataUri(newAudioDataUri);
+
+      setStatus('Step 3/3: Rendering Final FFMPEG Video...');
+      setVisualMode('template');
+      setOverlayMode('post');
+
+      let finalMediaUrl = template.mediaUrl || template.screenshotUrl;
+      let finalOverlayUrl = article.image; // Default overlay from post
+
+      // Gather visual materials just in case
+      let initialVisuals = [];
+      if (finalOverlayUrl) initialVisuals.push(finalOverlayUrl);
+      const contentStr = article.content || '';
+      const match = contentStr.match(/<!-- additionalImages:\s*(\[.*?\])\s*-->/);
+      if (match && match[1]) {
+         try {
+            const parsedArray = JSON.parse(match[1]);
+            if (Array.isArray(parsedArray)) initialVisuals.push(...parsedArray);
+         } catch(e) {}
+      }
+      const uniqueVisuals = Array.from(new Set(initialVisuals.filter(Boolean)));
+      
+      const renderRes = await fetch('/api/render-reel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audioUrl: newAudioDataUri,
+          templateMediaUrl: finalMediaUrl,
+          overlayMediaUrl: finalOverlayUrl,
+          visuals: uniqueVisuals,
+          scriptData: updatedScriptData,
+          template: modifiedTemplate,
+          styleOverrides: {}
+        })
+      });
+
+      if (!renderRes.ok) throw new Error(await renderRes.text());
+      const blob = await renderRes.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      setVideoBase64(objectUrl);
+      setStep(4);
+    } catch(e: any) {
+      console.error(e);
+      alert('1-Click Auto failed: ' + e.message);
+      setStep(1);
+    } finally {
+      setIsGenerating(false);
+      setStatus('');
+    }
+  };
+
+  const autoStarted = React.useRef(false);
+  useEffect(() => {
+    if (autoStart && articles.length > 0 && activeTemplates.length > 0 && !autoStarted.current) {
+       autoStarted.current = true;
+       let articleToUse = selectedArticle || articles[0];
+       let templateIdToUse = selectedTemplateId || activeTemplates[0].id;
+       handleAutoAllSteps(articleToUse, templateIdToUse);
+    }
+  }, [autoStart, articles, activeTemplates, selectedArticle, selectedTemplateId]);
 
   const handleGenerateVoice = async () => {
     setIsGenerating(true);
@@ -529,6 +617,7 @@ function ReelEditorView({
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [activeBox, setActiveBox] = useState<string | null>(null);
   const [dragAction, setDragAction] = useState<'move' | 'resize' | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [startCoords, setStartCoords] = useState<{x:number,y:number,w:number,h:number} | null>(null);
 
@@ -642,6 +731,46 @@ function ReelEditorView({
   const scale = 360 / 1080; 
 
   const isVideo = finalMediaUrl?.match(/\.(mp4|webm|mov)$/i) || finalMediaUrl?.startsWith('data:video');
+
+  const handlePublishReel = async () => {
+    if (!videoBase64) return;
+    setIsPublishing(true);
+    setStatus('Publishing to Facebook...');
+    try {
+      let payloadVideo = videoBase64;
+      if (videoBase64.startsWith('blob:')) {
+         const blob = await fetch(videoBase64).then(r => r.blob());
+         const rawBase64 = await new Promise<string>((res, rej) => { 
+            const reader = new FileReader(); 
+            reader.onloadend = () => res(reader.result as string); 
+            reader.onerror = rej; 
+            reader.readAsDataURL(blob); 
+         });
+         payloadVideo = rawBase64;
+      } else if (!videoBase64.startsWith('data:')) {
+         payloadVideo = `data:video/mp4;base64,${videoBase64}`;
+      }
+      
+      const fbMessage = scriptData.headline || selectedArticle?.title || 'Check out our latest reel!';
+      const res = await fetch('/api/facebook/post-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: fbMessage, videoBase64: payloadVideo }),
+      });
+      if (!res.ok) {
+         let errMsg = await res.text();
+         try { errMsg = JSON.parse(errMsg).error; } catch(e){}
+         throw new Error(errMsg || 'Failed to post reel to Facebook');
+      }
+      const data = await res.json();
+      alert('Successfully published reel to Facebook!\nURL: ' + data.url);
+    } catch (e: any) {
+      alert('Error publishing reel: ' + e.message);
+    } finally {
+      setIsPublishing(false);
+      setStatus('');
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -794,6 +923,9 @@ function ReelEditorView({
                <div className="flex flex-col gap-2">
                  {audioUrl && <a href={audioUrl} download="voiceover.wav" className="px-3 py-2 bg-white rounded border text-sm text-center font-medium shadow-sm hover:bg-gray-50 flex items-center justify-center gap-2">⬇️ Download Voiceover Audio</a>}
                  <a href={videoBase64.startsWith('blob:') ? videoBase64 : `data:video/mp4;base64,${videoBase64}`} download="reel.mp4" className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded border text-sm text-center font-medium shadow-sm flex items-center justify-center gap-2">⬇️ Download Final Reel.mp4</a>
+                 <button onClick={handlePublishReel} disabled={isPublishing} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded border text-sm text-center font-medium shadow-sm flex items-center justify-center gap-2">
+                    {isPublishing ? <RefreshCw className="animate-spin" size={16}/> : '🌐'} {isPublishing ? 'Publishing...' : 'Publish Reel to Facebook Page'}
+                 </button>
                </div>
             )}
             
