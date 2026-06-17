@@ -1975,21 +1975,21 @@ export const generateFullReelScript = async (
   const hasTicker = coords.ticker_box && coords.ticker_box !== "hidden";
   const hasSubtitles = coords.subtitle_box && coords.subtitle_box !== "hidden";
 
-  const prompt = `You are a professional TV News Anchor. Write a high-retention, professional Hindi news script.
+  const prompt = `You are a professional TV News Anchor. Write a high-retention professional Hindi breaking news script.
 Use ONLY facts from the article. NEVER hallucinate names, numbers, quotes, causes, or outcomes.
 
 ARTICLE TEXT:
 ${articleContent}
 
-Format rules for high engagement:
-0–3 sec: HOOK (Authoritative News Hook, e.g., "इस वक्त की बड़ी खबर..." or "आज की सबसे बड़ी खबर...")
-3–12 sec: What happened (The core fact delivered with professional urgency)
-12–22 sec: Why important (Impact and details)
-22–27 sec: Supporting context
-27–30 sec: Professional Sign-off (e.g., "ज़्यादा अपडेट्स के लिए जुड़े रहें हमारे साथ।")
+Format rules for high engagement (TARGET DURATION AROUND 30 SECONDS, MAXIMUM 60-70 WORDS):
+0–5 sec: HOOK (Authoritative News Hook, e.g., "इस वक्त की बड़ी खबर...")
+5–15 sec: What happened (The core fact delivered with clear professional urgency)
+15–25 sec: Why important (Impact and crucial details without filler)
+25–30 sec: Professional Sign-off (e.g., "ज़्यादा अपडेट्स के लिए जुड़े रहें हमारे साथ।")
 
-- Sentences MUST be short and punchy.
-- Tone MUST be like a professional TV news anchor (authoritative, clear, formal Hindi).
+- STRICT WORD LIMIT: The entire voiceoverScript MUST be between 60 to 70 words to ensure a 30-second duration.
+- Sentences MUST be short, clear, and punchy. No long storytelling.
+- Tone MUST be like a professional TV news anchor (authoritative, clear, slightly urgent but not overly fast).
 ${hasSubtitles ? `
 Subtitles Requirements (CRITICAL):
 - Break the ENTIRE voiceoverScript into chunks of maximum 3-5 words.
@@ -2057,10 +2057,9 @@ export const generateReelAudio = async (script: string): Promise<string> => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
-  const ttsPrompt = `Read the following news script in a professional news anchor tone.
-Be confident and clear, with slight urgency (breaking news feel).
-Natural pitch variation. Not robotic. Pause naturally at "...".
-Emphasize key words.
+  const ttsPrompt = `Read the following news script in an engaging, professional news anchor tone.
+Speak with a clear, authoritative reporting style. Keep a moderate, steady pace (not too fast, not too slow) suitable for a 30-second news bulletin.
+Ensure clear articulation and natural pauses. Punch the key words to maintain engagement without rushing.
 
 SCRIPT:
 ${script}
