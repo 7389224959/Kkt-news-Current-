@@ -129,6 +129,30 @@ export default async function handler(req, res) {
       throw new Error(`Failed to fetch URL. Last error: ${lastErrorText}`);
     };
 
+    const isVideoThumbnail = (src) => {
+      const lowerSrc = src.toLowerCase();
+      return lowerSrc.includes('i.ytimg.com') ||
+             lowerSrc.includes('youtube.com/vi/') ||
+             lowerSrc.includes('hqdefault') ||
+             lowerSrc.includes('mqdefault') ||
+             lowerSrc.includes('sddefault') ||
+             lowerSrc.includes('maxresdefault') ||
+             lowerSrc.match(/video|-vid\.|player/) ||
+             lowerSrc.endsWith('.gif') ||
+             lowerSrc.endsWith('.mp4');
+    };
+
+    const makeAbsolute = (src) => {
+      if (!src) return '';
+      if (src.startsWith('http')) return src;
+      if (src.startsWith('//')) return 'https:' + src;
+      try {
+        return new URL(src, url).href;
+      } catch (e) {
+        return '';
+      }
+    };
+
     const html = await fetchWithFallback(url);
     
     // If it's markdown from Jina
@@ -140,11 +164,19 @@ export default async function handler(req, res) {
       }
       
       let images = [];
-      const imgMatch = html.match(/!\[.*?\]\((.*?)\)/);
-      if (imgMatch) {
-         images.push(imgMatch[1]);
+      const regex = /!\[.*?\]\((.*?)\)/g;
+      let match;
+      while ((match = regex.exec(html)) !== null) {
+         let imgUrl = match[1];
+         if (!imgUrl) continue;
+         imgUrl = makeAbsolute(imgUrl);
+         const lowerUrl = imgUrl.toLowerCase();
+         if (!isVideoThumbnail(imgUrl) && !lowerUrl.includes('logo') && !lowerUrl.includes('icon') && !lowerUrl.includes('avatar') && !lowerUrl.includes('spinner')) {
+            images.push(imgUrl);
+         }
       }
       
+      images = Array.from(new Set(images.filter(Boolean)));
       let imageUrl = images.length > 0 ? images[0] : '';
       
       return res.status(200).json({
@@ -159,40 +191,104 @@ export default async function handler(req, res) {
     
     const doc = new JSDOM(html, { url });
     
-    // Extract og:image or any primary metadata image
     let imageUrl = '';
-    const images = [];
+    let images = [];
+    
+    const videoPosters = [];
+    doc.window.document.querySelectorAll('video, .wp-video-shortcode, .video-js').forEach(vid => {
+        let poster = vid.getAttribute('poster') || vid.getAttribute('data-poster');
+        if (poster) {
+           videoPosters.push(makeAbsolute(poster));
+        }
+    });
+
+    // Extract og:image or any primary metadata image
     const ogImage = doc.window.document.querySelector('meta[property="og:image"], meta[property="og:image:secure_url"], meta[name="twitter:image"], meta[property="twitter:image"]');
     if (ogImage) {
       imageUrl = ogImage.getAttribute('content') || '';
-    }
-    
-    if (!imageUrl) {
-      const imgElements = doc.window.document.querySelectorAll('article img, main img, figure img, .post-content img, .entry-content img, .content img');
-      if (imgElements.length > 0) {
-         imageUrl = imgElements[0].getAttribute('src') || '';
-      } else {
-         const allImgs = doc.window.document.querySelectorAll('img');
-         for (const img of Array.from(allImgs)) {
-            const src = img.getAttribute('src');
-            if (src && !src.includes('logo') && !src.includes('avatar') && !src.includes('icon') && !src.includes('spinner')) {
-               imageUrl = src;
-               break;
-            }
-         }
-      }
-    }
-    
-    // Ensure absolute URL
-    if (imageUrl && !imageUrl.startsWith('http')) {
-      try {
-        imageUrl = new URL(imageUrl, url).href;
-      } catch (e) {
-        // ignore
+      if (imageUrl) {
+        imageUrl = makeAbsolute(imageUrl);
+        if (!isVideoThumbnail(imageUrl) && !videoPosters.includes(imageUrl)) {
+          images.push(imageUrl);
+        } else {
+          imageUrl = '';
+        }
       }
     }
 
-    if (imageUrl) images.push(imageUrl);
+    const processImageSource = (src, el) => {
+        if (!src) return;
+        const lowerSrc = src.toLowerCase();
+        if (lowerSrc.includes('logo') || lowerSrc.includes('avatar') || lowerSrc.includes('icon') || lowerSrc.includes('spinner')) return;
+        if (isVideoThumbnail(src)) return;
+        
+        const absSrc = makeAbsolute(src);
+        if (videoPosters.includes(absSrc)) return; // Exclude explicit video posters
+        
+        let parent = el.parentElement;
+        for (let i = 0; i < 5; i++) {
+           if (!parent) break;
+           const tag = parent.tagName.toLowerCase();
+           const className = (parent.className || '').toLowerCase();
+           if (tag === 'video' || className.includes('video') || className.includes('player') || className.includes('play-btn') || className.includes('youtube')) {
+               return; // skip video thumbnails
+           }
+           parent = parent.parentElement;
+        }
+
+        if (absSrc && !images.includes(absSrc)) {
+            images.push(absSrc);
+        }
+    };
+
+    const imgElements = doc.window.document.querySelectorAll('article img, main img, figure img, .post-content img, .entry-content img, .content img');
+    if (imgElements.length > 0) {
+       imgElements.forEach(img => {
+          let src = img.getAttribute('data-src') || img.getAttribute('src');
+          if (src && src.startsWith('data:image')) {
+            src = img.getAttribute('data-lazy-src') || img.getAttribute('data-original') || src;
+          }
+          if (!src || src.startsWith('data:image')) return;
+          processImageSource(src, img);
+       });
+    }
+
+    if (images.length <= 1) { // Fallback if no images found in primary article tags
+       const allImgs = doc.window.document.querySelectorAll('img');
+       Array.from(allImgs).forEach(img => {
+          let src = img.getAttribute('data-src') || img.getAttribute('src');
+          if (src && src.startsWith('data:image')) {
+             src = img.getAttribute('data-lazy-src') || img.getAttribute('data-original') || src;
+          }
+          if (!src || src.startsWith('data:image')) return;
+          processImageSource(src, img);
+       });
+    }
+
+    // Extract videos
+    const ogVideo = doc.window.document.querySelector('meta[property="og:video"], meta[property="og:video:url"], meta[property="og:video:secure_url"]');
+    if (ogVideo) {
+      let vidUrl = ogVideo.getAttribute('content');
+      if (vidUrl) {
+         vidUrl = makeAbsolute(vidUrl);
+         if (!images.includes(vidUrl)) images.push(vidUrl);
+      }
+    }
+    
+    const videoElements = doc.window.document.querySelectorAll('video source, video');
+    videoElements.forEach(vid => {
+       let src = vid.getAttribute('src') || vid.getAttribute('data-src') || vid.getAttribute('data-lazy-src') || vid.getAttribute('data-url');
+       if (src) {
+          const absSrc = makeAbsolute(src);
+          if (absSrc && (absSrc.includes('.mp4') || absSrc.includes('.webm') || absSrc.includes('.mov'))) {
+             if (!images.includes(absSrc)) images.push(absSrc);
+          }
+       }
+    });
+
+    if (!imageUrl && images.length > 0) {
+       imageUrl = images[0];
+    }
 
     const reader = new Readability(doc.window.document);
     const article = reader.parse();

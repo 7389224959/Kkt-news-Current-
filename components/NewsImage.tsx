@@ -74,6 +74,23 @@ const NewsImage: React.FC<NewsImageProps> = ({
 
   const aspectClass = aspectRatio === 'video' ? 'aspect-video' : aspectRatio === 'square' ? 'aspect-square' : '';
 
+  const isVideo = src?.match(/\.(mp4|webm|mov)(\?|$)/i) || src?.startsWith('data:video');
+
+  if (isVideo) {
+    return (
+      <div className={`relative overflow-hidden bg-gray-100 ${aspectClass} ${className}`}>
+        <video 
+           src={src} 
+           autoPlay 
+           muted 
+           loop 
+           playsInline
+           className={`w-full h-full object-cover`}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={`relative overflow-hidden bg-gray-100 ${aspectClass} ${className}`}>
       {isLoading && (

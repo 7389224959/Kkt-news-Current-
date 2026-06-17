@@ -17,6 +17,7 @@ const downloadFile = async (url, dest) => {
       /^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+)?(?:;charset=[a-zA-Z0-9-]+)?(;base64)?,(.*)$/,
     );
     if (!matches) throw new Error("Invalid data URI");
+    const mimeType = matches[1] || "";
     const isBase64 = matches[2] === ";base64";
     const dataString = matches[3];
     const buffer = Buffer.from(
@@ -24,7 +25,7 @@ const downloadFile = async (url, dest) => {
       isBase64 ? "base64" : "utf8",
     );
     fs.writeFileSync(dest, buffer);
-    return;
+    return mimeType;
   }
 
   if (url.startsWith("/")) {
@@ -34,9 +35,11 @@ const downloadFile = async (url, dest) => {
   const response = await fetch(url);
   if (!response.ok)
     throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+  const contentType = response.headers.get("content-type") || "";
   const arrayBuffer = await response.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
   fs.writeFileSync(dest, buffer);
+  return contentType;
 };
 
 export default async function handler(req, res) {
@@ -85,14 +88,31 @@ export default async function handler(req, res) {
     const { overlayMediaUrl, visuals = [] } = req.body;
     let downloadedVisuals = [];
     for (let i = 0; i < visuals.length; i++) {
-      const p = path.join(tempDir, `visual_${i}.jpg`);
-      await downloadFile(visuals[i], p);
-      downloadedVisuals.push({ file: p, url: visuals[i] });
+      const p = path.join(tempDir, `visual_${i}_temp`);
+      const contentType = await downloadFile(visuals[i], p);
+      let isVideo = false;
+      let ext = "jpg";
+      
+      const isVideoContentType = contentType && contentType.startsWith('video/');
+      const hasVideoExt = visuals[i].match(/\.(mp4|mov|webm)(?:\?.*)?$/i);
+      
+      if (isVideoContentType || hasVideoExt || visuals[i].startsWith("data:video/")) {
+         isVideo = true;
+         ext = hasVideoExt ? hasVideoExt[1] : (isVideoContentType ? contentType.split('/')[1] : "mp4");
+         if (ext === "quicktime") ext = "mov";
+      } else {
+         const hasImgExt = visuals[i].match(/\.(png|gif|jpeg|webp)(?:\?.*)?$/i);
+         if (hasImgExt) ext = hasImgExt[1];
+      }
+      
+      const finalP = path.join(tempDir, `visual_${i}.${ext}`);
+      fs.renameSync(p, finalP);
+      downloadedVisuals.push({ file: finalP, url: visuals[i], isVideo: isVideo });
     }
     if (downloadedVisuals.length === 0 && overlayMediaUrl) {
       const p = path.join(tempDir, "overlay.mp4");
       await downloadFile(overlayMediaUrl, p);
-      downloadedVisuals.push({ file: p, url: overlayMediaUrl });
+      downloadedVisuals.push({ file: p, url: overlayMediaUrl, isVideo: true });
     }
 
     // Ensure 5-6 scenes if not enough by repeating
@@ -292,7 +312,7 @@ export default async function handler(req, res) {
       for (let i = 0; i < downloadedVisuals.length; i++) {
         const item = downloadedVisuals[i];
         const idx = nextInputIndex++;
-        const isImgInfo = !item.url.match(/\.(mp4|mov|webm)$/i);
+        const isImgInfo = !item.isVideo;
 
         filterGraph.push({
           filter: "scale",
@@ -493,14 +513,9 @@ export default async function handler(req, res) {
       if (downloadedVisuals.length > 0 && vBox) {
         for (let i = 0; i < downloadedVisuals.length; i++) {
           const item = downloadedVisuals[i];
-          const isOverlayImageInfo = !item.url.match(/\.(mp4|mov|webm)$/i);
-          if (isOverlayImageInfo) {
-            command = command
-              .input(item.file)
-              .inputOptions(["-stream_loop", "-1"]);
-          } else {
-            command = command.input(item.file);
-          }
+          command = command
+            .input(item.file)
+            .inputOptions(["-stream_loop", "-1"]);
         }
       }
 
