@@ -17,7 +17,29 @@ export const getArticles = async (page: number = 1, limit: number = 10): Promise
     .range(from, to);
 
   if (error) throw error;
-  return { data: data as Article[], count: count || 0 };
+  
+  const parsedData = (data as Article[]).map(parseArticleMeta);
+  return { data: parsedData, count: count || 0 };
+};
+
+/**
+ * Parses embedded JSON metadata from article content if present
+ */
+export const parseArticleMeta = (article: Article): Article => {
+  if (!article.content) return article;
+  
+  const metaMatch = article.content.match(/<!-- KKT_META:\s*(\{.*?\})\s*-->/s);
+  if (metaMatch && metaMatch[1]) {
+    try {
+      const meta = JSON.parse(metaMatch[1]);
+      return {
+        ...article,
+        ...meta,
+        content: article.content.replace(/<!-- KKT_META:\s*(\{.*?\})\s*-->/s, '').trim()
+      };
+    } catch(e) {}
+  }
+  return article;
 };
 
 /**
@@ -35,7 +57,18 @@ export const getArticleBySlug = async (slug: string): Promise<Article | null> =>
     if (error.code === 'PGRST116') return null; // Not found
     throw error;
   }
-  return data as Article;
+  return parseArticleMeta(data as Article);
+};
+
+const createMetaPayload = (article: Partial<Article>) => {
+  const { id, title, slug, summary, content, image, category, published_at, author, created_at, updated_at, ...meta } = article;
+  let finalContent = content || '';
+  if (Object.keys(meta).length > 0) {
+    // Remove existing meta if any
+    finalContent = finalContent.replace(/<!-- KKT_META:\s*(\{.*?\})\s*-->/s, '').trim();
+    finalContent += `\n\n<!-- KKT_META: ${JSON.stringify(meta)} -->`;
+  }
+  return { id, title, slug, summary, content: finalContent, image, category, published_at, author, created_at, updated_at };
 };
 
 /**
@@ -44,7 +77,13 @@ export const getArticleBySlug = async (slug: string): Promise<Article | null> =>
  */
 export const createArticle = async (article: Omit<Article, 'id'>): Promise<Article> => {
   try {
-    const { seoTitle, metaDescription, facebookCaption, ...articleDbPayload } = article as any;
+    const serializedPayload = createMetaPayload(article);
+    // Remove undefined top-level DB fields that Supabase might reject
+    const articleDbPayload: any = {};
+    for (const [k, v] of Object.entries(serializedPayload)) {
+      if (v !== undefined) articleDbPayload[k] = v;
+    }
+    
     const { data, error } = await supabase
       .from('articles')
       .insert([articleDbPayload])
@@ -86,7 +125,13 @@ export const createArticle = async (article: Omit<Article, 'id'>): Promise<Artic
  */
 export const updateArticle = async (id: string, article: Partial<Article>): Promise<Article> => {
   try {
-    const { seoTitle, metaDescription, facebookCaption, ...articleDbPayload } = article as any;
+    const serializedPayload = createMetaPayload(article);
+    // Remove undefined top-level DB fields that Supabase might reject
+    const articleDbPayload: any = {};
+    for (const [k, v] of Object.entries(serializedPayload)) {
+      if (v !== undefined && k !== 'id') articleDbPayload[k] = v;
+    }
+
     const { data, error } = await supabase
       .from('articles')
       .update(articleDbPayload)

@@ -878,6 +878,23 @@ const Admin: React.FC = () => {
     }
   };
 
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const publicUrl = await uploadImage(file);
+      setCurrentArticle(prev => ({ ...prev, videoUrl: publicUrl }));
+      alert('Video uploaded successfully!');
+    } catch (error) {
+      console.error('Video upload failed:', error);
+      alert('Video upload failed.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   // --- Viral Post Handlers ---
 
 
@@ -1839,7 +1856,26 @@ const Admin: React.FC = () => {
                         <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={isUploading} />
                       </label>
                     </div>
-                    <div className="flex flex-col gap-2 mb-2 bg-purple-50 p-3 rounded border border-purple-100">
+                  </div>
+                  <div className="mt-4">
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Primary Video (For Reels)</label>
+                    <div className="flex gap-2">
+                       <input 
+                         type="text" 
+                         className="flex-1 px-3 py-2 border rounded focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                         placeholder="Video URL (https://...mp4)"
+                         value={currentArticle.videoUrl || ''}
+                         onChange={e => setCurrentArticle({...currentArticle, videoUrl: e.target.value})}
+                       />
+                       <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded border border-gray-300 flex items-center gap-2 transition-colors">
+                         {isUploading ? <RefreshCw className="animate-spin" size={14} /> : <Upload size={14} />}
+                         <span className="text-xs font-bold">Upload Video</span>
+                         <input type="file" className="hidden" accept="video/mp4,video/webm" onChange={handleVideoUpload} disabled={isUploading} />
+                       </label>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex flex-col gap-2 mb-2 bg-purple-50 p-3 rounded border border-purple-100 mt-4">
                       <label className="text-xs font-bold text-purple-800 uppercase flex items-center gap-1">
                         <Sparkles size={12} /> AI Image Generator
                       </label>

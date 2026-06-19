@@ -196,18 +196,24 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       setOverlayMode('post');
 
       let finalMediaUrl = template.mediaUrl || template.screenshotUrl;
+      
       let finalOverlayUrl = article.image; // Default overlay from post
 
       // Gather visual materials just in case
       let initialVisuals = [];
-      if (finalOverlayUrl) initialVisuals.push(finalOverlayUrl);
-      const contentStr = article.content || '';
-      const match = contentStr.match(/<!-- additionalImages:\s*(\[.*?\])\s*-->/);
-      if (match && match[1]) {
-         try {
-            const parsedArray = JSON.parse(match[1]);
-            if (Array.isArray(parsedArray)) initialVisuals.push(...parsedArray);
-         } catch(e) {}
+      if (article.videoUrl) initialVisuals.push(article.videoUrl);
+      if (finalOverlayUrl && finalOverlayUrl !== article.videoUrl) initialVisuals.push(finalOverlayUrl);
+      if ((article as any).additionalImages && Array.isArray((article as any).additionalImages)) {
+         initialVisuals.push(...(article as any).additionalImages);
+      } else {
+         const contentStr = article.content || '';
+         const match = contentStr.match(/<!-- (?:KKT_META:\s*\{.*?"additionalImages"\s*:\s*(\[.*?\]).*?\}|additionalImages:\s*(\[.*?\]))\s*-->/s);
+         if (match) {
+            try {
+               const parsedArray = JSON.parse(match[1] || match[2]);
+               if (Array.isArray(parsedArray)) initialVisuals.push(...parsedArray);
+            } catch(e) {}
+         }
       }
       const uniqueVisuals = Array.from(new Set(initialVisuals.filter(Boolean)));
       
@@ -317,17 +323,19 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       const template = activeTemplates.find((t: any) => t.id === selectedTemplateId);
       
       let finalMediaUrl = template.mediaUrl || template.screenshotUrl;
-      if (visualMode === 'post' && selectedArticle?.image) {
-         finalMediaUrl = selectedArticle.image; 
+      if (visualMode === 'post') {
+         if (selectedArticle?.videoUrl) finalMediaUrl = selectedArticle.videoUrl;
+         else if (selectedArticle?.image) finalMediaUrl = selectedArticle.image;
       } else if (visualMode === 'upload' || visualMode === 'ai') {
          if (!customMediaUrl) throw new Error("No custom media provided");
          finalMediaUrl = customMediaUrl;
       }
 
-      let finalOverlayUrl = null;
+      let finalOverlayUrl: string | null = null;
       if (visualMode === 'template' && overlayMode !== 'none') {
-         if (overlayMode === 'post' && selectedArticle?.image) {
-            finalOverlayUrl = selectedArticle.image;
+         if (overlayMode === 'post') {
+            if (selectedArticle?.videoUrl) finalOverlayUrl = selectedArticle.videoUrl;
+            else if (selectedArticle?.image) finalOverlayUrl = selectedArticle.image;
          } else if ((overlayMode === 'upload' || overlayMode === 'ai') && overlayMediaUrl) {
             finalOverlayUrl = overlayMediaUrl;
          }
@@ -347,18 +355,23 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       if (customCoords.video) renderTemplate.coordinates.video_box = customCoords.video;
 
       let initialVisuals = [];
-      if (finalOverlayUrl) initialVisuals.push(finalOverlayUrl);
+      if (selectedArticle?.videoUrl) initialVisuals.push(selectedArticle.videoUrl);
+      if (finalOverlayUrl && finalOverlayUrl !== selectedArticle?.videoUrl) initialVisuals.push(finalOverlayUrl);
       if (selectedArticle?.image) initialVisuals.push(selectedArticle.image);
       
-      const contentStr = selectedArticle?.content || '';
-      const match = contentStr.match(/<!-- additionalImages:\s*(\[.*?\])\s*-->/);
-      if (match && match[1]) {
-         try {
-            const parsedArray = JSON.parse(match[1]);
-            if (Array.isArray(parsedArray)) {
-               initialVisuals.push(...parsedArray);
-            }
-         } catch(e) {}
+      if ((selectedArticle as any)?.additionalImages && Array.isArray((selectedArticle as any).additionalImages)) {
+         initialVisuals.push(...(selectedArticle as any).additionalImages);
+      } else {
+         const contentStr = selectedArticle?.content || '';
+         const match = contentStr.match(/<!-- (?:KKT_META:\s*\{.*?"additionalImages"\s*:\s*(\[.*?\]).*?\}|additionalImages:\s*(\[.*?\]))\s*-->/s);
+         if (match) {
+            try {
+               const parsedArray = JSON.parse(match[1] || match[2]);
+               if (Array.isArray(parsedArray)) {
+                  initialVisuals.push(...parsedArray);
+               }
+            } catch(e) {}
+         }
       }
       
       const uniqueVisuals = Array.from(new Set(initialVisuals.filter(Boolean)));
@@ -758,7 +771,10 @@ function ReelEditorView({
   }, [activeBox, dragStart, startCoords]);
 
   let finalMediaUrl = template.mediaUrl || template.screenshotUrl;
-  if (visualMode === 'post' && selectedArticle?.image) finalMediaUrl = selectedArticle.image; 
+  if (visualMode === 'post') {
+     if (selectedArticle?.videoUrl) finalMediaUrl = selectedArticle.videoUrl;
+     else if (selectedArticle?.image) finalMediaUrl = selectedArticle.image; 
+  }
   if ((visualMode === 'upload' || visualMode === 'ai') && customMediaUrl) finalMediaUrl = customMediaUrl;
 
   let finalOverlayUrl: string | null = null;

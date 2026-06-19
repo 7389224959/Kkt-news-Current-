@@ -281,14 +281,26 @@ const ArticleDetail: React.FC = () => {
               </div>
 
               <div className="mb-10 rounded-sm overflow-hidden bg-gray-100 aspect-video relative group">
-                <NewsImage 
-                  src={article.image || article.imageUrl || ''} 
-                  alt={article.title} 
-                  className="w-full h-full object-cover" 
-                  fallbackText={article.title}
-                  priority={true}
-                />
-                {article.imageCaption && (
+                {article.videoUrl ? (
+                  <video 
+                    src={article.videoUrl} 
+                    controls 
+                    className="w-full h-full object-cover"
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                  />
+                ) : (
+                  <NewsImage 
+                    src={article.image || article.imageUrl || ''} 
+                    alt={article.title} 
+                    className="w-full h-full object-cover" 
+                    fallbackText={article.title}
+                    priority={true}
+                  />
+                )}
+                {article.imageCaption && !article.videoUrl && (
                   <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white p-3 text-xs font-medium backdrop-blur-sm">
                     {article.imageCaption}
                   </div>

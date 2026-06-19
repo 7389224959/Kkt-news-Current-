@@ -74,8 +74,15 @@ const NewsCard: React.FC<NewsCardProps> = ({ article, variant = 'vertical', isTr
             fallbackText="News"
             priority={priority}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-bhaskar-dark via-bhaskar-dark/40 to-transparent"></div>
-          <div className="absolute bottom-0 left-0 p-4 md:p-8 w-full">
+          {article.videoUrl && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/20 transition-colors z-10">
+              <div className="w-16 h-16 md:w-20 md:h-20 bg-white/90 rounded-full flex items-center justify-center shadow-2xl border border-white/40 backdrop-blur-sm">
+                <Play className="w-6 h-6 md:w-8 md:h-8 text-bhaskar-orange translate-x-1" fill="currentColor" />
+              </div>
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-bhaskar-dark via-bhaskar-dark/40 to-transparent z-0"></div>
+          <div className="absolute bottom-0 left-0 p-4 md:p-8 w-full z-20">
             <span className="bg-bhaskar-orange text-white text-[10px] md:text-xs font-bold px-2 py-1 rounded-sm uppercase tracking-wider mb-2 inline-block">
               {categoryLabel || 'TOP NEWS'}
             </span>
@@ -103,6 +110,13 @@ const NewsCard: React.FC<NewsCardProps> = ({ article, variant = 'vertical', isTr
             className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
             fallbackText="News"
           />
+          {article.videoUrl && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+              <div className="w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-lg border border-white/40">
+                <Play className="w-3.5 h-3.5 text-bhaskar-orange translate-x-0.5" fill="currentColor" />
+              </div>
+            </div>
+          )}
           {isTrending && (
             <div className="absolute top-0 left-0 bg-red-600 text-white text-[8px] font-bold px-1 py-0.5 rounded-br-lg">
               HOT
@@ -130,6 +144,13 @@ const NewsCard: React.FC<NewsCardProps> = ({ article, variant = 'vertical', isTr
           fallbackText={article.category}
           priority={priority}
         />
+        {article.videoUrl && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+            <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center shadow-lg border border-white/40">
+              <Play className="w-5 h-5 text-bhaskar-orange translate-x-0.5" fill="currentColor" />
+            </div>
+          </div>
+        )}
         {isTrending && (
           <div className="absolute top-3 left-3 bg-bhaskar-orange text-white text-[10px] font-bold px-2 py-1 rounded-sm shadow-lg">
             TRENDING

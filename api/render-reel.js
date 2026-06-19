@@ -85,7 +85,9 @@ export default async function handler(req, res) {
     const { overlayMediaUrl, visuals = [] } = req.body;
     let downloadedVisuals = [];
     for (let i = 0; i < visuals.length; i++) {
-      const p = path.join(tempDir, `visual_${i}.jpg`);
+      const extMatch = visuals[i].match(/\.(mp4|mov|webm)$/i);
+      const ext = extMatch ? extMatch[0] : '.jpg';
+      const p = path.join(tempDir, `visual_${i}${ext}`);
       await downloadFile(visuals[i], p);
       downloadedVisuals.push({ file: p, url: visuals[i] });
     }
@@ -121,7 +123,7 @@ export default async function handler(req, res) {
     const targetH = 1280;
     const scaleFactor = targetW / 1080;
     const parseAndScaleCoords = (cStr) =>
-      cStr.split(",").map((n) => Math.round(Number(n) * scaleFactor));
+      cStr.split(",").map((n) => Math.round(Number(n) * scaleFactor / 2) * 2);
 
     const vBox =
       template.coordinates.video_box && template.coordinates.video_box !== "hidden"
@@ -298,6 +300,12 @@ export default async function handler(req, res) {
           filter: "scale",
           options: `${vBox[2]}:${vBox[3]}:force_original_aspect_ratio=increase`,
           inputs: `${idx}:v`,
+          outputs: `vis_scaled_raw_${i}`,
+        });
+        filterGraph.push({
+          filter: "setsar",
+          options: "1",
+          inputs: `vis_scaled_raw_${i}`,
           outputs: `vis_scaled_${i}`,
         });
         filterGraph.push({
@@ -310,7 +318,6 @@ export default async function handler(req, res) {
         if (isImgInfo) {
           const motion = motions[i % motions.length];
           filterGraph.push({
-            // d is frames = duration * fps (assume 25fps)
             filter: "zoompan",
             options: `${motion}:d=${Math.ceil(sceneDur * 25) + 50}:s=${vBox[2]}x${vBox[3]}`,
             inputs: `vis_cropped_${i}`,
@@ -324,17 +331,36 @@ export default async function handler(req, res) {
           });
         } else {
           filterGraph.push({
+            filter: "setpts",
+            options: "PTS-STARTPTS",
+            inputs: `vis_cropped_${i}`,
+            outputs: `vis_ptsed_${i}`,
+          });
+          filterGraph.push({
+            filter: "fps",
+            options: "25",
+            inputs: `vis_ptsed_${i}`,
+            outputs: `vis_fps_${i}`,
+          });
+          filterGraph.push({
             filter: "trim",
             options: `duration=${sceneDur + 1.0}`,
-            inputs: `vis_cropped_${i}`,
+            inputs: `vis_fps_${i}`,
             outputs: `vis_trimmed_${i}`,
           });
         }
 
         filterGraph.push({
+          filter: "format",
+          options: "yuv420p",
+          inputs: `vis_trimmed_${i}`,
+          outputs: `vis_formatted_${i}`,
+        });
+
+        filterGraph.push({
           filter: "setpts",
           options: "PTS-STARTPTS",
-          inputs: `vis_trimmed_${i}`,
+          inputs: `vis_formatted_${i}`,
           outputs: `vis_ready_${i}`,
         });
       }
@@ -493,14 +519,9 @@ export default async function handler(req, res) {
       if (downloadedVisuals.length > 0 && vBox) {
         for (let i = 0; i < downloadedVisuals.length; i++) {
           const item = downloadedVisuals[i];
-          const isOverlayImageInfo = !item.url.match(/\.(mp4|mov|webm)$/i);
-          if (isOverlayImageInfo) {
-            command = command
+          command = command
               .input(item.file)
-              .inputOptions(["-stream_loop", "-1"]);
-          } else {
-            command = command.input(item.file);
-          }
+              .inputOptions(["-stream_loop", "-1", "-an"]);
         }
       }
 

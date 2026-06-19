@@ -31,6 +31,7 @@ export interface Article {
   excerpt?: string; 
   date?: string;
   imageUrl?: string;
+  videoUrl?: string;
   sourceUrl?: string;
   additionalImages?: string[];
   isBreaking?: boolean;
