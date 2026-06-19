@@ -258,10 +258,17 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
     if (autoStart && articles.length > 0 && activeTemplates.length > 0 && !autoStarted.current) {
        autoStarted.current = true;
        let articleToUse = selectedArticle || articles[0];
-       let templateIdToUse = selectedTemplateId || activeTemplates[0].id;
+       
+       let templateIndexToUse = parseInt(localStorage.getItem('lastAutoReelTemplateIndex') || '0', 10);
+       if (isNaN(templateIndexToUse) || templateIndexToUse >= activeTemplates.length) {
+         templateIndexToUse = 0;
+       }
+       let templateIdToUse = activeTemplates[templateIndexToUse].id;
+       localStorage.setItem('lastAutoReelTemplateIndex', ((templateIndexToUse + 1) % activeTemplates.length).toString());
+       
        handleAutoAllSteps(articleToUse, templateIdToUse);
     }
-  }, [autoStart, articles, activeTemplates, selectedArticle, selectedTemplateId]);
+  }, [autoStart, articles, activeTemplates, selectedArticle]);
 
   const handleGenerateVoice = async () => {
     setIsGenerating(true);
