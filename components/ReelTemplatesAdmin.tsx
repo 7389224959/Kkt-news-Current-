@@ -52,6 +52,8 @@ const ReelTemplatesAdmin: React.FC<ReelTemplatesAdminProps> = ({ settings, onSav
         text_shadow: true,
       },
       isActive: true,
+      isIntroCombined: false,
+      introDuration: 3,
       createdAt: new Date().toISOString(),
     });
     setIsEditing(true);
@@ -539,6 +541,32 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
           </div>
 
           <div className="bg-purple-50 p-4 rounded border border-purple-100">
+             <label className="flex items-center gap-2 block text-sm font-bold text-purple-900 mb-2 cursor-pointer">
+               <input
+                 type="checkbox"
+                 checked={template.isIntroCombined || false}
+                 onChange={(e) => setTemplate({...template, isIntroCombined: e.target.checked})}
+                 className="w-4 h-4 cursor-pointer"
+               />
+               Set as Intro Combined Template
+             </label>
+             {template.isIntroCombined && (
+               <div className="mt-2 mb-4 bg-white p-3 rounded shadow-sm">
+                 <label className="block text-xs font-bold text-gray-700 mb-1">Intro Timing for FFmpeg (Seconds before visual overlay starts)</label>
+                 <input
+                   type="number"
+                   step="0.1"
+                   value={template.introDuration !== undefined ? template.introDuration : 3}
+                   onChange={e => setTemplate({...template, introDuration: parseFloat(e.target.value) || 0})}
+                   className="w-full p-2 border rounded outline-none text-sm"
+                   placeholder="e.g. 3.5"
+                 />
+                 <p className="text-xs text-gray-500 mt-1 pb-1">
+                   FFmpeg will wait this long playing only the media, then it will overlay the headlines, visual elements, and ticker.
+                 </p>
+               </div>
+             )}
+
              <label className="block text-sm font-bold text-purple-900 mb-2">Intro Video (Optional)</label>
              {template.introMediaUrl && (
                <div className="mb-2 text-sm text-green-600 font-bold break-all">

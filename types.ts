@@ -89,6 +89,8 @@ export interface ReelTemplate {
     text_shadow: boolean;
   };
   isActive: boolean;
+  isIntroCombined?: boolean;
+  introDuration?: number;
   createdAt: string;
 }
 

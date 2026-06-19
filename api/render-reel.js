@@ -224,6 +224,8 @@ export default async function handler(req, res) {
     let currentOutput = "bg_cropped";
     let nextInputIndex = 1;
 
+    const delayTime = template.isIntroCombined ? (Number(template.introDuration) || 0) : 0;
+
     // Prepare text content for words counting
     let rawLines =
       Array.isArray(scriptData.subtitleChunks) &&
@@ -381,7 +383,7 @@ export default async function handler(req, res) {
 
       filterGraph.push({
         filter: "overlay",
-        options: `x=${vBox[0]}:y=${vBox[1]}:eof_action=pass`,
+        options: `x=${vBox[0]}:y=${vBox[1]}:enable='gte(t,${delayTime})'`,
         inputs: [currentOutput, currentVis],
         outputs: "with_overlay",
       });
@@ -409,6 +411,7 @@ export default async function handler(req, res) {
           shadowy: "4",
           bordercolor: "black",
           borderw: "4",
+          enable: `gte(t,${delayTime})`,
         },
         inputs: currentOutput,
         outputs: "with_headline",
@@ -436,6 +439,7 @@ export default async function handler(req, res) {
           h: tBox[3],
           color: styleOverrides.tickerBg || "red@0.8",
           t: "fill",
+          enable: `gte(t,${delayTime})`,
         },
         inputs: currentOutput,
         outputs: "with_ticker_bg",
@@ -454,6 +458,7 @@ export default async function handler(req, res) {
           shadowcolor: "black@0.5",
           shadowx: "2",
           shadowy: "2",
+          enable: `gte(t,${delayTime})`,
         },
         inputs: "with_ticker_bg",
         outputs: "with_ticker",
@@ -478,8 +483,8 @@ export default async function handler(req, res) {
         // The proportion of the total text length dictates the duration this chunk is shown.
         let duration = (words / totalWords) * exactAudioDuration;
 
-        const startT = currentTime;
-        const endT = currentTime + duration;
+        const startT = currentTime + delayTime;
+        const endT = currentTime + duration + delayTime;
         currentTime += duration;
 
         filterGraph.push({
@@ -508,6 +513,13 @@ export default async function handler(req, res) {
     console.log(
       "Starting FFmpeg with comprehensive layout and subtitle pass...",
     );
+
+    const hasBgAudio = await new Promise((res) => {
+      ffmpeg.ffprobe(backgroundPath, (err, metadata) => {
+        if (err || !metadata || !metadata.streams) res(false);
+        else res(metadata.streams.some(s => s.codec_type === 'audio'));
+      });
+    });
 
     await new Promise((resolve, reject) => {
       let command = ffmpeg();
@@ -557,7 +569,7 @@ export default async function handler(req, res) {
         )
         .inputFormat("lavfi");
 
-      let durationLimit = audioPath ? exactAudioDuration : 15;
+      let durationLimit = (audioPath ? exactAudioDuration : 15) + delayTime;
 
       let outOpts = [
         "-c:v libx264",
@@ -572,32 +584,69 @@ export default async function handler(req, res) {
         "2", // Prevent resource exhaustion in Vercel limits
       ];
 
-      if (audioPath) {
-        // Voiceover (100%), Background Music (10-15%), Transition SFX (15-20%)
-        // amix lowers overall volume, so we boost it back after mixing.
+      if (true) { // Always mix available audio tracks so output always has audio
+        const mixInputs = [];
+        if (hasBgAudio) {
+          filterGraph.push({
+            filter: "volume",
+            options: "1.0",
+            inputs: "0:a",
+            outputs: "bg_media_audio",
+          });
+          mixInputs.push("bg_media_audio");
+        }
+
+        if (audioPath) {
+          filterGraph.push(
+            {
+              filter: "adelay",
+              options: `${delayTime * 1000}|${delayTime * 1000}`,
+              inputs: `${audioIndex}:a`,
+              outputs: "vo_delayed",
+            },
+            {
+              filter: "volume",
+              options: "0.8",
+              inputs: "vo_delayed",
+              outputs: "vo_mix",
+            }
+          );
+          mixInputs.push("vo_mix");
+        }
+
         filterGraph.push(
           {
-            filter: "volume",
-            options: "0.8",
-            inputs: `${audioIndex}:a`,
-            outputs: "vo_mix",
+            filter: "adelay",
+            options: `${delayTime * 1000}|${delayTime * 1000}`,
+            inputs: `${sfxIndex}:a`,
+            outputs: "sfx_delayed",
+          },
+          {
+            filter: "adelay",
+            options: `${delayTime * 1000}|${delayTime * 1000}`,
+            inputs: `${bgmIndex}:a`,
+            outputs: "bgm_delayed",
           },
           {
             filter: "volume",
             options: bgmPath ? "0.2" : "0.12",
-            inputs: `${bgmIndex}:a`,
+            inputs: "bgm_delayed",
             outputs: "bgm_mix",
           },
           {
             filter: "volume",
             options: "0.18",
-            inputs: `${sfxIndex}:a`,
+            inputs: "sfx_delayed",
             outputs: "sfx_mix",
-          },
+          }
+        );
+        mixInputs.push("bgm_mix", "sfx_mix");
+
+        filterGraph.push(
           {
             filter: "amix",
-            options: "inputs=3:duration=first:dropout_transition=2",
-            inputs: ["vo_mix", "bgm_mix", "sfx_mix"],
+            options: `inputs=${mixInputs.length}:duration=first:dropout_transition=2`,
+            inputs: mixInputs,
             outputs: "mixed_audio",
           },
           {
@@ -605,7 +654,7 @@ export default async function handler(req, res) {
             options: "3.0",
             inputs: "mixed_audio",
             outputs: "final_audio",
-          },
+          }
         );
         outOpts = [
           "-map",
@@ -631,26 +680,53 @@ export default async function handler(req, res) {
     let finalPath = middlePath;
     if (introPath || outroPath) {
       finalPath = path.join(tempDir, "final.mp4");
+      
+      const hasAudio = await Promise.all([introPath, middlePath, outroPath].map(async (p) => {
+        if(!p) return false;
+        return new Promise((res) => {
+          ffmpeg.ffprobe(p, (err, metadata) => {
+            if (err) res(false);
+            else res(metadata.streams.some(s => s.codec_type === 'audio'));
+          });
+        });
+      }));
+
+      const introHasAudio = hasAudio[0];
+      const middleHasAudio = hasAudio[1];
+      const outroHasAudio = hasAudio[2];
+
       await new Promise((resolve, reject) => {
         let concatCommand = ffmpeg();
         let filterParts = [];
         let concatInputs = [];
         
-        let fileIdx = 0;
+        // Add anullsrc as input so we can use it to substitute missing audio
+        concatCommand = concatCommand.input("anullsrc=r=44100:cl=stereo").inputFormat("lavfi");
+        // Its input index will be the total number of files (+1 depending) - we will know later
         
-        // Ensure all inputs have audio or fake audio to prevent concat failure
-        // We use aevalsrc for dummy audio if an input might not have it.
-        const addPart = (fPath) => {
+        let fileIdx = 0;
+        let actualFileIdx = 1; // since anullsrc is at index 0
+        
+        // Restructure adding parts
+        const addPart = (fPath, hasA) => {
           concatCommand = concatCommand.input(fPath);
-          // Scale to 720:1280 standard aspect ratio
-          filterParts.push(`[${fileIdx}:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,format=yuv420p[v${fileIdx}];[${fileIdx}:a]afifo[a${fileIdx}]`);
+          filterParts.push(`[${actualFileIdx}:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,format=yuv420p[v${fileIdx}]`);
+          
+          if (hasA) {
+            filterParts.push(`[${actualFileIdx}:a]afifo[a${fileIdx}]`);
+          } else {
+            // map from anullsrc (which is at index 0)
+            filterParts.push(`[0:a]afifo[a${fileIdx}]`);
+          }
+
           concatInputs.push(`[v${fileIdx}][a${fileIdx}]`);
           fileIdx++;
+          actualFileIdx++;
         };
 
-        if (introPath) addPart(introPath);
-        addPart(middlePath);
-        if (outroPath) addPart(outroPath);
+        if (introPath) addPart(introPath, introHasAudio);
+        addPart(middlePath, middleHasAudio);
+        if (outroPath) addPart(outroPath, outroHasAudio);
 
         const complexFilterStr = filterParts.join(';') + ';' + concatInputs.join('') + `concat=n=${fileIdx}:v=1:a=1[outv][outa]`;
 
