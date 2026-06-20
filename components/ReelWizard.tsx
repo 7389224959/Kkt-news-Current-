@@ -4,6 +4,7 @@ import { Article } from '../types';
 import { generateFullReelScript, generateReelAudio, generateAiImage } from '../services/geminiService';
 import { pcmBase64ToWavUrl, pcmBase64ToWavDataUri } from '../src/utils/audioUtils';
 import { uploadImage } from '../services/supabase';
+import { saveSiteSettings } from '../services/articleService';
 
 export default function ReelWizard({ articles, settings, onClose, autoStart = false }: { articles: Article[], settings: any, onClose: () => void, autoStart?: boolean }) {
   const [step, setStep] = useState(1);
@@ -259,16 +260,24 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
        autoStarted.current = true;
        let articleToUse = selectedArticle || articles[0];
        
-       let templateIndexToUse = parseInt(localStorage.getItem('lastAutoReelTemplateIndex') || '0', 10);
-       if (isNaN(templateIndexToUse) || templateIndexToUse >= activeTemplates.length) {
-         templateIndexToUse = 0;
+       let currentIndex = settings?.autoReelTemplateIndex !== undefined ? settings.autoReelTemplateIndex : parseInt(localStorage.getItem('lastAutoReelTemplateIndex') || '0', 10);
+       if (isNaN(currentIndex) || currentIndex >= activeTemplates.length) {
+         currentIndex = 0;
        }
-       let templateIdToUse = activeTemplates[templateIndexToUse].id;
-       localStorage.setItem('lastAutoReelTemplateIndex', ((templateIndexToUse + 1) % activeTemplates.length).toString());
+       
+       let templateIdToUse = activeTemplates[currentIndex].id;
+       const nextIndex = (currentIndex + 1) % activeTemplates.length;
+       
+       localStorage.setItem('lastAutoReelTemplateIndex', nextIndex.toString());
+       
+       if (settings) {
+         const updatedSettings = { ...settings, autoReelTemplateIndex: nextIndex };
+         saveSiteSettings(updatedSettings).catch(e => console.error("Failed to save reel template index", e));
+       }
        
        handleAutoAllSteps(articleToUse, templateIdToUse);
     }
-  }, [autoStart, articles, activeTemplates, selectedArticle]);
+  }, [autoStart, articles, activeTemplates, selectedArticle, settings]);
 
   const handleGenerateVoice = async () => {
     setIsGenerating(true);
