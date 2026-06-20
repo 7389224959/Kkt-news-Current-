@@ -1982,10 +1982,10 @@ ARTICLE TEXT:
 ${articleContent}
 
 Format rules for high engagement (TARGET DURATION AROUND 30 SECONDS, MAXIMUM 60-70 WORDS):
-0–5 sec: HOOK (Authoritative News Hook, e.g., "इस वक्त की बड़ी खबर...")
+0–5 sec: HOOK (Dynamic, context-aware Authoritative News Hook. DO NOT use the same generic "इस वक्त की बड़ी खबर" every time. Instead, make it specific to the core news and location, e.g., "बड़ी खबर आ रही है छत्तीसगढ़ के हसदेव से..." or "चौंकाने वाला मामला सामने आया है...". Be creative and dynamic, but maintain professional Hindi news anchor tone).
 5–15 sec: What happened (The core fact delivered with clear professional urgency)
 15–25 sec: Why important (Impact and crucial details without filler)
-25–30 sec: Professional Sign-off (e.g., "ज़्यादा अपडेट्स के लिए जुड़े रहें हमारे साथ।")
+25–30 sec: Professional Sign-off (Dynamic and professional sign-off, avoid repeating the same phrase).
 
 - STRICT WORD LIMIT: The entire voiceoverScript MUST be between 60 to 70 words to ensure a 30-second duration.
 - Sentences MUST be short, clear, and punchy. No long storytelling.
