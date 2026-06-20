@@ -260,19 +260,25 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
        autoStarted.current = true;
        let articleToUse = selectedArticle || articles[0];
        
-       let currentIndex = settings?.autoReelTemplateIndex !== undefined ? settings.autoReelTemplateIndex : parseInt(localStorage.getItem('lastAutoReelTemplateIndex') || '0', 10);
-       if (isNaN(currentIndex) || currentIndex >= activeTemplates.length) {
-         currentIndex = 0;
+       let templateToUse = activeTemplates[0];
+       let oldestTime = templateToUse.lastUsedTimestamp || 0;
+       
+       for (const t of activeTemplates) {
+         const tTime = t.lastUsedTimestamp || 0;
+         if (tTime < oldestTime) {
+           oldestTime = tTime;
+           templateToUse = t;
+         }
        }
        
-       let templateIdToUse = activeTemplates[currentIndex].id;
-       const nextIndex = (currentIndex + 1) % activeTemplates.length;
+       const templateIdToUse = templateToUse.id;
        
-       localStorage.setItem('lastAutoReelTemplateIndex', nextIndex.toString());
-       
-       if (settings) {
-         const updatedSettings = { ...settings, autoReelTemplateIndex: nextIndex };
-         saveSiteSettings(updatedSettings).catch(e => console.error("Failed to save reel template index", e));
+       if (settings && settings.reelTemplates) {
+         const updatedReelTemplates = settings.reelTemplates.map((t: any) => 
+           t.id === templateIdToUse ? { ...t, lastUsedTimestamp: Date.now() } : t
+         );
+         const updatedSettings = { ...settings, reelTemplates: updatedReelTemplates };
+         saveSiteSettings(updatedSettings).catch(e => console.error("Failed to save reel template usage", e));
        }
        
        handleAutoAllSteps(articleToUse, templateIdToUse);

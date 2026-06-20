@@ -91,6 +91,7 @@ export interface ReelTemplate {
   isActive: boolean;
   isIntroCombined?: boolean;
   introDuration?: number;
+  lastUsedTimestamp?: number;
   createdAt: string;
 }
 
