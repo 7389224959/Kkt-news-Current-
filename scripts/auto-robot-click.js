@@ -173,6 +173,12 @@ async function runAutoRobot() {
           // If we got here, it's a success
           fetchSuccess = true;
           console.log("Auto Fetch succeeded", res.message);
+          
+          if (res.message && res.message.toLowerCase().includes("no new articles")) {
+            console.log("No new articles generated - skipping auto viral and auto reel.");
+            viralSuccess = true;
+            reelSuccess = true;
+          }
         } catch (e) {
           throw new Error(`Auto Fetch Failed: ${e.message}`);
         }
