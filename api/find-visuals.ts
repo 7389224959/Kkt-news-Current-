@@ -137,9 +137,7 @@ ${script}`;
       // Filter out long phrases and keep unique, short terms
       const searchTerms = Array.from(new Set(rawTerms))
         .filter((t: any) => t && t.split(' ').length <= 3)
-        .slice(0, 2); // Max 2 terms per scene to prevent rate limits and be extremely fast
-
-      let googleSearchesPerformed = 0;
+        .slice(0, 1); // Max 1 term to be extremely fast
 
       for (const term of searchTerms) {
         if (!term) continue;
@@ -160,18 +158,6 @@ ${script}`;
           relevanceSc = 85;
           sourceInfo = "Wikipedia (" + term + ")";
           break;
-        }
-
-        // 3. Try Google Search Grounding (Limit to 1 call per scene to avoid quota limits)
-        if (googleSearchesPerformed < 1) {
-            googleSearchesPerformed++;
-            const googleImg = await searchGoogleImages(term + " news", ai);
-            if (googleImg) {
-              visualFound = googleImg;
-              relevanceSc = 80;
-              sourceInfo = "Google Web Search (" + term + ")";
-              break;
-            }
         }
       }
 
