@@ -1,5 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { getAiClient } from "../services/geminiService";
+import { GoogleGenAI } from "@google/genai";
 
 async function searchWikipedia(query: string) {
   try {
@@ -19,30 +18,6 @@ async function searchWikipedia(query: string) {
     }
   } catch (e) {
     // console.warn("Wikipedia error", e);
-  }
-  return null;
-}
-
-async function searchGoogleImages(query: string, ai: GoogleGenAI) {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `Search Google and find a high quality image representing '${query}'. Return ONLY the raw public image URL starting with http, no other text. We need the actual image file url (like .jpg or .png). If you cannot find a direct image link in the search results, respond with NONE.`,
-      config: {
-        tools: [{ googleSearch: {} }]
-      }
-    });
-    
-    let text = response.text?.trim() || "";
-    if (text && !text.includes('NONE')) {
-        const match = text.match(/https?:\/\/[^\s"'>]+(?:\.jpg|\.jpeg|\.png|\.webp)/i);
-        if (match) return match[0];
-        
-        const genericMatch = text.match(/https?:\/\/[^\s"'>]+/i);
-        if (genericMatch) return genericMatch[0];
-    }
-  } catch (e) {
-    console.warn("Google image search error:", e);
   }
   return null;
 }
@@ -74,8 +49,9 @@ export default async function handler(req: any, res: any) {
   const { script } = req.body;
   if (!script) return res.status(400).json({ error: 'Script is required' });
 
-  const ai = getAiClient();
-  if (!ai) return res.status(500).json({ error: 'AI key missing' });
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'AI key missing in environment' });
+  const ai = new GoogleGenAI({ apiKey });
 
   try {
     const prompt = `Analyze this Hindi news script. 
