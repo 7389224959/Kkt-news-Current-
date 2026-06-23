@@ -119,8 +119,8 @@ ${script}`;
     const parsed = JSON.parse(response.text || '{}');
     if (!parsed.scenes) throw new Error("Invalid schema returned");
 
-    // Perform visual search based on search layers
-    for (const scene of parsed.scenes) {
+    // Perform visual search based on search layers IN PARALLEL
+    await Promise.all(parsed.scenes.map(async (scene: any) => {
       let visualFound = null;
       let relevanceSc = 0;
       let sourceInfo = "";
@@ -136,8 +136,8 @@ ${script}`;
       
       // Filter out long phrases and keep unique, short terms
       const searchTerms = Array.from(new Set(rawTerms))
-        .filter(t => t && t.split(' ').length <= 3)
-        .slice(0, 4); // Max 4 searches per scene to prevent rate limits
+        .filter((t: any) => t && t.split(' ').length <= 3)
+        .slice(0, 2); // Max 2 terms per scene to prevent rate limits and be extremely fast
 
       let googleSearchesPerformed = 0;
 
@@ -149,7 +149,7 @@ ${script}`;
         if (wikiImg) {
           visualFound = wikiImg;
           relevanceSc = 90;
-          sourceInfo = "Wikimedia Commons (" + term + ")";
+          sourceInfo = "Wikimedia (" + term + ")";
           break;
         }
 
@@ -165,7 +165,7 @@ ${script}`;
         // 3. Try Google Search Grounding (Limit to 1 call per scene to avoid quota limits)
         if (googleSearchesPerformed < 1) {
             googleSearchesPerformed++;
-            const googleImg = await searchGoogleImages(term + " news photo", ai);
+            const googleImg = await searchGoogleImages(term + " news", ai);
             if (googleImg) {
               visualFound = googleImg;
               relevanceSc = 80;
@@ -186,14 +186,15 @@ ${script}`;
         scene.source = "AI Generation Recommended";
         scene.ai_prompt = scene.search_queries?.layer4_symbolic_search?.[0] || scene.visual_description;
       }
-    }
+    }));
 
     return res.status(200).json(parsed);
   } catch (err: any) {
     console.error("Find visuals error:", err);
-    let errMsg = err.message || "Unknown error";
-    if (errMsg.includes("API_KEY_INVALID") || errMsg.includes("invalid API key")) {
-        errMsg = "Vite environment evaluated an invalid API key or you haven't set a valid GEMINI_API_KEY. Please check your settings.";
+    let errMsg = err.message ? err.message : (typeof err === 'string' ? err : "Unknown error");
+    const strErr = String(err) + " " + JSON.stringify(err);
+    if (strErr.includes("API_KEY_INVALID") || strErr.includes("invalid API key") || strErr.includes("API key not valid")) {
+        errMsg = "The Gemini API Key provided is INVALID. Please check that you have pasted your correct, valid API key in Environment variables (Settings -> Secrets) or .env file.";
     }
     res.status(500).json({ error: errMsg });
   }

@@ -51,7 +51,7 @@ export const getAiClient = () => {
     if (!k5) k5 = process.env.GEMINI_API_KEY_5;
   } catch (e) {}
 
-  const keys = [k1, k2, k3, k4, k5].filter((key) => !!key);
+  const keys = [k1, k2, k3, k4, k5].filter((key) => !!key && !String(key).includes("your_api") && key !== "undefined");
 
   if (keys.length === 0) {
     console.warn("API Keys are missing. Please ensure GEMINI_API_KEY is set.");

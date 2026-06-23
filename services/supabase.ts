@@ -3,13 +3,13 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = (typeof process !== 'undefined' && (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL)) || (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_URL);
 const supabaseKey = (typeof process !== 'undefined' && (process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY)) || (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY);
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Supabase URL and Anon Key are required. Please check your environment variables.');
+if (!supabaseUrl || !supabaseKey || !supabaseUrl.startsWith('http')) {
+  console.error('Supabase URL and Anon Key are required and URL must be valid. Please check your environment variables.');
 }
 
 export let supabase: any = null;
 try {
-  if (supabaseUrl && supabaseKey) {
+  if (supabaseUrl && supabaseKey && supabaseUrl.startsWith('http')) {
     supabase = createClient(supabaseUrl, supabaseKey);
   }
 } catch(e) {
