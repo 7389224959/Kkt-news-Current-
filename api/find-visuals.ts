@@ -4,7 +4,10 @@ import { jsonrepair } from "jsonrepair";
 
 async function searchWebImages(query: string): Promise<string | null> {
   return new Promise((resolve) => {
-      https.get(`https://duckduckgo.com/?q=${encodeURIComponent(query)}&t=h_&iar=images&iax=images&ia=images`, (res) => {
+      const options = {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36' }
+      };
+      https.get(`https://duckduckgo.com/?q=${encodeURIComponent(query)}&t=h_&iar=images&iax=images&ia=images`, options, (res) => {
           let data = '';
           res.on('data', chunk => data += chunk);
           res.on('end', () => {
@@ -12,7 +15,7 @@ async function searchWebImages(query: string): Promise<string | null> {
               if (!match) return resolve(null);
               const vqd = match[1];
 
-              const req = https.get(`https://duckduckgo.com/i.js?q=${encodeURIComponent(query)}&o=json&p=1&s=0&u=bing&f=,,,,,&l=us-en&vqd=${vqd}`, (res2) => {
+              const req = https.get(`https://duckduckgo.com/i.js?q=${encodeURIComponent(query)}&o=json&p=1&s=0&u=bing&f=,,,,,&l=us-en&vqd=${vqd}`, options, (res2) => {
                   let data2 = '';
                   res2.on('data', chunk => data2 += chunk);
                   res2.on('end', () => {
@@ -87,13 +90,40 @@ ${script}`;
       contents: prompt,
       config: {
         responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            scenes: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  scene_number: { type: "INTEGER" },
+                  voiceover_text: { type: "STRING" },
+                  visual_description: { type: "STRING" },
+                  entities: { type: "ARRAY", items: { type: "STRING" } },
+                  event_type: { type: "STRING" },
+                  location: { type: "STRING" },
+                  search_queries: {
+                    type: "OBJECT",
+                    properties: {
+                      layer1_real_incident: { type: "ARRAY", items: { type: "STRING" } },
+                      layer2_entity_search: { type: "ARRAY", items: { type: "STRING" } },
+                      layer3_event_search: { type: "ARRAY", items: { type: "STRING" } },
+                      layer4_symbolic_search: { type: "ARRAY", items: { type: "STRING" } },
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     });
 
     let parsed;
     try {
-      const repaired = jsonrepair(response.text || '{}');
-      parsed = JSON.parse(repaired);
+      parsed = JSON.parse(response.text || '{}');
     } catch(e: any) {
       console.warn("JSON repair/parse failed on:", response.text);
       throw new Error("Failed to parse AI response as JSON: " + e.message);
@@ -119,16 +149,16 @@ ${script}`;
       // Filter out long phrases and keep unique, short terms
       const searchTerms = Array.from(new Set(rawTerms))
         .filter((t: any) => t && typeof t === 'string' && t.split(' ').length <= 3)
-        .slice(0, 1); // Max 1 term to be extremely fast
+        .slice(0, 3); // Max 3 terms for fallbacks
 
-      let googleSearchesPerformed = 0;
+      let webSearchesPerformed = 0;
 
       for (const term of searchTerms) {
         if (!term) continue;
         
-        // Try Web Image Search (Limit to 1 call per scene to avoid quota limits)
-        if (googleSearchesPerformed < 1) {
-            googleSearchesPerformed++;
+        // Try Web Image Search (Limit to 2 calls per scene to avoid rate limits)
+        if (webSearchesPerformed < 2) {
+            webSearchesPerformed++;
             const webImg = await searchWebImages(term + " news");
             if (webImg) {
               visualFound = webImg;
