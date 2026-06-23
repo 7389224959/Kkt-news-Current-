@@ -5,7 +5,7 @@ import { generateSlug } from "../newsUtils";
 import { supabase } from "./supabase";
 import { jsonrepair } from "jsonrepair";
 
-const getAiClient = () => {
+export const getAiClient = () => {
   let k1, k2, k3, k4, k5;
   // Try to read from Vite env
   try {

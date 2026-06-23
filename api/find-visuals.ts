@@ -1,16 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-
-const getAiClient = () => {
-  const keys = [
-    process.env.VITE_GEMINI_API_KEY,
-    process.env.GEMINI_API_KEY,
-    process.env.VITE_GEMINI_API_KEY_2,
-    process.env.GEMINI_API_KEY_2
-  ].filter(s => Boolean(s) && s !== "undefined" && typeof s === 'string' && !s.includes('your_api'));
-  
-  if (keys.length === 0) return null;
-  return new GoogleGenAI({ apiKey: keys[0] as string });
-};
+import { getAiClient } from "../services/geminiService";
 
 async function searchWikipedia(query: string) {
   try {
@@ -94,6 +83,7 @@ Split it into logical scenes (approx 3-5 seconds each).
 Extract entities: people, locations, organizations, event types.
 Generate search queries in 4 layers for each scene.
 IMPORTANT: Translate all entities and search queries to strictly ENGLISH to ensure image searches work properly. Do not use Hindi for search_queries or entities.
+CRITICAL: Keep search queries VERY SHORT (1 to 2 words max). For example, instead of "Brijmohan Agrawal railway proposal", just output "Brijmohan Agrawal" or "Railway".
 
 Format must be exactly this JSON schema:
 {
@@ -135,12 +125,21 @@ ${script}`;
       let relevanceSc = 0;
       let sourceInfo = "";
 
-      // Try Layer 1 & 2 (Entities / Real Incident) via Wikipedia
-      const searchTerms = [
+      // Prioritize short, direct entity names over complex phrases
+      let rawTerms = [
+        ...(scene.entities || []),
         ...(scene.search_queries?.layer1_real_incident || []),
         ...(scene.search_queries?.layer2_entity_search || []),
-        ...(scene.entities || [])
-      ].slice(0, 3); // Max 3 searches per scene to be quick
+        ...(scene.search_queries?.layer3_event_search || []),
+        ...(scene.search_queries?.layer4_symbolic_search || [])
+      ];
+      
+      // Filter out long phrases and keep unique, short terms
+      const searchTerms = Array.from(new Set(rawTerms))
+        .filter(t => t && t.split(' ').length <= 3)
+        .slice(0, 4); // Max 4 searches per scene to prevent rate limits
+
+      let googleSearchesPerformed = 0;
 
       for (const term of searchTerms) {
         if (!term) continue;
@@ -163,13 +162,16 @@ ${script}`;
           break;
         }
 
-        // 3. Try Google Search Grounding
-        const googleImg = await searchGoogleImages(term, ai);
-        if (googleImg) {
-          visualFound = googleImg;
-          relevanceSc = 80;
-          sourceInfo = "Google Web Search (" + term + ")";
-          break;
+        // 3. Try Google Search Grounding (Limit to 1 call per scene to avoid quota limits)
+        if (googleSearchesPerformed < 1) {
+            googleSearchesPerformed++;
+            const googleImg = await searchGoogleImages(term + " news photo", ai);
+            if (googleImg) {
+              visualFound = googleImg;
+              relevanceSc = 80;
+              sourceInfo = "Google Web Search (" + term + ")";
+              break;
+            }
         }
       }
 
