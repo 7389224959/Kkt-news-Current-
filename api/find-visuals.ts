@@ -49,8 +49,15 @@ export default async function handler(req: any, res: any) {
   const { script } = req.body;
   if (!script) return res.status(400).json({ error: 'Script is required' });
 
-  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'AI key missing in environment' });
+  let apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey && typeof process !== 'undefined' && process.env.VITE_GEMINI_API_KEY) {
+      apiKey = process.env.VITE_GEMINI_API_KEY;
+  }
+  
+  if (!apiKey) {
+      return res.status(500).json({ error: 'AI API key is missing. Please configure GEMINI_API_KEY.' });
+  }
+
   const ai = new GoogleGenAI({ apiKey });
 
   try {
@@ -112,7 +119,7 @@ ${script}`;
       
       // Filter out long phrases and keep unique, short terms
       const searchTerms = Array.from(new Set(rawTerms))
-        .filter((t: any) => t && t.split(' ').length <= 3)
+        .filter((t: any) => t && typeof t === 'string' && t.split(' ').length <= 3)
         .slice(0, 1); // Max 1 term to be extremely fast
 
       for (const term of searchTerms) {
