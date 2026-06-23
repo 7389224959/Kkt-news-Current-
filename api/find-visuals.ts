@@ -118,8 +118,8 @@ export default async function handler(req: any, res: any) {
   try {
     const prompt = `Analyze this Hindi news script. 
 Split it into logical scenes (approx 3-5 seconds each).
-Extract entities: people, locations, organizations, event types.
-Generate search queries in 4 layers for each scene.
+Extract entities: STRICTLY limit to tangible, visual elements like specific persons, places, location maps, or prominent physical objects relevant to the news scene. Do not include abstract concepts, actions, or full sentences.
+Generate search queries in 4 layers for each scene based ONLY on these tangible visual elements.
 IMPORTANT: Translate all entities and search queries to strictly ENGLISH to ensure image searches work properly. Do not use Hindi for search_queries or entities.
 CRITICAL: Keep search queries VERY SHORT (1 to 2 words max). For example, instead of "Brijmohan Agrawal railway proposal", just output "Brijmohan Agrawal" or "Railway".
 
