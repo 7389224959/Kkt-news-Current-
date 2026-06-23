@@ -58,6 +58,27 @@ async function searchGoogleImages(query: string, ai: GoogleGenAI) {
   return null;
 }
 
+async function searchWikimedia(query: string) {
+  try {
+    const searchRes = await fetch(`https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&srnamespace=6&format=json&srlimit=1`);
+    const searchJson = await searchRes.json();
+    if (searchJson.query?.search?.length > 0) {
+      const title = searchJson.query.search[0].title;
+      const imgRes = await fetch(`https://commons.wikimedia.org/w/api.php?action=query&prop=imageinfo&iiprop=url&titles=${encodeURIComponent(title)}&format=json`);
+      const imgJson = await imgRes.json();
+      const pages = imgJson.query?.pages;
+      if (pages) {
+         const pageId = Object.keys(pages)[0];
+         if (pages[pageId]?.imageinfo?.[0]?.url) {
+            return pages[pageId].imageinfo[0].url;
+         }
+      }
+    }
+  } catch (e) {
+  }
+  return null;
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   
@@ -72,6 +93,7 @@ export default async function handler(req: any, res: any) {
 Split it into logical scenes (approx 3-5 seconds each).
 Extract entities: people, locations, organizations, event types.
 Generate search queries in 4 layers for each scene.
+IMPORTANT: Translate all entities and search queries to strictly ENGLISH to ensure image searches work properly. Do not use Hindi for search_queries or entities.
 
 Format must be exactly this JSON schema:
 {
@@ -123,7 +145,16 @@ ${script}`;
       for (const term of searchTerms) {
         if (!term) continue;
         
-        // 1. Try Wikipedia
+        // 1. Try Wikimedia Commons first (usually returns better explicit media)
+        const wikiImg = await searchWikimedia(term);
+        if (wikiImg) {
+          visualFound = wikiImg;
+          relevanceSc = 90;
+          sourceInfo = "Wikimedia Commons (" + term + ")";
+          break;
+        }
+
+        // 2. Try Wikipedia
         const img = await searchWikipedia(term);
         if (img) {
           visualFound = img;
@@ -132,7 +163,7 @@ ${script}`;
           break;
         }
 
-        // 2. Try Google Search Grounding
+        // 3. Try Google Search Grounding
         const googleImg = await searchGoogleImages(term, ai);
         if (googleImg) {
           visualFound = googleImg;
