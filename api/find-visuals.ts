@@ -1,7 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
 import https from "node:https";
-import { jsonrepair } from "jsonrepair";
-import { getAiClient } from "../services/geminiService";
 
 async function searchWebImages(query: string): Promise<string | null> {
   return new Promise((resolve) => {
@@ -38,17 +36,86 @@ async function searchWebImages(query: string): Promise<string | null> {
   });
 }
 
+async function analyzeScriptWithFallback(prompt: string) {
+  let k1, k2, k3, k4, k5;
+  try { k1 = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY; } catch (e) {}
+  try { k2 = process.env.VITE_GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY_2; } catch (e) {}
+  try { k3 = process.env.VITE_GEMINI_API_KEY_3 || process.env.GEMINI_API_KEY_3; } catch (e) {}
+  try { k4 = process.env.VITE_GEMINI_API_KEY_4 || process.env.GEMINI_API_KEY_4; } catch (e) {}
+  try { k5 = process.env.VITE_GEMINI_API_KEY_5 || process.env.GEMINI_API_KEY_5; } catch (e) {}
+
+  const keys = [k1, k2, k3, k4, k5].filter((key) => !!key && !String(key).includes("your_api") && key !== "undefined");
+
+  if (keys.length === 0) {
+    throw new Error("API_KEY_INVALID: API Keys are missing. Please ensure GEMINI_API_KEY is set.");
+  }
+
+  let lastError;
+  const maxRetries = 2;
+
+  for (let retry = 0; retry < maxRetries; retry++) {
+    for (let i = 0; i < keys.length; i++) {
+      try {
+        const client = new GoogleGenAI({ apiKey: keys[i] as string });
+        return await client.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                scenes: {
+                  type: "ARRAY",
+                  items: {
+                    type: "OBJECT",
+                    properties: {
+                      scene_number: { type: "INTEGER" },
+                      voiceover_text: { type: "STRING" },
+                      visual_description: { type: "STRING" },
+                      entities: { type: "ARRAY", items: { type: "STRING" } },
+                      event_type: { type: "STRING" },
+                      location: { type: "STRING" },
+                      search_queries: {
+                        type: "OBJECT",
+                        properties: {
+                          layer1_real_incident: { type: "ARRAY", items: { type: "STRING" } },
+                          layer2_entity_search: { type: "ARRAY", items: { type: "STRING" } },
+                          layer3_event_search: { type: "ARRAY", items: { type: "STRING" } },
+                          layer4_symbolic_search: { type: "ARRAY", items: { type: "STRING" } },
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+      } catch (error: any) {
+        lastError = error;
+        const msg = typeof error?.message === "string" ? error.message : JSON.stringify(error?.message || "");
+        
+        if (msg.toLowerCase().includes("quota") || msg.includes("429") || msg.toLowerCase().includes("exhausted")) {
+          console.warn(`[Gemini API Key ${i + 1}] Quota exceeded. Falling back...`);
+          continue;
+        } else if (msg.includes("500") || msg.includes("503") || msg.toLowerCase().includes("internal")) {
+          console.warn(`[Gemini API Key ${i + 1}] Temp error. Retrying...`);
+          break;
+        } else {
+          throw error;
+        }
+      }
+    }
+  }
+  throw lastError;
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   
   const { script } = req.body;
   if (!script) return res.status(400).json({ error: 'Script is required' });
-
-  const ai = getAiClient();
-  
-  if (!ai) {
-      return res.status(500).json({ error: 'AI API key is missing. Please configure GEMINI_API_KEY.' });
-  }
 
   try {
     const prompt = `Analyze this Hindi news script. 
@@ -81,59 +148,20 @@ Format must be exactly this JSON schema:
 Script to analyze:
 ${script}`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            scenes: {
-              type: "ARRAY",
-              items: {
-                type: "OBJECT",
-                properties: {
-                  scene_number: { type: "INTEGER" },
-                  voiceover_text: { type: "STRING" },
-                  visual_description: { type: "STRING" },
-                  entities: { type: "ARRAY", items: { type: "STRING" } },
-                  event_type: { type: "STRING" },
-                  location: { type: "STRING" },
-                  search_queries: {
-                    type: "OBJECT",
-                    properties: {
-                      layer1_real_incident: { type: "ARRAY", items: { type: "STRING" } },
-                      layer2_entity_search: { type: "ARRAY", items: { type: "STRING" } },
-                      layer3_event_search: { type: "ARRAY", items: { type: "STRING" } },
-                      layer4_symbolic_search: { type: "ARRAY", items: { type: "STRING" } },
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    });
+    const response = await analyzeScriptWithFallback(prompt);
 
     let parsed;
     try {
-      parsed = JSON.parse(response.text || '{}');
+      parsed = JSON.parse(response?.text || '{}');
     } catch(e: any) {
-      console.warn("JSON repair/parse failed on:", response.text);
+      console.warn("JSON parse failed on:", response?.text);
       throw new Error("Failed to parse AI response as JSON: " + e.message);
     }
     
     if (!parsed.scenes) throw new Error("Invalid schema returned");
 
-    // Perform visual search based on search layers SEQUENTIALLY to avoid timeouts
-    for (const scene of parsed.scenes) {
-      let visualFound = null;
-      let relevanceSc = 0;
-      let sourceInfo = "";
-
-      // Prioritize short, direct entity names over complex phrases
+    // Process all scenes in parallel to avoid Vercel function timeout
+    await Promise.all(parsed.scenes.map(async (scene: any) => {
       let rawTerms = [
         ...(scene.entities || []),
         ...(scene.search_queries?.layer1_real_incident || []),
@@ -142,41 +170,39 @@ ${script}`;
         ...(scene.search_queries?.layer4_symbolic_search || [])
       ];
       
-      // Filter out long phrases and keep unique, short terms
       const searchTerms = Array.from(new Set(rawTerms))
         .filter((t: any) => t && typeof t === 'string' && t.split(' ').length <= 3)
-        .slice(0, 3); // Max 3 terms for fallbacks
+        .slice(0, 2); // Max 2 terms for speed
 
-      let webSearchesPerformed = 0;
+      let visualFound = null;
+      let sourceInfo = "";
 
-      for (const term of searchTerms) {
-        if (!term) continue;
-        
-        // Try Web Image Search (Limit to 2 calls per scene to avoid rate limits)
-        if (webSearchesPerformed < 2) {
-            webSearchesPerformed++;
-            const webImg = await searchWebImages(term + " news");
-            if (webImg) {
-              visualFound = webImg;
-              relevanceSc = 80;
-              sourceInfo = "Web Image Search (" + term + ")";
-              break;
-            }
+      // Try searching terms in parallel, pick first successful
+      if (searchTerms.length > 0) {
+        const results = await Promise.allSettled(searchTerms.map(async (term) => {
+          const img = await searchWebImages(term + " news");
+          if (!img) throw new Error("No image");
+          return { img, term };
+        }));
+
+        const success = results.find(r => r.status === 'fulfilled');
+        if (success && success.status === 'fulfilled') {
+            visualFound = success.value.img;
+            sourceInfo = "Web Image Search (" + success.value.term + ")";
         }
       }
 
       if (visualFound) {
         scene.selected_visual = visualFound;
-        scene.relevance_score = relevanceSc;
+        scene.relevance_score = 80;
         scene.source = sourceInfo;
       } else {
-        // Fallback symbolic logic (handled by AI Image / frontend or just placeholders)
         scene.selected_visual = "";
-        scene.relevance_score = 40; // Needs replacement
+        scene.relevance_score = 40;
         scene.source = "AI Generation Recommended";
         scene.ai_prompt = scene.search_queries?.layer4_symbolic_search?.[0] || scene.visual_description;
       }
-    }
+    }));
 
     return res.status(200).json(parsed);
   } catch (err: any) {
@@ -189,3 +215,4 @@ ${script}`;
     res.status(500).json({ error: errMsg });
   }
 }
+
