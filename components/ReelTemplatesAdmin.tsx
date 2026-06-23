@@ -567,7 +567,14 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
                </div>
              )}
 
-             <label className="block text-sm font-bold text-purple-900 mb-2">Intro Video (Optional)</label>
+             <div className="flex justify-between items-center mb-2">
+               <label className="block text-sm font-bold text-purple-900">Intro Video (Optional)</label>
+               {template.introMediaUrl && (
+                 <button type="button" onClick={() => setTemplate({...template, introMediaUrl: ''})} className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 px-2 py-1 bg-red-50 rounded border border-red-100">
+                   <X size={12} /> Remove
+                 </button>
+               )}
+             </div>
              {template.introMediaUrl && (
                <div className="mb-2 text-sm text-green-600 font-bold break-all">
                  Using intro video.
@@ -577,7 +584,14 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
           </div>
 
           <div className="bg-purple-50 p-4 rounded border border-purple-100">
-             <label className="block text-sm font-bold text-purple-900 mb-2">Outro Video (Optional)</label>
+             <div className="flex justify-between items-center mb-2">
+               <label className="block text-sm font-bold text-purple-900">Outro Video (Optional)</label>
+               {template.outroMediaUrl && (
+                 <button type="button" onClick={() => setTemplate({...template, outroMediaUrl: ''})} className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 px-2 py-1 bg-red-50 rounded border border-red-100">
+                   <X size={12} /> Remove
+                 </button>
+               )}
+             </div>
              {template.outroMediaUrl && (
                <div className="mb-2 text-sm text-green-600 font-bold break-all">
                  Using outro video.
@@ -587,7 +601,14 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
           </div>
 
           <div className="bg-purple-50 p-4 rounded border border-purple-100">
-             <label className="block text-sm font-bold text-purple-900 mb-2">Background Music (Optional)</label>
+             <div className="flex justify-between items-center mb-2">
+               <label className="block text-sm font-bold text-purple-900">Background Music (Optional)</label>
+               {template.bgmUrl && (
+                 <button type="button" onClick={() => setTemplate({...template, bgmUrl: ''})} className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 px-2 py-1 bg-red-50 rounded border border-red-100">
+                   <X size={12} /> Remove
+                 </button>
+               )}
+             </div>
              {template.bgmUrl && (
                <div className="mb-2 text-sm text-green-600 font-bold break-all">
                  Using custom BGM.
