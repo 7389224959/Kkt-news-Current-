@@ -98,34 +98,7 @@ async function analyzeScriptWithFallback(prompt: string) {
           contents: prompt,
           config: {
             responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                scenes: {
-                  type: "ARRAY",
-                  items: {
-                    type: "OBJECT",
-                    properties: {
-                      scene_number: { type: "INTEGER" },
-                      voiceover_text: { type: "STRING" },
-                      visual_description: { type: "STRING" },
-                      entities: { type: "ARRAY", items: { type: "STRING" } },
-                      event_type: { type: "STRING" },
-                      location: { type: "STRING" },
-                      search_queries: {
-                        type: "OBJECT",
-                        properties: {
-                          layer1_real_incident: { type: "ARRAY", items: { type: "STRING" } },
-                          layer2_entity_search: { type: "ARRAY", items: { type: "STRING" } },
-                          layer3_event_search: { type: "ARRAY", items: { type: "STRING" } },
-                          layer4_symbolic_search: { type: "ARRAY", items: { type: "STRING" } },
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            temperature: 0.2
           }
         });
       } catch (error: any) {
