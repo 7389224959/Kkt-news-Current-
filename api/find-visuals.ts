@@ -1,27 +1,36 @@
 import { GoogleGenAI } from "@google/genai";
+import https from "node:https";
 
-async function searchGoogleImages(query: string, ai: GoogleGenAI) {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `Search Google and find a high quality image representing '${query}'. Return ONLY the raw public image URL starting with http, no other text. We need the actual image file url (like .jpg or .png). If you cannot find a direct image link in the search results, respond with NONE.`,
-      config: {
-        tools: [{ googleSearch: {} }]
-      }
-    });
-    
-    let text = response.text?.trim() || "";
-    if (text && !text.includes('NONE')) {
-        const match = text.match(/https?:\/\/[^\s"'>]+(?:\.jpg|\.jpeg|\.png|\.webp)/i);
-        if (match) return match[0];
-        
-        const genericMatch = text.match(/https?:\/\/[^\s"'>]+/i);
-        if (genericMatch) return genericMatch[0];
-    }
-  } catch (e) {
-    console.warn("Google image search error:", e);
-  }
-  return null;
+async function searchWebImages(query: string): Promise<string | null> {
+  return new Promise((resolve) => {
+      https.get(`https://duckduckgo.com/?q=${encodeURIComponent(query)}&t=h_&iar=images&iax=images&ia=images`, (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+              const match = data.match(/vqd=([a-zA-Z0-9-]+)/);
+              if (!match) return resolve(null);
+              const vqd = match[1];
+
+              const req = https.get(`https://duckduckgo.com/i.js?q=${encodeURIComponent(query)}&o=json&p=1&s=0&u=bing&f=,,,,,&l=us-en&vqd=${vqd}`, (res2) => {
+                  let data2 = '';
+                  res2.on('data', chunk => data2 += chunk);
+                  res2.on('end', () => {
+                      try {
+                          const json = JSON.parse(data2);
+                          if (json.results && json.results.length > 0) {
+                              resolve(json.results[0].image);
+                          } else {
+                              resolve(null);
+                          }
+                      } catch (e) {
+                          resolve(null);
+                      }
+                  });
+              });
+              req.on('error', () => resolve(null));
+          });
+      }).on('error', () => resolve(null));
+  });
 }
 
 export default async function handler(req: any, res: any) {
@@ -108,14 +117,14 @@ ${script}`;
       for (const term of searchTerms) {
         if (!term) continue;
         
-        // Try Google Image Search (Limit to 1 call per scene to avoid quota limits)
+        // Try Web Image Search (Limit to 1 call per scene to avoid quota limits)
         if (googleSearchesPerformed < 1) {
             googleSearchesPerformed++;
-            const googleImg = await searchGoogleImages(term + " news", ai);
-            if (googleImg) {
-              visualFound = googleImg;
+            const webImg = await searchWebImages(term + " news");
+            if (webImg) {
+              visualFound = webImg;
               relevanceSc = 80;
-              sourceInfo = "Google Web Search (" + term + ")";
+              sourceInfo = "Web Image Search (" + term + ")";
               break;
             }
         }
