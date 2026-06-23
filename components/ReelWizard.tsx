@@ -18,7 +18,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
   const [showTicker, setShowTicker] = useState(true);
   const [showSubtitles, setShowSubtitles] = useState(true);
   
-  const [visualMode, setVisualMode] = useState<'template'|'post'|'upload'|'ai'>('template');
+  const [visualMode, setVisualMode] = useState<'template'|'post'|'upload'|'ai'|'scenes'>('template');
   const [customMediaUrl, setCustomMediaUrl] = useState<string>('');
   
   const [overlayMode, setOverlayMode] = useState<'none'|'post'|'upload'|'ai'>('post');
@@ -33,6 +33,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [status, setStatus] = useState('');
+  const [scenes, setScenes] = useState<any[]>([]);
 
   const activeTemplates = settings?.reelTemplates?.filter((t: any) => t.isActive) || [];
 
@@ -334,6 +335,27 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
     }
   }
 
+  const handleFindVisuals = async () => {
+    setIsGenerating(true);
+    setStatus('Analyzing script and finding visuals scene-by-scene...');
+    try {
+      const res = await fetch('/api/find-visuals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ script: scriptData.fullScript || scriptData.voiceoverScript })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setScenes(data.scenes || []);
+    } catch(e: any) {
+      console.error(e);
+      alert('Error finding visuals: ' + e.message);
+    } finally {
+      setIsGenerating(false);
+      setStatus('');
+    }
+  };
+
   const generateHTMLPreview = () => {
     setStep(4);
   };
@@ -377,22 +399,28 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       if (customCoords.video) renderTemplate.coordinates.video_box = customCoords.video;
 
       let initialVisuals = [];
-      if (selectedArticle?.videoUrl) initialVisuals.push(selectedArticle.videoUrl);
-      if (finalOverlayUrl && finalOverlayUrl !== selectedArticle?.videoUrl) initialVisuals.push(finalOverlayUrl);
-      if (selectedArticle?.image) initialVisuals.push(selectedArticle.image);
-      
-      if ((selectedArticle as any)?.additionalImages && Array.isArray((selectedArticle as any).additionalImages)) {
-         initialVisuals.push(...(selectedArticle as any).additionalImages);
+      if (visualMode === 'scenes' && scenes.length > 0) {
+         scenes.forEach((s: any) => {
+            if (s.selected_visual) initialVisuals.push(s.selected_visual);
+         });
       } else {
-         const contentStr = selectedArticle?.content || '';
-         const match = contentStr.match(/<!-- (?:KKT_META:\s*\{.*?"additionalImages"\s*:\s*(\[.*?\]).*?\}|additionalImages:\s*(\[.*?\]))\s*-->/s);
-         if (match) {
-            try {
-               const parsedArray = JSON.parse(match[1] || match[2]);
-               if (Array.isArray(parsedArray)) {
-                  initialVisuals.push(...parsedArray);
-               }
-            } catch(e) {}
+         if (selectedArticle?.videoUrl) initialVisuals.push(selectedArticle.videoUrl);
+         if (finalOverlayUrl && finalOverlayUrl !== selectedArticle?.videoUrl) initialVisuals.push(finalOverlayUrl);
+         if (selectedArticle?.image) initialVisuals.push(selectedArticle.image);
+         
+         if ((selectedArticle as any)?.additionalImages && Array.isArray((selectedArticle as any).additionalImages)) {
+            initialVisuals.push(...(selectedArticle as any).additionalImages);
+         } else {
+            const contentStr = selectedArticle?.content || '';
+            const match = contentStr.match(/<!-- (?:KKT_META:\s*\{.*?"additionalImages"\s*:\s*(\[.*?\]).*?\}|additionalImages:\s*(\[.*?\]))\s*-->/s);
+            if (match) {
+               try {
+                  const parsedArray = JSON.parse(match[1] || match[2]);
+                  if (Array.isArray(parsedArray)) {
+                     initialVisuals.push(...parsedArray);
+                  }
+               } catch(e) {}
+            }
          }
       }
       
@@ -557,7 +585,52 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
                  <button onClick={()=>setVisualMode('post')} className={`px-4 py-2 rounded border ${visualMode === 'post' ? 'bg-pink-50 border-pink-500' : 'bg-gray-50'}`}>From Post</button>
                  <button onClick={()=>setVisualMode('upload')} className={`px-4 py-2 rounded border ${visualMode === 'upload' ? 'bg-pink-50 border-pink-500' : 'bg-gray-50'}`}>Upload custom</button>
                  <button onClick={()=>setVisualMode('ai')} className={`px-4 py-2 rounded border ${visualMode === 'ai' ? 'bg-pink-50 border-pink-500' : 'bg-gray-50'}`}>Generate AI</button>
+                 <button onClick={()=>setVisualMode('scenes')} className={`px-4 py-2 rounded border ${visualMode === 'scenes' ? 'bg-pink-50 border-pink-500 font-bold' : 'bg-gray-50'}`}>Auto Find Visuals</button>
               </div>
+
+              {visualMode === 'scenes' && (
+                <div className="p-4 border rounded">
+                  <button onClick={handleFindVisuals} disabled={isGenerating} className="px-4 py-3 bg-pink-100 border-pink-300 text-pink-800 font-bold rounded flex gap-2 items-center mb-4 text-sm w-full justify-center hover:bg-pink-200">
+                    {isGenerating ? <RefreshCw className="animate-spin" size={18}/> : <Zap size={18} />} Analyze Script & Find Visuals For Scenes
+                  </button>
+                  
+                  {scenes.length > 0 && (
+                    <div className="space-y-4">
+                      <h5 className="font-bold border-b pb-2">Logical Scenes ({scenes.length})</h5>
+                      <div className="max-h-96 overflow-y-auto pr-2 space-y-4">
+                      {scenes.map((scene: any, idx) => (
+                        <div key={idx} className="bg-gray-50 border rounded p-3 shadow-sm">
+                          <div className="flex justify-between items-start mb-2">
+                             <div className="font-bold text-sm bg-gray-200 px-2 rounded">Scene {scene.scene_number}</div>
+                             <div className={`text-xs px-2 py-1 border rounded font-semibold ${(scene.relevance_score || 0) >= 75 ? 'bg-green-100 text-green-800 border-green-300' : 'bg-yellow-100 text-yellow-800 border-yellow-300'}`}>Score: {scene.relevance_score || 0}/100</div>
+                          </div>
+                          <p className="text-sm text-gray-700 italic border-l-2 border-pink-400 pl-2 mb-2">"{scene.voiceover_text}"</p>
+                          <div className="flex flex-col sm:flex-row gap-4 mt-3">
+                             {scene.selected_visual ? 
+                               <img src={scene.selected_visual} className="w-24 h-24 object-cover rounded shadow-sm border border-gray-300" />
+                             :
+                               <div className="w-24 h-24 bg-gray-200 rounded flex items-center justify-center text-xs text-center border border-gray-300 p-1 text-gray-500">No Target Match<br/>(AI suggested)</div>
+                             }
+                             <div className="flex-1 text-sm">
+                               <p className="mb-1 text-gray-600"><span className="font-semibold text-black">Source:</span> {scene.source || 'None'}</p>
+                               {scene.ai_prompt && !scene.selected_visual && <p className="mb-2 text-xs text-indigo-600"><span className="font-semibold text-black">Suggested Topic:</span> {scene.ai_prompt}</p>}
+                               <div className="space-y-1">
+                                  <label className="block text-xs font-semibold text-gray-700">Replace/Set visual URL (Image/Video):</label>
+                                  <input type="text" className="w-full px-2 py-1.5 border rounded text-xs bg-white focus:ring-1 focus:ring-pink-500" placeholder="Paste URL..." value={scene.selected_visual || ''} onChange={(e) => {
+                                     const newScenes = [...scenes];
+                                     newScenes[idx].selected_visual = e.target.value;
+                                     setScenes(newScenes);
+                                  }} />
+                               </div>
+                             </div>
+                          </div>
+                        </div>
+                      ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {visualMode === 'post' && (
                 <div className="p-4 border rounded">
