@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import https from "node:https";
 import { jsonrepair } from "jsonrepair";
+import { getAiClient } from "../services/geminiService";
 
 async function searchWebImages(query: string): Promise<string | null> {
   return new Promise((resolve) => {
@@ -43,16 +44,11 @@ export default async function handler(req: any, res: any) {
   const { script } = req.body;
   if (!script) return res.status(400).json({ error: 'Script is required' });
 
-  let apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey && typeof process !== 'undefined' && process.env.VITE_GEMINI_API_KEY) {
-      apiKey = process.env.VITE_GEMINI_API_KEY;
-  }
+  const ai = getAiClient();
   
-  if (!apiKey) {
+  if (!ai) {
       return res.status(500).json({ error: 'AI API key is missing. Please configure GEMINI_API_KEY.' });
   }
-
-  const ai = new GoogleGenAI({ apiKey });
 
   try {
     const prompt = `Analyze this Hindi news script. 
