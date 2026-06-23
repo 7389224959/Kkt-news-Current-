@@ -1,39 +1,37 @@
 import { GoogleGenAI } from "@google/genai";
-import https from "node:https";
+
+export const maxDuration = 60; // Allow more time on Vercel
 
 async function searchWebImages(query: string): Promise<string | null> {
-  return new Promise((resolve) => {
-      const options = {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36' }
-      };
-      https.get(`https://duckduckgo.com/?q=${encodeURIComponent(query)}&t=h_&iar=images&iax=images&ia=images`, options, (res) => {
-          let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', () => {
-              const match = data.match(/vqd=([a-zA-Z0-9-]+)/);
-              if (!match) return resolve(null);
-              const vqd = match[1];
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5-second timeout to avoid Vercel 10s limit
 
-              const req = https.get(`https://duckduckgo.com/i.js?q=${encodeURIComponent(query)}&o=json&p=1&s=0&u=bing&f=,,,,,&l=us-en&vqd=${vqd}`, options, (res2) => {
-                  let data2 = '';
-                  res2.on('data', chunk => data2 += chunk);
-                  res2.on('end', () => {
-                      try {
-                          const json = JSON.parse(data2);
-                          if (json.results && json.results.length > 0) {
-                              resolve(json.results[0].image);
-                          } else {
-                              resolve(null);
-                          }
-                      } catch (e) {
-                          resolve(null);
-                      }
-                  });
-              });
-              req.on('error', () => resolve(null));
-          });
-      }).on('error', () => resolve(null));
-  });
+  try {
+    const res1 = await fetch(`https://duckduckgo.com/?q=${encodeURIComponent(query)}&t=h_&iar=images&iax=images&ia=images`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36' },
+      signal: controller.signal
+    });
+    const data1 = await res1.text();
+    const match = data1.match(/vqd=([a-zA-Z0-9-]+)/);
+    if (!match) return null;
+    const vqd = match[1];
+
+    const res2 = await fetch(`https://duckduckgo.com/i.js?q=${encodeURIComponent(query)}&o=json&p=1&s=0&u=bing&f=,,,,,&l=us-en&vqd=${vqd}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36' },
+      signal: controller.signal
+    });
+    const data2 = await res2.json();
+    
+    clearTimeout(timeoutId);
+
+    if (data2?.results && data2.results.length > 0) {
+      return data2.results[0].image;
+    }
+    return null;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    return null;
+  }
 }
 
 async function analyzeScriptWithFallback(prompt: string) {
@@ -51,14 +49,14 @@ async function analyzeScriptWithFallback(prompt: string) {
   }
 
   let lastError;
-  const maxRetries = 2;
+  const maxRetries = 1;
 
   for (let retry = 0; retry < maxRetries; retry++) {
     for (let i = 0; i < keys.length; i++) {
       try {
         const client = new GoogleGenAI({ apiKey: keys[i] as string });
         return await client.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: "gemini-1.5-flash",
           contents: prompt,
           config: {
             responseMimeType: "application/json",
