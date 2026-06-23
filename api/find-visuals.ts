@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import https from "node:https";
+import { jsonrepair } from "jsonrepair";
 
 async function searchWebImages(query: string): Promise<string | null> {
   return new Promise((resolve) => {
@@ -89,7 +90,15 @@ ${script}`;
       }
     });
 
-    const parsed = JSON.parse(response.text || '{}');
+    let parsed;
+    try {
+      const repaired = jsonrepair(response.text || '{}');
+      parsed = JSON.parse(repaired);
+    } catch(e: any) {
+      console.warn("JSON repair/parse failed on:", response.text);
+      throw new Error("Failed to parse AI response as JSON: " + e.message);
+    }
+    
     if (!parsed.scenes) throw new Error("Invalid schema returned");
 
     // Perform visual search based on search layers SEQUENTIALLY to avoid timeouts
