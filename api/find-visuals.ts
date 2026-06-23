@@ -123,6 +123,8 @@ Generate search queries in 4 layers for each scene.
 IMPORTANT: Translate all entities and search queries to strictly ENGLISH to ensure image searches work properly. Do not use Hindi for search_queries or entities.
 CRITICAL: Keep search queries VERY SHORT (1 to 2 words max). For example, instead of "Brijmohan Agrawal railway proposal", just output "Brijmohan Agrawal" or "Railway".
 
+Return strictly ONLY the raw JSON without any markdown formatting, backticks, or extra conversational text.
+
 Format must be exactly this JSON schema:
 {
   "scenes": [
@@ -150,7 +152,11 @@ ${script}`;
 
     let parsed;
     try {
-      parsed = JSON.parse(response?.text || '{}');
+      const text = response?.text || '{}';
+      // Extract JSON from markdown block if present
+      const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      const cleanJson = jsonMatch ? jsonMatch[1] : text.replace(/^[^{]*({[\s\S]*})[^}]*$/, '$1');
+      parsed = JSON.parse(cleanJson);
     } catch(e: any) {
       console.warn("JSON parse failed on:", response?.text);
       throw new Error("Failed to parse AI response as JSON: " + e.message);
