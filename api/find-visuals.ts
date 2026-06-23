@@ -4,29 +4,67 @@ export const maxDuration = 60; // Allow more time on Vercel
 
 async function searchWebImages(query: string): Promise<string | null> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5-second timeout to avoid Vercel 10s limit
+  const timeoutId = setTimeout(() => controller.abort(), 2000); 
 
   try {
-    const res1 = await fetch(`https://duckduckgo.com/?q=${encodeURIComponent(query)}&t=h_&iar=images&iax=images&ia=images`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36' },
+    // 1. Try Wikimedia Commons search
+    const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&format=json&prop=imageinfo&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrnamespace=6&gsrlimit=2&iiprop=url`;
+    const commonsRes = await fetch(commonsUrl, {
+      headers: { 'User-Agent': 'NewsVisualFinder/1.0 (contact@example.com)' },
       signal: controller.signal
     });
-    const data1 = await res1.text();
-    const match = data1.match(/vqd=([a-zA-Z0-9-]+)/);
-    if (!match) return null;
-    const vqd = match[1];
+    
+    if (commonsRes.ok) {
+        const commonsData = await commonsRes.json();
+        if (commonsData.query && commonsData.query.pages) {
+          for (const key of Object.keys(commonsData.query.pages)) {
+            const page = commonsData.query.pages[key];
+            if (key !== "-1" && page.imageinfo && page.imageinfo.length > 0) {
+                const imgUrl = page.imageinfo[0].url;
+                if (!imgUrl.endsWith('.svg') && !imgUrl.endsWith('.pdf')) {
+                    clearTimeout(timeoutId);
+                    return imgUrl;
+                }
+            }
+          }
+        }
+    }
 
-    const res2 = await fetch(`https://duckduckgo.com/i.js?q=${encodeURIComponent(query)}&o=json&p=1&s=0&u=bing&f=,,,,,&l=us-en&vqd=${vqd}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36' },
-      signal: controller.signal
+    // 2. Try Wikipedia Text Search
+    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json&srlimit=1`;
+    const searchRes = await fetch(searchUrl, {
+        headers: { 'User-Agent': 'NewsVisualFinder/1.0' },
+        signal: controller.signal
     });
-    const data2 = await res2.json();
+    
+    if (searchRes.ok) {
+        const searchData = await searchRes.json();
+        if (searchData.query && searchData.query.search && searchData.query.search.length > 0) {
+            const title = searchData.query.search[0].title;
+            const url2 = `https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=original&titles=${encodeURIComponent(title)}`;
+            const res2 = await fetch(url2, { 
+                headers: { 'User-Agent': 'NewsVisualFinder/1.0' },
+                signal: controller.signal
+            });
+            if (res2.ok) {
+                const data2 = await res2.json();
+                if (data2.query && data2.query.pages) {
+                    for (const key of Object.keys(data2.query.pages)) {
+                        const page = data2.query.pages[key];
+                        if (key !== "-1" && page.original) {
+                            const imgUrl = page.original.source;
+                            if (!imgUrl.endsWith('.svg') && !imgUrl.endsWith('.pdf')) {
+                                clearTimeout(timeoutId);
+                                return imgUrl;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     
     clearTimeout(timeoutId);
-
-    if (data2?.results && data2.results.length > 0) {
-      return data2.results[0].image;
-    }
     return null;
   } catch (error) {
     clearTimeout(timeoutId);
@@ -184,7 +222,7 @@ ${script}`;
       // Try searching terms in parallel, pick first successful
       if (searchTerms.length > 0) {
         const results = await Promise.allSettled(searchTerms.map(async (term) => {
-          const img = await searchWebImages(term + " news");
+          const img = await searchWebImages(term as string);
           if (!img) throw new Error("No image");
           return { img, term };
         }));
