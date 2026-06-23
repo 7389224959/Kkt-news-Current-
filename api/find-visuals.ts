@@ -1,44 +1,25 @@
 import { GoogleGenAI } from "@google/genai";
 
-async function searchWikipedia(query: string) {
+async function searchGoogleImages(query: string, ai: GoogleGenAI) {
   try {
-    const searchRes = await fetch(`https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&limit=1&format=json`);
-    const searchJson = await searchRes.json();
-    if (!searchJson[1] || searchJson[1].length === 0) return null;
-    
-    const pageTitle = searchJson[1][0];
-    const imgRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=original&titles=${encodeURIComponent(pageTitle)}`);
-    const imgJson = await imgRes.json();
-    const pages = imgJson.query?.pages;
-    if (!pages) return null;
-    const pageId = Object.keys(pages)[0];
-    const imageInfo = pages[pageId]?.original;
-    if (imageInfo && imageInfo.source) {
-      return imageInfo.source;
-    }
-  } catch (e) {
-    // console.warn("Wikipedia error", e);
-  }
-  return null;
-}
-
-async function searchWikimedia(query: string) {
-  try {
-    const searchRes = await fetch(`https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&srnamespace=6&format=json&srlimit=1`);
-    const searchJson = await searchRes.json();
-    if (searchJson.query?.search?.length > 0) {
-      const title = searchJson.query.search[0].title;
-      const imgRes = await fetch(`https://commons.wikimedia.org/w/api.php?action=query&prop=imageinfo&iiprop=url&titles=${encodeURIComponent(title)}&format=json`);
-      const imgJson = await imgRes.json();
-      const pages = imgJson.query?.pages;
-      if (pages) {
-         const pageId = Object.keys(pages)[0];
-         if (pages[pageId]?.imageinfo?.[0]?.url) {
-            return pages[pageId].imageinfo[0].url;
-         }
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `Search Google and find a high quality image representing '${query}'. Return ONLY the raw public image URL starting with http, no other text. We need the actual image file url (like .jpg or .png). If you cannot find a direct image link in the search results, respond with NONE.`,
+      config: {
+        tools: [{ googleSearch: {} }]
       }
+    });
+    
+    let text = response.text?.trim() || "";
+    if (text && !text.includes('NONE')) {
+        const match = text.match(/https?:\/\/[^\s"'>]+(?:\.jpg|\.jpeg|\.png|\.webp)/i);
+        if (match) return match[0];
+        
+        const genericMatch = text.match(/https?:\/\/[^\s"'>]+/i);
+        if (genericMatch) return genericMatch[0];
     }
   } catch (e) {
+    console.warn("Google image search error:", e);
   }
   return null;
 }
@@ -122,25 +103,21 @@ ${script}`;
         .filter((t: any) => t && typeof t === 'string' && t.split(' ').length <= 3)
         .slice(0, 1); // Max 1 term to be extremely fast
 
+      let googleSearchesPerformed = 0;
+
       for (const term of searchTerms) {
         if (!term) continue;
         
-        // 1. Try Wikimedia Commons first (usually returns better explicit media)
-        const wikiImg = await searchWikimedia(term);
-        if (wikiImg) {
-          visualFound = wikiImg;
-          relevanceSc = 90;
-          sourceInfo = "Wikimedia (" + term + ")";
-          break;
-        }
-
-        // 2. Try Wikipedia
-        const img = await searchWikipedia(term);
-        if (img) {
-          visualFound = img;
-          relevanceSc = 85;
-          sourceInfo = "Wikipedia (" + term + ")";
-          break;
+        // Try Google Image Search (Limit to 1 call per scene to avoid quota limits)
+        if (googleSearchesPerformed < 1) {
+            googleSearchesPerformed++;
+            const googleImg = await searchGoogleImages(term + " news", ai);
+            if (googleImg) {
+              visualFound = googleImg;
+              relevanceSc = 80;
+              sourceInfo = "Google Web Search (" + term + ")";
+              break;
+            }
         }
       }
 
