@@ -56,7 +56,7 @@ async function analyzeScriptWithFallback(prompt: string) {
       try {
         const client = new GoogleGenAI({ apiKey: keys[i] as string });
         return await client.models.generateContent({
-          model: "gemini-1.5-flash",
+          model: "gemini-2.5-flash",
           contents: prompt,
           config: {
             responseMimeType: "application/json",
