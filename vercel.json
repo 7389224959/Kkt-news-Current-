@@ -4,6 +4,9 @@
       "includeFiles": "node_modules/{ffmpeg-static/ffmpeg,ffprobe-static/bin/linux/**/ffprobe}",
       "excludeFiles": "node_modules/onnxruntime-node/**",
       "maxDuration": 300
+    },
+    "api/find-visuals.ts": {
+      "maxDuration": 60
     }
   },
   "rewrites": [

@@ -119,8 +119,8 @@ ${script}`;
     const parsed = JSON.parse(response.text || '{}');
     if (!parsed.scenes) throw new Error("Invalid schema returned");
 
-    // Perform visual search based on search layers IN PARALLEL
-    await Promise.all(parsed.scenes.map(async (scene: any) => {
+    // Perform visual search based on search layers SEQUENTIALLY to avoid timeouts
+    for (const scene of parsed.scenes) {
       let visualFound = null;
       let relevanceSc = 0;
       let sourceInfo = "";
@@ -186,7 +186,7 @@ ${script}`;
         scene.source = "AI Generation Recommended";
         scene.ai_prompt = scene.search_queries?.layer4_symbolic_search?.[0] || scene.visual_description;
       }
-    }));
+    }
 
     return res.status(200).json(parsed);
   } catch (err: any) {
