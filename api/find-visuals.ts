@@ -127,12 +127,76 @@ export default async function handler(req: any, res: any) {
   if (!script) return res.status(400).json({ error: 'Script is required' });
 
   try {
-    const prompt = `Analyze this Hindi news script. 
-Split it into logical scenes (approx 3-5 seconds each).
-Extract entities: STRICTLY limit to tangible, visual elements like specific persons, places, location maps, or prominent physical objects relevant to the news scene. Do not include abstract concepts, actions, or full sentences.
-Generate search queries in 4 layers for each scene based ONLY on these tangible visual elements.
-IMPORTANT: Translate all entities and search queries to strictly ENGLISH to ensure image searches work properly. Do not use Hindi for search_queries or entities.
-CRITICAL: Keep search queries VERY SHORT (1 to 2 words max). For example, instead of "Brijmohan Agrawal railway proposal", just output "Brijmohan Agrawal" or "Railway".
+    const prompt = `You are an expert television news editor and visual researcher.
+
+Your task is NOT to find images matching keywords.
+Your task is to determine what viewers should see on screen while hearing the voiceover.
+
+For each scene:
+1. Analyze the meaning of the scene.
+2. Determine the visual intent.
+3. Determine what a professional news editor would show.
+4. Generate visual search strategies.
+5. Avoid literal keyword matching.
+6. Avoid historical paintings, artwork, icons, logos, religious illustrations, clipart, symbols, maps, and generic Wikipedia images unless absolutely necessary.
+7. Prefer real-world photographs.
+8. Prefer India-specific visuals when the story is about India.
+9. Prefer Chhattisgarh-specific visuals when available.
+10. Prefer actual incident visuals over generic visuals.
+11. If exact visuals cannot be found, use contextually relevant visuals.
+12. Never search only nouns extracted from the sentence.
+13. TRANSLATE all search queries to strictly ENGLISH. Keep search queries VERY SHORT (1 to 3 words max).
+
+BAD EXAMPLES:
+
+Scene:
+"26 Christian families were expelled from their homes"
+
+Wrong Visual:
+- Christian painting
+- Church artwork
+- Religious icon
+
+Correct Visual:
+- Rural families standing outside houses
+- Villagers gathered in discussion
+- Rural settlement
+- Community meeting
+
+--------------------------------
+
+Scene:
+"Heavy police force deployed"
+
+Wrong Visual:
+- Random foreign police officer
+- Police badge
+- Cartoon police
+
+Correct Visual:
+- Indian police personnel
+- Security deployment
+- Police vehicles
+- Crowd control scene
+
+--------------------------------
+
+Scene:
+"Religious conversion dispute in Narayanpur village"
+
+Wrong Visual:
+- Temple image
+- Church painting
+- Religious symbol
+
+Correct Visual:
+- Village gathering
+- Community meeting
+- Rural dispute discussion
+- News coverage visuals
+- Narayanpur village if available
+
+--------------------------------
 
 Return strictly ONLY the raw JSON without any markdown formatting, backticks, or extra conversational text.
 
@@ -142,16 +206,17 @@ Format must be exactly this JSON schema:
     {
       "scene_number": 1,
       "voiceover_text": "...",
-      "visual_description": "...",
-      "entities": ["..."],
-      "event_type": "...",
-      "location": "...",
-      "search_queries": {
-        "layer1_real_incident": ["..."],
-        "layer2_entity_search": ["..."],
-        "layer3_event_search": ["..."],
-        "layer4_symbolic_search": ["..."]
-      }
+      "visual_intent": "...",
+      "what_viewer_should_see": "...",
+      "avoid_visuals": ["..."],
+      "search_strategy": {
+        "layer1_actual_incident": ["..."],
+        "layer2_people_location": ["..."],
+        "layer3_event_context": ["..."],
+        "layer4_supporting_visuals": ["..."]
+      },
+      "preferred_visual_types": ["..."],
+      "fallback_visual_types": ["..."]
     }
   ]
 }
@@ -178,16 +243,15 @@ ${script}`;
     // Process all scenes in parallel to avoid Vercel function timeout
     await Promise.all(parsed.scenes.map(async (scene: any) => {
       let rawTerms = [
-        ...(scene.entities || []),
-        ...(scene.search_queries?.layer1_real_incident || []),
-        ...(scene.search_queries?.layer2_entity_search || []),
-        ...(scene.search_queries?.layer3_event_search || []),
-        ...(scene.search_queries?.layer4_symbolic_search || [])
+        ...(scene.search_strategy?.layer1_actual_incident || []),
+        ...(scene.search_strategy?.layer2_people_location || []),
+        ...(scene.search_strategy?.layer3_event_context || []),
+        ...(scene.search_strategy?.layer4_supporting_visuals || [])
       ];
       
       const searchTerms = Array.from(new Set(rawTerms))
-        .filter((t: any) => t && typeof t === 'string' && t.split(' ').length <= 3)
-        .slice(0, 2); // Max 2 terms for speed
+        .filter((t: any) => t && typeof t === 'string' && t.split(' ').length <= 4)
+        .slice(0, 3); // Max 3 terms for speed
 
       let visualFound = null;
       let sourceInfo = "";
@@ -207,6 +271,9 @@ ${script}`;
         }
       }
 
+      // Map back to what frontend expects, or add new keys
+      scene.ai_prompt = scene.what_viewer_should_see || scene.visual_intent || "AI generation recommended";
+      
       if (visualFound) {
         scene.selected_visual = visualFound;
         scene.relevance_score = 80;
@@ -215,7 +282,6 @@ ${script}`;
         scene.selected_visual = "";
         scene.relevance_score = 40;
         scene.source = "AI Generation Recommended";
-        scene.ai_prompt = scene.search_queries?.layer4_symbolic_search?.[0] || scene.visual_description;
       }
     }));
 
