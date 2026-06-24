@@ -1985,11 +1985,11 @@ Format rules for high engagement (TARGET DURATION AROUND 30 SECONDS, MAXIMUM 60-
 0–5 sec: HOOK (Dynamic, context-aware Authoritative News Hook. DO NOT use the same generic "इस वक्त की बड़ी खबर" every time. Instead, make it specific to the core news and location, e.g., "बड़ी खबर आ रही है छत्तीसगढ़ के हसदेव से..." or "चौंकाने वाला मामला सामने आया है...". Be creative and dynamic, but maintain professional Hindi news anchor tone).
 5–15 sec: What happened (The core fact delivered with clear professional urgency)
 15–25 sec: Why important (Impact and crucial details without filler)
-25–30 sec: Professional Sign-off (Dynamic and professional sign-off, avoid repeating the same phrase).
+25–30 sec: Professional Sign-off (Dynamic and professional sign-off that psychologically compels viewers to engage. MUST include a question asking for viewers' opinions or suggestions on the matter to drive comments, followed by a powerful call to action to 'like' and 'follow' for more updates. DO NOT use 'subscribe', strictly use 'follow'. E.g., "आपकी इस पर क्या राय है? कमेंट में बताएं और ऐसी ही खबरों के लिए हमें फॉलो करें").
 
-- STRICT WORD LIMIT: The entire voiceoverScript MUST be between 60 to 70 words to ensure a 30-second duration.
+- STRICT WORD LIMIT: The entire voiceoverScript MUST be between 60 to 75 words to ensure a 30-second duration.
 - Sentences MUST be short, clear, and punchy. No long storytelling.
-- Tone MUST be like a fast-paced professional TV news anchor (authoritative, clear, highly energetic and urgent).
+- Tone MUST be like a fast-paced professional TV news anchor (authoritative, clear, highly energetic and urgent, yet highly compelling and engaging).
 ${hasSubtitles ? `
 Subtitles Requirements (CRITICAL):
 - Break the ENTIRE voiceoverScript into chunks of maximum 3-5 words.
@@ -2058,7 +2058,7 @@ export const generateReelAudio = async (script: string): Promise<string> => {
   if (!ai) throw new Error("API Key missing");
 
   const ttsPrompt = `Read the following news script in an engaging, fast-paced, and energetic professional news anchor tone.
-Speak with a clear, authoritative, and urgent reporting style. Deliver the news quickly and dynamically to keep the viewer hooked.
+Speak with a clear, authoritative, and urgent reporting style. Deliver the news quickly and dynamically to keep the viewer hooked, ensuring the ending call-to-action (if any) sounds highly compelling and natural.
 Ensure clear articulation and punch the key words to maintain high engagement.
 
 SCRIPT:
