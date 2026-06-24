@@ -1989,7 +1989,7 @@ Format rules for high engagement (TARGET DURATION AROUND 30 SECONDS, MAXIMUM 60-
 
 - STRICT WORD LIMIT: The entire voiceoverScript MUST be between 60 to 70 words to ensure a 30-second duration.
 - Sentences MUST be short, clear, and punchy. No long storytelling.
-- Tone MUST be like a professional TV news anchor (authoritative, clear, slightly urgent but not overly fast).
+- Tone MUST be like a fast-paced professional TV news anchor (authoritative, clear, highly energetic and urgent).
 ${hasSubtitles ? `
 Subtitles Requirements (CRITICAL):
 - Break the ENTIRE voiceoverScript into chunks of maximum 3-5 words.
@@ -2057,9 +2057,9 @@ export const generateReelAudio = async (script: string): Promise<string> => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
-  const ttsPrompt = `Read the following news script in an engaging, professional news anchor tone.
-Speak with a clear, authoritative reporting style. Keep a moderate, steady pace (not too fast, not too slow) suitable for a 30-second news bulletin.
-Ensure clear articulation and natural pauses. Punch the key words to maintain engagement without rushing.
+  const ttsPrompt = `Read the following news script in an engaging, fast-paced, and energetic professional news anchor tone.
+Speak with a clear, authoritative, and urgent reporting style. Deliver the news quickly and dynamically to keep the viewer hooked.
+Ensure clear articulation and punch the key words to maintain high engagement.
 
 SCRIPT:
 ${script}
