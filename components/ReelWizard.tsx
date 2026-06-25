@@ -240,7 +240,11 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       
       if (autoStart) {
          setStatus('Step 4/4: Publishing to Facebook...');
-         const fbMessage = updatedScriptData.headline || article.title || 'Check out our latest reel!';
+         let hashtagsStr = '';
+         if (article && article.tags && article.tags.length > 0) {
+            hashtagsStr = '\n\n' + article.tags.map((t: string) => '#' + t.replace(/\\s+/g, '')).join(' ');
+         }
+         const fbMessage = (updatedScriptData.headline || article.title || 'Check out our latest reel!') + hashtagsStr;
          await doPublishReel(blob, fbMessage);
       } else {
          setStep(4);
@@ -916,7 +920,11 @@ function ReelEditorView({
        blob = await fetch(d).then(r => r.blob());
     }
     
-    const fbMessage = scriptData.headline || selectedArticle?.title || 'Check out our latest reel!';
+    let hashtagsStr = '';
+    if (selectedArticle && selectedArticle.tags && selectedArticle.tags.length > 0) {
+       hashtagsStr = '\n\n' + selectedArticle.tags.map((t: string) => '#' + t.replace(/\\s+/g, '')).join(' ');
+    }
+    const fbMessage = (scriptData.headline || selectedArticle?.title || 'Check out our latest reel!') + hashtagsStr;
     await doPublishReel(blob, fbMessage);
   };
 
