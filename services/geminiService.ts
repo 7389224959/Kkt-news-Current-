@@ -1924,7 +1924,7 @@ RULES:
 - DO NOT end lines with "है" (hai)
 - Max 6-8 words per line
 - Total duration should be 8-15 seconds (around 4-6 lines)
-- Add emotional hook at the beginning (e.g., 😳 बड़ी खबर!, ध्यान दीजिए, etc.)
+- First, classify the news (Breaking, Local, Entertainment, Tragedy, Tech). Then generate a hook based on the category. DO NOT use "बड़ी खबर" unless it's a major event. Use context-appropriate hooks like "क्या आपको पता है...", "वायरल हो रहा है...", or "[शहर] से अपडेट...".
 - Add pauses using "..." to control pacing
 - Keep it conversational, engaging, and not overly formal
 
@@ -1982,7 +1982,7 @@ ARTICLE TEXT:
 ${articleContent}
 
 Format rules for high engagement (TARGET DURATION AROUND 30 SECONDS, MAXIMUM 60-70 WORDS):
-0–5 sec: HOOK (Dynamic, context-aware Authoritative News Hook. DO NOT use the same generic "इस वक्त की बड़ी खबर" every time. Instead, make it specific to the core news and location, e.g., "बड़ी खबर आ रही है छत्तीसगढ़ के हसदेव से..." or "चौंकाने वाला मामला सामने आया है...". Be creative and dynamic, but maintain professional Hindi news anchor tone).
+0–5 sec: HOOK (First, classify the news into a category: Breaking, Local, Entertainment, Tragedy, Tech. Generate a dynamic, context-aware hook strictly based on the category. DO NOT use generic "बड़ी खबर" (Breaking News) unless it's a major national/international event. For small/local news use "क्या आपको पता है..." or "[शहर] से आज की अपडेट...". For entertainment use "वायरल हो रहा है...". For tragedy use "एक गंभीर मामला...". Be creative and dynamic, maintaining an appropriate tone for the news type).
 5–15 sec: What happened (The core fact delivered with clear professional urgency)
 15–25 sec: Why important (Impact and crucial details without filler)
 25–30 sec: Professional Sign-off (Dynamic and professional sign-off that psychologically compels viewers to engage. MUST include a question asking for viewers' opinions or suggestions on the matter to drive comments, followed by a powerful call to action to 'like' and 'follow' for more updates. DO NOT use 'subscribe', strictly use 'follow'. E.g., "आपकी इस पर क्या राय है? कमेंट में बताएं और ऐसी ही खबरों के लिए हमें फॉलो करें").
