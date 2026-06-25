@@ -841,6 +841,7 @@ export const fetchDailyNews = async (
         // If not explicitly a URL duplicate, and within 48 hours, add as candidate
         // We relax the hours condition slightly so AI has candidates to choose from
         if (!isDuplicateUrl && hoursDiff <= 48) {
+          const videoUrl = (item.enclosure && item.enclosure.type && item.enclosure.type.startsWith('video/') && item.enclosure.link) ? item.enclosure.link : "";
           candidateItems.push({
             category: source.category,
             title: item.title,
@@ -849,6 +850,7 @@ export const fetchDailyNews = async (
             description: item.description,
             image:
               item.thumbnail || (item.enclosure && item.enclosure.link) || "",
+            video: videoUrl
           });
           sourceCandidates++;
         }
@@ -876,6 +878,9 @@ export const fetchDailyNews = async (
     let fullText = "";
     let sourceImageUrl = item.image || "";
     let additionalImages: string[] = [];
+    if (item.video) {
+      additionalImages.push(item.video);
+    }
     try {
       const extractRes = await fetch(
         `/api/extract-article?url=${encodeURIComponent(item.link)}`,
@@ -888,6 +893,10 @@ export const fetchDailyNews = async (
         }
         if (extractData.images && Array.isArray(extractData.images)) {
           additionalImages = extractData.images;
+        }
+        if (extractData.video) {
+          // Put video at the beginning so it's the primary visual
+          additionalImages.unshift(extractData.video);
         }
       }
     } catch (err) {

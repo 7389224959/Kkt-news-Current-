@@ -162,6 +162,28 @@ export default async function handler(req, res) {
     // Extract og:image or any primary metadata image
     let imageUrl = '';
     const images = [];
+    let videoUrl = '';
+    
+    const ogVideo = doc.window.document.querySelector('meta[property="og:video"], meta[property="og:video:secure_url"], meta[property="twitter:player"]');
+    if (ogVideo) {
+      videoUrl = ogVideo.getAttribute('content') || '';
+    } else {
+      const videoElements = doc.window.document.querySelectorAll('video source, video');
+      for (const v of Array.from(videoElements)) {
+         const src = v.getAttribute('src');
+         if (src) {
+           videoUrl = src;
+           break;
+         }
+      }
+    }
+    
+    if (videoUrl && !videoUrl.startsWith('http')) {
+      try {
+        videoUrl = new URL(videoUrl, url).href;
+      } catch (e) {}
+    }
+
     const ogImage = doc.window.document.querySelector('meta[property="og:image"], meta[property="og:image:secure_url"], meta[name="twitter:image"], meta[property="twitter:image"]');
     if (ogImage) {
       imageUrl = ogImage.getAttribute('content') || '';
@@ -207,7 +229,8 @@ export default async function handler(req, res) {
       length: article.length,
       excerpt: article.excerpt,
       image: imageUrl || '',
-      images: images
+      images: images,
+      video: videoUrl || ''
     });
   } catch (error) {
     console.error('Error extracting article:', error);

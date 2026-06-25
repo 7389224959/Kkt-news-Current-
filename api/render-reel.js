@@ -85,16 +85,41 @@ export default async function handler(req, res) {
     const { overlayMediaUrl, visuals = [] } = req.body;
     let downloadedVisuals = [];
     for (let i = 0; i < visuals.length; i++) {
-      const extMatch = visuals[i].match(/\.(mp4|mov|webm)$/i);
-      const ext = extMatch ? extMatch[0] : '.jpg';
-      const p = path.join(tempDir, `visual_${i}${ext}`);
-      await downloadFile(visuals[i], p);
-      downloadedVisuals.push({ file: p, url: visuals[i] });
+      const extMatch = visuals[i].match(/\.(mp4|mov|webm|gif|webp)$/i);
+      const ext = extMatch ? extMatch[0] : '';
+      const rawP = path.join(tempDir, `visual_raw_${i}`);
+      await downloadFile(visuals[i], rawP);
+
+      const isVideo = await new Promise((resolve) => {
+        ffmpeg.ffprobe(rawP, (err, meta) => {
+          if (err || !meta || !meta.streams) return resolve(false);
+          const vStream = meta.streams.find(s => s.codec_type === 'video');
+          if (!vStream) return resolve(false);
+          // treat gif and webp as potentially animated (video)
+          if (vStream.codec_name && ['mjpeg', 'png'].includes(vStream.codec_name)) return resolve(false);
+          if (vStream.codec_name && ['webp'].includes(vStream.codec_name) && vStream.nb_frames && parseInt(vStream.nb_frames) === 1) return resolve(false);
+          if (vStream.nb_frames && parseInt(vStream.nb_frames) === 1 && vStream.codec_name !== 'gif') return resolve(false);
+          resolve(true);
+        });
+      });
+
+      const finalExt = isVideo ? (ext || '.mp4') : (ext || '.jpg');
+      const finalP = path.join(tempDir, `visual_${i}${finalExt}`);
+      fs.renameSync(rawP, finalP);
+
+      downloadedVisuals.push({ file: finalP, url: visuals[i], isVideo });
     }
     if (downloadedVisuals.length === 0 && overlayMediaUrl) {
       const p = path.join(tempDir, "overlay.mp4");
       await downloadFile(overlayMediaUrl, p);
-      downloadedVisuals.push({ file: p, url: overlayMediaUrl });
+      downloadedVisuals.push({ file: p, url: overlayMediaUrl, isVideo: true });
+    }
+
+    // Move first video/gif to the beginning
+    const firstVideoIndex = downloadedVisuals.findIndex(v => v.isVideo);
+    if (firstVideoIndex > 0) {
+      const firstVideo = downloadedVisuals.splice(firstVideoIndex, 1)[0];
+      downloadedVisuals.unshift(firstVideo);
     }
 
     // Ensure 5-6 scenes if not enough by repeating
@@ -296,7 +321,7 @@ export default async function handler(req, res) {
       for (let i = 0; i < downloadedVisuals.length; i++) {
         const item = downloadedVisuals[i];
         const idx = nextInputIndex++;
-        const isImgInfo = !item.url.match(/\.(mp4|mov|webm)$/i);
+        const isImgInfo = !item.isVideo;
 
         filterGraph.push({
           filter: "scale",
@@ -531,9 +556,13 @@ export default async function handler(req, res) {
       if (downloadedVisuals.length > 0 && vBox) {
         for (let i = 0; i < downloadedVisuals.length; i++) {
           const item = downloadedVisuals[i];
+          let inputOpts = ["-stream_loop", "-1", "-an"];
+          if (item.file.toLowerCase().endsWith('.gif') || item.file.toLowerCase().endsWith('.webp')) {
+            inputOpts.push("-ignore_loop", "0");
+          }
           command = command
               .input(item.file)
-              .inputOptions(["-stream_loop", "-1", "-an"]);
+              .inputOptions(inputOpts);
         }
       }
 
@@ -605,9 +634,33 @@ export default async function handler(req, res) {
               outputs: "vo_delayed",
             },
             {
+              filter: "highpass",
+              options: "f=80",
+              inputs: "vo_delayed",
+              outputs: "vo_hp"
+            },
+            {
+              filter: "equalizer",
+              options: "f=3500:t=h:width=1500:g=3",
+              inputs: "vo_hp",
+              outputs: "vo_eq"
+            },
+            {
+              filter: "acompressor",
+              options: "threshold=-18dB:ratio=3",
+              inputs: "vo_eq",
+              outputs: "vo_comp"
+            },
+            {
+              filter: "loudnorm",
+              options: "I=-16:TP=-1.5:LRA=11",
+              inputs: "vo_comp",
+              outputs: "vo_norm"
+            },
+            {
               filter: "volume",
               options: "0.8",
-              inputs: "vo_delayed",
+              inputs: "vo_norm",
               outputs: "vo_mix",
             }
           );
