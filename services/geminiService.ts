@@ -1982,14 +1982,7 @@ ARTICLE TEXT:
 ${articleContent}
 
 Format rules for high engagement (TARGET DURATION AROUND 30 SECONDS, MAXIMUM 60-70 WORDS):
-0–5 sec: HOOK (Classify the news story and use a context-appropriate opening. It must command attention and sound 20% more energetic. 
-  - Category 1 (Breaking/Urgent: accidents, crime, alerts): "इस वक्त की बड़ी खबर...", "अभी-अभी सामने आई बड़ी जानकारी...", "एक बड़ी घटना ने सबका ध्यान खींचा है..."
-  - Category 2 (Achievement/Positive: awards, success, sports): "छत्तीसगढ़ के लिए गर्व की खबर...", "प्रदेश को मिला एक और गौरव का क्षण...", "छत्तीसगढ़ का नाम फिर हुआ रोशन..."
-  - Category 3 (Local Civic Issues: roads, water, problems): "अब बात करते हैं इस स्थानीय मुद्दे की...", "यह मामला चर्चा का विषय बना हुआ है...", "स्थानीय लोगों ने लगाए गंभीर आरोप..."
-  - Category 4 (Government Schemes): "सरकार की इस योजना से लोगों को बड़ा लाभ...", "जनता के लिए आई नई सुविधा..."
-  - Category 5 (Viral Videos): "सोशल मीडिया पर तेजी से वायरल हो रहा यह वीडियो...", "इस वीडियो ने लोगों का ध्यान खींच लिया है..."
-  - Category 6 (Weather): "मौसम को लेकर बड़ा अपडेट...", "अगले कुछ घंटों में मौसम बदल सकता है..."
-  Match the tone to the category: urgent for breaking, excited for achievements, serious for civic issues!).
+0–5 sec: HOOK (Dynamic, context-aware Authoritative News Hook. DO NOT use the same generic "इस वक्त की बड़ी खबर" every time. Instead, make it specific to the core news and location, e.g., "बड़ी खबर आ रही है छत्तीसगढ़ के हसदेव से..." or "चौंकाने वाला मामला सामने आया है...". Be creative and dynamic, but maintain professional Hindi news anchor tone).
 5–15 sec: What happened (The core fact delivered with clear professional urgency)
 15–25 sec: Why important (Impact and crucial details without filler)
 25–30 sec: Professional Sign-off (Dynamic and professional sign-off that psychologically compels viewers to engage. MUST include a question asking for viewers' opinions or suggestions on the matter to drive comments, followed by a powerful call to action to 'like' and 'follow' for more updates. DO NOT use 'subscribe', strictly use 'follow'. E.g., "आपकी इस पर क्या राय है? कमेंट में बताएं और ऐसी ही खबरों के लिए हमें फॉलो करें").
@@ -1997,8 +1990,6 @@ Format rules for high engagement (TARGET DURATION AROUND 30 SECONDS, MAXIMUM 60-
 - STRICT WORD LIMIT: The entire voiceoverScript MUST be between 60 to 75 words to ensure a 30-second duration.
 - Sentences MUST be short, clear, and punchy. No long storytelling.
 - Tone MUST be like a fast-paced professional TV news anchor (authoritative, clear, highly energetic and urgent, yet highly compelling and engaging).
-- Pacing & Pauses: Use ellipses (...) and commas (,) deliberately to force 0.2-0.3 second pauses in the AI voiceover. Put pauses after major facts and before important names or awards to create dramatic tension and improve comprehension. Do not pack sentences too tightly.
-- Emphasis: Ensure important names, entities, and awards are highlighted or phrased to stand out. Include slight excitement when announcing achievements.
 ${hasSubtitles ? `
 Subtitles Requirements (CRITICAL):
 - Break the ENTIRE voiceoverScript into chunks of maximum 3-5 words.
@@ -2067,10 +2058,6 @@ export const generateReelAudio = async (script: string): Promise<string> => {
   if (!ai) throw new Error("API Key missing");
 
   const ttsPrompt = `Read the following news script in an engaging, fast-paced, and energetic professional news anchor tone.
-The first 3 seconds MUST be 15-20% more energetic and authoritative to create a strong hook.
-Use emotional variation: show slight excitement when announcing achievements or good news.
-Add slight pauses (0.2-0.3 seconds) after major facts for better comprehension.
-Place stronger emphasis on important names, entities, and awards. 
 Speak with a clear, authoritative, and urgent reporting style. Deliver the news quickly and dynamically to keep the viewer hooked, ensuring the ending call-to-action (if any) sounds highly compelling and natural.
 Ensure clear articulation and punch the key words to maintain high engagement.
 
