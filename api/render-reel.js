@@ -50,6 +50,7 @@ export default async function handler(req, res) {
       scriptData,
       template,
       styleOverrides = {},
+      directorScenes = [],
     } = req.body;
     if (!templateMediaUrl || !template)
       return res.status(400).json({ error: "Missing required parameters." });
@@ -343,7 +344,15 @@ export default async function handler(req, res) {
         });
 
         if (isImgInfo) {
-          const motion = motions[i % motions.length];
+          let motion = motions[i % motions.length];
+          if (directorScenes && directorScenes[i] && directorScenes[i].motion) {
+             const dm = directorScenes[i].motion;
+             if (dm === 'slow_zoom_in' || dm === 'push_in') motion = motions[0];
+             else if (dm === 'slow_zoom_out' || dm === 'push_out') motion = motions[1];
+             else if (dm === 'pan_left') motion = motions[2];
+             else if (dm === 'pan_right') motion = motions[3];
+             else if (dm === 'parallax' || dm === 'spotlight_focus') motion = motions[4];
+          }
           filterGraph.push({
             filter: "zoompan",
             options: `${motion}:d=${Math.ceil(sceneDur * 25) + 50}:s=${vBox[2]}x${vBox[3]}`,
@@ -395,7 +404,15 @@ export default async function handler(req, res) {
       // xfade them together
       let currentVis = `vis_ready_0`;
       for (let i = 1; i < downloadedVisuals.length; i++) {
-        const trans = transitions[i % transitions.length];
+        let trans = transitions[i % transitions.length];
+        if (directorScenes && directorScenes[i] && directorScenes[i].transition) {
+            const dt = directorScenes[i].transition;
+            if (dt === 'slideleft' || dt === 'slideright' || dt === 'fadeblack' || dt === 'dissolve') {
+                trans = dt;
+            } else if (dt === 'flash_transition') {
+                trans = 'fadeblack';
+            }
+        }
         const offset = i * sceneDur;
         filterGraph.push({
           filter: "xfade",

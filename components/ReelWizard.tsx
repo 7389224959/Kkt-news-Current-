@@ -443,7 +443,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
           visuals: uniqueVisuals,
           scriptData: scriptData,
           template: renderTemplate,
-          styleOverrides: styleOverrides
+          styleOverrides: styleOverrides,
+          directorScenes: scenes
         })
       });
 

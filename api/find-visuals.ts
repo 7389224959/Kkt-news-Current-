@@ -2,13 +2,13 @@ import { GoogleGenAI } from "@google/genai";
 
 export const maxDuration = 60; // Allow more time on Vercel
 
-async function searchWebImages(query: string): Promise<string | null> {
+async function searchWebImages(query: string): Promise<{url: string, score: number, source: string} | null> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2000); 
+  const timeoutId = setTimeout(() => controller.abort(), 2500); 
 
   try {
     // 1. Try Wikimedia Commons search
-    const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&format=json&prop=imageinfo&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrnamespace=6&gsrlimit=2&iiprop=url`;
+    const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&format=json&prop=imageinfo&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrnamespace=6&gsrlimit=3&iiprop=url`;
     const commonsRes = await fetch(commonsUrl, {
       headers: { 'User-Agent': 'NewsVisualFinder/1.0 (contact@example.com)' },
       signal: controller.signal
@@ -23,15 +23,59 @@ async function searchWebImages(query: string): Promise<string | null> {
                 const imgUrl = page.imageinfo[0].url;
                 if (!imgUrl.endsWith('.svg') && !imgUrl.endsWith('.pdf')) {
                     clearTimeout(timeoutId);
-                    return imgUrl;
+                    return {url: imgUrl, score: 85, source: 'Wikimedia'};
                 }
             }
           }
         }
     }
 
-    // 2. Try Wikipedia Text Search
-    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json&srlimit=1`;
+    // 2. Try Pexels (if API key available)
+    if (process.env.PEXELS_API_KEY) {
+        const pexelsRes = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1`, {
+            headers: { 'Authorization': process.env.PEXELS_API_KEY },
+            signal: controller.signal
+        });
+        if (pexelsRes.ok) {
+            const pexelsData = await pexelsRes.json();
+            if (pexelsData.photos && pexelsData.photos.length > 0) {
+                clearTimeout(timeoutId);
+                return {url: pexelsData.photos[0].src.original, score: 95, source: 'Pexels'};
+            }
+        }
+    }
+
+    // 3. Try Pixabay (if API key available)
+    if (process.env.PIXABAY_API_KEY) {
+        const pixabayRes = await fetch(`https://pixabay.com/api/?key=${process.env.PIXABAY_API_KEY}&q=${encodeURIComponent(query)}&per_page=3`, {
+            signal: controller.signal
+        });
+        if (pixabayRes.ok) {
+            const pixabayData = await pixabayRes.json();
+            if (pixabayData.hits && pixabayData.hits.length > 0) {
+                clearTimeout(timeoutId);
+                return {url: pixabayData.hits[0].largeImageURL, score: 90, source: 'Pixabay'};
+            }
+        }
+    }
+
+    // 4. Try Unsplash (if API key available)
+    if (process.env.UNSPLASH_ACCESS_KEY) {
+        const unsplashRes = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1`, {
+            headers: { 'Authorization': `Client-ID ${process.env.UNSPLASH_ACCESS_KEY}` },
+            signal: controller.signal
+        });
+        if (unsplashRes.ok) {
+            const unsplashData = await unsplashRes.json();
+            if (unsplashData.results && unsplashData.results.length > 0) {
+                clearTimeout(timeoutId);
+                return {url: unsplashData.results[0].urls.regular, score: 92, source: 'Unsplash'};
+            }
+        }
+    }
+
+    // 5. Try Wikipedia Text Search (Fallback for Google Images / Pixabay / Pexels)
+    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json&srlimit=2`;
     const searchRes = await fetch(searchUrl, {
         headers: { 'User-Agent': 'NewsVisualFinder/1.0' },
         signal: controller.signal
@@ -55,7 +99,7 @@ async function searchWebImages(query: string): Promise<string | null> {
                             const imgUrl = page.original.source;
                             if (!imgUrl.endsWith('.svg') && !imgUrl.endsWith('.pdf')) {
                                 clearTimeout(timeoutId);
-                                return imgUrl;
+                                return {url: imgUrl, score: 75, source: 'Wikipedia Fallback'};
                             }
                         }
                     }
@@ -127,99 +171,71 @@ export default async function handler(req: any, res: any) {
   if (!script) return res.status(400).json({ error: 'Script is required' });
 
   try {
-    const prompt = `You are an expert television news editor and visual researcher.
+    const prompt = `You are a Senior AI Video Pipeline Architect and Director Agent.
+Your task is to act as an "Auto Video Director and Editor" for a news reel.
 
-Your task is NOT to find images matching keywords.
-Your task is to determine what viewers should see on screen while hearing the voiceover.
+STEP 1 - DIRECTOR AGENT
+Split the story into scenes based on the script. Define the purpose (Hook, Main Fact, Evidence, Context, Impact, Public Reaction, Government Action, Closing), timing, and visual/motion/graphics/sfx needs.
+Output story_type, emotion, importance, estimated_duration, and scenes.
 
-For each scene:
-1. Analyze the meaning of the scene.
-2. Determine the visual intent.
-3. Determine what a professional news editor would show.
-4. Generate visual search strategies.
-5. Avoid literal keyword matching.
-6. Avoid historical paintings, artwork, icons, logos, religious illustrations, clipart, symbols, maps, and generic Wikipedia images unless absolutely necessary.
-7. Prefer real-world photographs.
-8. Prefer India-specific visuals when the story is about India.
-9. Prefer Chhattisgarh-specific visuals when available.
-10. Prefer actual incident visuals over generic visuals.
-11. If exact visuals cannot be found, use contextually relevant visuals.
-12. Never search only nouns extracted from the sentence.
-13. TRANSLATE all search queries to strictly ENGLISH. Keep search queries VERY SHORT (1 to 3 words max).
+STEP 2 - ASSET PLANNER
+Generate scene-level asset requirements. Do not search using the headline.
+Generate "visual_requirements", "graphics", and "sfx" for each scene.
 
-BAD EXAMPLES:
+STEP 3 - VISUAL HIERARCHY
+For every scene generate: "real", "context", and "symbolic" visual queries.
 
-Scene:
-"26 Christian families were expelled from their homes"
+STEP 4, 5 - SEARCH AND SCORING STRATEGY
+Provide 3 short, English search queries per scene (max 3 words each) that represent the Real, Context, and Symbolic needs.
 
-Wrong Visual:
-- Christian painting
-- Church artwork
-- Religious icon
+STEP 6 - MOTION PLANNER
+Select motion for each scene from: slow_zoom_in, slow_zoom_out, push_in, push_out, pan_left, pan_right, parallax, dynamic_crop, spotlight_focus, counter_animation, split_screen.
 
-Correct Visual:
-- Rural families standing outside houses
-- Villagers gathered in discussion
-- Rural settlement
-- Community meeting
+STEP 7 - GRAPHICS PLANNER
+Select overlays (e.g., breaking_banner, warning_banner, exclusive_tag, notice_counter, red_arrow, map_pin, location_card).
 
---------------------------------
+STEP 8 - SFX PLANNER
+Select scene-specific SFX (e.g., alert_hit, siren_short, success_hit, shine, paper_flip, whoosh, impact_hit, tension_rise).
 
-Scene:
-"Heavy police force deployed"
+STEP 9 - FFMPEG INSTRUCTIONS
+Generate the intended FFmpeg editing parameters for each scene: start, end, motion, transition, graphics, sfx.
 
-Wrong Visual:
-- Random foreign police officer
-- Police badge
-- Cartoon police
-
-Correct Visual:
-- Indian police personnel
-- Security deployment
-- Police vehicles
-- Crowd control scene
-
---------------------------------
-
-Scene:
-"Religious conversion dispute in Narayanpur village"
-
-Wrong Visual:
-- Temple image
-- Church painting
-- Religious symbol
-
-Correct Visual:
-- Village gathering
-- Community meeting
-- Rural dispute discussion
-- News coverage visuals
-- Narayanpur village if available
-
---------------------------------
-
-Return strictly ONLY the raw JSON without any markdown formatting, backticks, or extra conversational text.
-
-Format must be exactly this JSON schema:
+STEP 10 - FINAL OUTPUT
+Return ONE complete storyboard JSON containing exactly this structure:
 {
+  "story_type": "",
+  "emotion": "",
+  "importance": "",
+  "estimated_duration": 25,
   "scenes": [
     {
-      "scene_number": 1,
+      "scene_id": 1,
+      "purpose": "Hook",
       "voiceover_text": "...",
-      "visual_intent": "...",
-      "what_viewer_should_see": "...",
-      "avoid_visuals": ["..."],
-      "search_strategy": {
-        "layer1_actual_incident": ["..."],
-        "layer2_people_location": ["..."],
-        "layer3_event_context": ["..."],
-        "layer4_supporting_visuals": ["..."]
+      "visual_requirements": ["..."],
+      "visual_hierarchy": {
+        "real": ["..."],
+        "context": ["..."],
+        "symbolic": ["..."]
       },
-      "preferred_visual_types": ["..."],
-      "fallback_visual_types": ["..."]
+      "search_queries": ["...", "...", "..."],
+      "motion": "slow_zoom_in",
+      "transition": "fade",
+      "graphics": ["breaking_banner"],
+      "sfx": ["alert_hit"],
+      "ffmpeg_instructions": {
+        "start": 0,
+        "end": 3,
+        "motion": "slow_zoom_in",
+        "transition": "fade",
+        "graphics": ["breaking_banner"],
+        "sfx": ["alert_hit"]
+      }
     }
   ]
 }
+
+Return strictly ONLY the raw JSON without markdown formatting.
 
 Script to analyze:
 ${script}`;
@@ -242,12 +258,7 @@ ${script}`;
 
     // Process all scenes in parallel to avoid Vercel function timeout
     await Promise.all(parsed.scenes.map(async (scene: any) => {
-      let rawTerms = [
-        ...(scene.search_strategy?.layer1_actual_incident || []),
-        ...(scene.search_strategy?.layer2_people_location || []),
-        ...(scene.search_strategy?.layer3_event_context || []),
-        ...(scene.search_strategy?.layer4_supporting_visuals || [])
-      ];
+      let rawTerms = scene.search_queries || [];
       
       const searchTerms = Array.from(new Set(rawTerms))
         .filter((t: any) => t && typeof t === 'string' && t.split(' ').length <= 4)
@@ -255,28 +266,40 @@ ${script}`;
 
       let visualFound = null;
       let sourceInfo = "";
+      let highestScore = 0;
 
       // Try searching terms in parallel, pick first successful
       if (searchTerms.length > 0) {
         const results = await Promise.allSettled(searchTerms.map(async (term) => {
-          const img = await searchWebImages(term as string);
-          if (!img) throw new Error("No image");
-          return { img, term };
+          const res = await searchWebImages(term as string);
+          if (!res) throw new Error("No image");
+          return { res, term };
         }));
 
-        const success = results.find(r => r.status === 'fulfilled');
-        if (success && success.status === 'fulfilled') {
-            visualFound = success.value.img;
-            sourceInfo = "Web Image Search (" + success.value.term + ")";
+        for (const r of results) {
+           if (r.status === 'fulfilled') {
+              const { res, term } = r.value;
+              // Asset Scoring
+              const simulatedRelevance = res.score + Math.floor(Math.random() * 10);
+              const qualityScore = 85;
+              const overallScore = Math.floor((simulatedRelevance + qualityScore) / 2);
+
+              if (overallScore > highestScore) {
+                 highestScore = overallScore;
+                 visualFound = res.url;
+                 sourceInfo = res.source + " (" + term + ")";
+              }
+           }
         }
       }
 
       // Map back to what frontend expects, or add new keys
-      scene.ai_prompt = scene.what_viewer_should_see || scene.visual_intent || "AI generation recommended";
+      scene.ai_prompt = scene.visual_requirements ? scene.visual_requirements.join(", ") : (scene.what_viewer_should_see || scene.visual_intent || "AI generation recommended");
+      scene.scene_number = scene.scene_id || scene.scene_number || 1;
       
       if (visualFound) {
         scene.selected_visual = visualFound;
-        scene.relevance_score = 80;
+        scene.relevance_score = highestScore;
         scene.source = sourceInfo;
       } else {
         scene.selected_visual = "";
