@@ -5,7 +5,7 @@
       "excludeFiles": "node_modules/onnxruntime-node/**",
       "maxDuration": 300
     },
-    "api/find-visuals.ts": {
+    "api/search-images.ts": {
       "maxDuration": 60
     }
   },
