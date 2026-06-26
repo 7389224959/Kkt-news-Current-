@@ -310,11 +310,13 @@ ${script}`;
 
     return res.status(200).json(parsed);
   } catch (err: any) {
-    console.error("Find visuals error:", err);
     let errMsg = err.message ? err.message : (typeof err === 'string' ? err : "Unknown error");
     const strErr = String(err) + " " + JSON.stringify(err);
     if (strErr.includes("API_KEY_INVALID") || strErr.includes("invalid API key") || strErr.includes("API key not valid")) {
         errMsg = "The Gemini API Key provided is INVALID. Please check that you have pasted your correct, valid API key in Environment variables (Settings -> Secrets) or .env file.";
+        console.warn("Find visuals API Key warning:", errMsg);
+    } else {
+        console.error("Find visuals error:", err);
     }
     res.status(500).json({ error: errMsg });
   }

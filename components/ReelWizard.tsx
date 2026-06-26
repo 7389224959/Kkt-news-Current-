@@ -6,6 +6,16 @@ import { pcmBase64ToWavUrl, pcmBase64ToWavDataUri } from '../src/utils/audioUtil
 import { uploadImage } from '../services/supabase';
 import { saveSiteSettings } from '../services/articleService';
 
+function handleError(e: any, prefix: string) {
+  const errMsg = e.message || String(e);
+  if (!errMsg.includes("API Key provided is INVALID") && !errMsg.includes("API_KEY_INVALID")) {
+     console.error(e);
+  } else {
+     console.warn(errMsg);
+  }
+  alert(prefix + ': ' + errMsg);
+}
+
 export default function ReelWizard({ articles, settings, onClose, autoStart = false }: { articles: Article[], settings: any, onClose: () => void, autoStart?: boolean }) {
   const [step, setStep] = useState(1);
   const [selectedArticleId, setSelectedArticleId] = useState<string>('latest');
@@ -104,8 +114,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       });
       setStep(2);
     } catch (e: any) {
-      console.error(e);
-      alert('Error: ' + e.message);
+      handleError(e, 'Error');
     } finally {
       setIsGenerating(false);
       setStatus('');
@@ -253,8 +262,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
          setStep(4);
       }
     } catch(e: any) {
-      console.error(e);
-      alert('1-Click Auto failed: ' + e.message);
+      handleError(e, '1-Click Auto failed');
       setStep(1);
     } finally {
       setIsGenerating(false);
@@ -302,8 +310,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       setAudioDataUri(pcmBase64ToWavDataUri(base64Audio));
       setStep(3);
     } catch (e: any) {
-      console.error(e);
-      alert('Voice error: ' + e.message);
+      handleError(e, 'Voice error');
     } finally {
       setIsGenerating(false);
       setStatus('');
@@ -317,9 +324,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       const prompt = selectedArticle?.title || "Indian news";
       const base64 = await generateAiImage(prompt);
       setCustomMediaUrl(`data:image/jpeg;base64,${base64}`);
-    } catch(e) {
-      console.error(e);
-      alert("AI Image generation failed.");
+    } catch(e: any) {
+      handleError(e, "AI Image generation failed");
     } finally {
       setIsGenerating(false);
       setStatus('');
@@ -333,9 +339,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       const prompt = selectedArticle?.title || "Indian news";
       const base64 = await generateAiImage(prompt);
       setOverlayMediaUrl(`data:image/jpeg;base64,${base64}`);
-    } catch(e) {
-      console.error(e);
-      alert("AI Image generation failed.");
+    } catch(e: any) {
+      handleError(e, "AI Image generation failed");
     } finally {
       setIsGenerating(false);
       setStatus('');
@@ -351,12 +356,18 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ script: scriptData.fullScript || scriptData.voiceoverScript })
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        let errStr = await res.text();
+        try {
+          const errObj = JSON.parse(errStr);
+          if (errObj.error) errStr = errObj.error;
+        } catch(e) {}
+        throw new Error(errStr);
+      }
       const data = await res.json();
       setScenes(data.scenes || []);
     } catch(e: any) {
-      console.error(e);
-      alert('Error finding visuals: ' + e.message);
+      handleError(e, 'Error finding visuals');
     } finally {
       setIsGenerating(false);
       setStatus('');
@@ -453,8 +464,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       const objectUrl = URL.createObjectURL(blob);
       setVideoBase64(objectUrl);
     } catch(e: any) {
-      console.error(e);
-      alert('Render error: ' + e.message);
+      handleError(e, 'Render error');
     } finally {
       setIsGenerating(false);
       setStatus('');
