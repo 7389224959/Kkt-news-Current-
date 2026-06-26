@@ -1,4 +1,6 @@
-import { chromium } from 'playwright';
+import { chromium as playwright } from 'playwright-core';
+import chromium from '@sparticuz/chromium';
+import { chromium as localChromium } from 'playwright';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST' && req.method !== 'GET') {
@@ -13,7 +15,18 @@ export default async function handler(req: any, res: any) {
 
   let browser;
   try {
-    browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled'] });
+    const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+    
+    if (isProd) {
+      browser = await playwright.launch({
+        args: chromium.args,
+        executablePath: await chromium.executablePath(),
+        headless: true,
+      });
+    } else {
+      browser = await localChromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled'] });
+    }
+    
     const context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     });

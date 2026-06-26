@@ -1988,7 +1988,13 @@ export const searchWebImages = async (query: string): Promise<{url: string, scor
       const data = await res.json();
       if (data.images && data.images.length > 0) {
         return { url: data.images[0].url, score: 90, source: 'DuckDuckGo' };
+      } else {
+        console.warn("DuckDuckGo returned 0 images for:", query);
       }
+    } else {
+      console.error("DuckDuckGo search failed with status:", res.status);
+      const err = await res.text();
+      console.error("Error details:", err);
     }
     return null;
   } catch (error) {
