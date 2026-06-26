@@ -48,6 +48,33 @@ export default async function handler(req: any, res: any) {
        console.warn("No VQD token found for query:", query);
     }
 
+    // Fallback to Bing Images if DDG failed (DDG often blocks cloud IPs with a captcha)
+    if (images.length === 0) {
+      try {
+        const bingRes = await fetch(`https://www.bing.com/images/search?q=${encodeURIComponent(query)}&form=HDRSC2&first=1`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+          }
+        });
+        
+        if (bingRes.ok) {
+          const html2 = await bingRes.text();
+          const matches = html2.match(/murl&quot;:&quot;(.*?)&quot;/g);
+          
+          if (matches) {
+             images = matches.slice(0, 5).map(m => {
+               const url = m.replace('murl&quot;:&quot;', '').replace('&quot;', '');
+               return { url, source: 'Bing Images (DDG Fallback)' };
+             });
+          }
+        }
+      } catch (err) {
+        console.error("Bing search fallback error:", err);
+      }
+    }
+
     // Fallback to Yahoo if DDG yielded no images
     if (images.length === 0) {
         const yahooRes = await fetch(`https://images.search.yahoo.com/search/images?p=${encodeURIComponent(query)}`, {
