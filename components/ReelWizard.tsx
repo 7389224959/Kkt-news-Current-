@@ -242,7 +242,10 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
          setStatus('Step 4/4: Publishing to Facebook...');
          let hashtagsStr = '';
          if (article && article.tags && article.tags.length > 0) {
-            hashtagsStr = '\n\n' + article.tags.map((t: string) => '#' + t.replace(/\\s+/g, '')).join(' ');
+            const selectedTags = article.tags.slice(0, 3);
+            hashtagsStr = '\n\n' + selectedTags.map((t: string) => '#' + t.replace(/\\s+/g, '')).join(' ') + ' #kktnews';
+         } else {
+            hashtagsStr = '\n\n#kktnews';
          }
          const fbMessage = (updatedScriptData.headline || article.title || 'Check out our latest reel!') + hashtagsStr;
          await doPublishReel(blob, fbMessage);
@@ -922,7 +925,10 @@ function ReelEditorView({
     
     let hashtagsStr = '';
     if (selectedArticle && selectedArticle.tags && selectedArticle.tags.length > 0) {
-       hashtagsStr = '\n\n' + selectedArticle.tags.map((t: string) => '#' + t.replace(/\\s+/g, '')).join(' ');
+       const selectedTags = selectedArticle.tags.slice(0, 3);
+       hashtagsStr = '\n\n' + selectedTags.map((t: string) => '#' + t.replace(/\\s+/g, '')).join(' ') + ' #kktnews';
+    } else {
+       hashtagsStr = '\n\n#kktnews';
     }
     const fbMessage = (scriptData.headline || selectedArticle?.title || 'Check out our latest reel!') + hashtagsStr;
     await doPublishReel(blob, fbMessage);
