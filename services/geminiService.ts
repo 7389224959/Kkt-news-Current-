@@ -51,7 +51,9 @@ export const getAiClient = () => {
     if (!k5) k5 = process.env.GEMINI_API_KEY_5;
   } catch (e) {}
 
-  const keys = [k1, k2, k3, k4, k5].filter((key) => !!key && !String(key).includes("your_api") && key !== "undefined");
+  const keys = [k1, k2, k3, k4, k5]
+    .filter((key) => !!key && !String(key).includes("your_api") && key !== "undefined")
+    .map((key) => String(key).trim());
 
   if (keys.length === 0) {
     console.warn("API Keys are missing. Please ensure GEMINI_API_KEY is set.");
@@ -1970,6 +1972,537 @@ OUTPUT OBLIGATIONS (JSON ONLY):
     console.error("Reel script generation failed", error);
     throw error;
   }
+};
+
+export const searchWebImages = async (query: string): Promise<{url: string, score: number, source: string} | null> => {
+  try {
+    const res = await fetch('/api/search-images', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ query })
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      if (data.images && data.images.length > 0) {
+        return { url: data.images[0].url, score: 90, source: 'DuckDuckGo' };
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error("DuckDuckGo search error:", error);
+    return null;
+  }
+}
+
+export const planScenesForScript = async (script: string) => {
+  const ai = getAiClient();
+  if (!ai) throw new Error("API Key missing");
+
+  const prompt = `You are a Senior AI Video Pipeline Architect.
+Split the following news script into logical scenes (1-2 sentences each). 
+For each scene, define the purpose (Hook, Main Fact, Evidence, Context, Impact, Public Reaction, Government Action, Closing).
+Return strictly ONLY raw JSON without markdown formatting.
+
+Format:
+{
+  "scenes": [
+    {
+      "scene_id": 1,
+      "purpose": "Hook",
+      "voiceover_text": "..."
+    }
+  ]
+}
+
+Script to analyze:
+${script}`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      temperature: 0.2
+    }
+  });
+
+  let parsed: any;
+  try {
+    const text = response?.text || '{}';
+    let cleanedText = text;
+    if (text.includes('```json')) {
+      cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    }
+    parsed = JSON.parse(cleanedText);
+  } catch(e) {
+    throw new Error("Failed to parse Gemini JSON response for planning scenes.");
+  }
+
+  if (!parsed || !parsed.scenes) {
+    throw new Error("Invalid format returned by AI. Missing scenes array.");
+  }
+
+  return parsed;
+};
+
+export const findShotsForScene = async (sceneText: string, purpose: string) => {
+  const ai = getAiClient();
+  if (!ai) throw new Error("API Key missing");
+
+  const prompt = `You are a Senior AI Video Pipeline Architect and Director Agent.
+Your task is to act as an "Auto Video Director and Editor" for a news reel.
+
+We are working on a specific scene with the following details:
+Scene Text: "${sceneText}"
+Purpose: "${purpose}"
+
+Think like a human television editor.
+DO NOT think like a keyword extractor.
+
+==================================================================
+CRITICAL RULE #1
+KEYWORDS ARE NOT SHOTS
+==================================================================
+BAD:
+Script: "अबूझमाड़ में नक्सलवाद खत्म हुआ लेकिन जंगल कटाई बढ़ रही है"
+Generated shots:
+1. Abujhmad map
+2. Peace
+3. Deforestation
+4. Forest destruction
+This is WRONG. It creates a keyword slideshow.
+Instead understand the story.
+
+GOOD:
+Shot 1: Location Introduction
+Shot 2: Situation Change
+Shot 3: New Threat
+
+==================================================================
+CRITICAL RULE #2
+SHOTS MUST REPRESENT INFORMATION CHANGES
+==================================================================
+Every shot must introduce NEW information.
+Ask: "What new information does this shot add?"
+If the answer is: "Nothing new"
+DO NOT CREATE THE SHOT.
+
+==================================================================
+CRITICAL RULE #3
+MERGE DUPLICATE VISUAL IDEAS
+==================================================================
+BAD: forest, tree cutting, forest destruction
+These are nearly identical. Merge them into one visual idea.
+GOOD: Dense forest, Logging activity, Cleared land aftermath
+
+==================================================================
+CRITICAL RULE #4
+NEVER USE ABSTRACT VISUALS
+==================================================================
+BAD: corruption, negligence, poor governance, anger, criticism, peace, development, lax system, administrative failure
+These cannot be reliably searched. Convert abstract concepts into physical visuals.
+GOOD: government office, official meeting, court building, judge bench, inspection team, fire extinguisher, road construction, security forces, warning notice, government file, school building, hospital
+
+==================================================================
+CRITICAL RULE #5
+CREATE STORY STRUCTURE FIRST
+==================================================================
+Before creating any shot identify:
+{
+  "location": "",
+  "main_actor": "",
+  "topic": "",
+  "past_state": "",
+  "current_state": "",
+  "conflict": "",
+  "threat": "",
+  "government_action": "",
+  "impact": "",
+  "emotion": ""
+}
+
+==================================================================
+CRITICAL RULE #6
+CREATE NARRATIVE FLOW
+==================================================================
+Convert the story into a narrative.
+Example:
+Script: "नक्सलवाद से मुक्ति के बाद अब जंगल कटाई का संकट"
+Narrative: 1. Location, 2. Recovery, 3. New Threat
+Generate shots from the narrative. NOT from keywords.
+
+==================================================================
+CRITICAL RULE #7
+USE SHOT PURPOSES
+==================================================================
+Allowed purposes:
+- Hook
+- Location Establishment
+- Character Introduction
+- Main Fact
+- Situation Introduction
+- Context
+- Evidence
+- Comparison
+- Transition
+- Threat Reveal
+- Government Action
+- Public Impact
+- Statistics
+- Outcome
+- Closing
+Every shot MUST have one purpose.
+
+==================================================================
+CRITICAL RULE #8
+VISUAL DIVERSITY
+==================================================================
+Adjacent shots must look visually different.
+BAD: court building -> another court building -> judge building
+GOOD: court building -> judge bench -> government office -> inspection footage
+
+==================================================================
+CRITICAL RULE #9
+SHOT COUNT
+==================================================================
+Hook sentence: 2-3 shots maximum
+Normal information: 1-2 shots
+Major reveal: 1 shot
+Never create unnecessary shots. Prefer fewer meaningful shots over many repetitive shots.
+
+==================================================================
+CRITICAL RULE #10
+VISUAL SEARCH STRATEGY
+==================================================================
+For every shot generate:
+Priority 1: Real visuals
+Priority 2: Context visuals
+Priority 3: Symbolic visuals
+
+==================================================================
+CRITICAL RULE #11
+SEARCHABLE QUERIES ONLY
+==================================================================
+Every visual query must be searchable on Wikimedia/Pexels/Pixabay/Unsplash.
+BAD QUERY: "government inefficiency"
+GOOD QUERY: "government office india"
+BAD QUERY: "criticism"
+GOOD QUERY: "judge bench india"
+Provide exactly 3 short, English search queries per shot (max 3 words each) that represent the Real, Context, and Symbolic needs. These must be in the \`search_queries\` field.
+
+==================================================================
+CRITICAL RULE #12
+INFORMATION ADDED FIELD
+==================================================================
+Every shot MUST contain an "information_added" field explaining what new info it brings.
+If two shots contain the same information_added value, MERGE THEM.
+
+==================================================================
+CRITICAL RULE #13
+SHOT VALIDATION
+==================================================================
+Before finalizing every shot ask:
+1. Does it add new information?
+2. Is it visually different from the previous shot?
+3. Is it searchable?
+4. Would a TV editor actually show this?
+If any answer is NO, regenerate the shot.
+
+==================================================================
+ADDITIONAL ELEMENTS
+==================================================================
+Select motion for each shot from: slow_zoom_in, slow_zoom_out, push_in, push_out, pan_left, pan_right, parallax, dynamic_crop, spotlight_focus, counter_animation, split_screen.
+Select overlays for each shot (e.g., breaking_banner, warning_banner, exclusive_tag, notice_counter, red_arrow, map_pin, location_card).
+Select modern text animations (e.g., typewriter, kinetic_typography, neon_glow, glitch_text, highlight_reveal).
+Select shot-specific SFX (e.g., alert_hit, siren_short, success_hit, shine, paper_flip, whoosh, impact_hit, tension_rise).
+
+==================================================================
+OUTPUT FORMAT
+==================================================================
+Return ONE complete JSON containing exactly this structure:
+{
+  "story_structure": {
+    "location": "",
+    "main_actor": "",
+    "topic": "",
+    "past_state": "",
+    "current_state": "",
+    "threat": "",
+    "impact": ""
+  },
+  "narrative_flow": ["..."],
+  "shots": [
+    {
+      "shot_id": 1,
+      "purpose": "",
+      "information_added": "",
+      "duration": 2,
+      "visual_requirements": ["..."],
+      "visual_hierarchy": {
+        "real": ["..."],
+        "context": ["..."],
+        "symbolic": ["..."]
+      },
+      "search_queries": ["...", "...", "..."],
+      "motion": "slow_zoom_in",
+      "transition": "fade",
+      "text_animation": "glitch_text",
+      "graphics": ["breaking_banner"],
+      "sfx": ["alert_hit"],
+      "ffmpeg_instructions": {
+        "start": 0,
+        "end": 2,
+        "motion": "slow_zoom_in",
+        "transition": "fade",
+        "text_animation": "glitch_text",
+        "graphics": ["breaking_banner"],
+        "sfx": ["alert_hit"]
+      }
+    }
+  ]
+}
+
+Return strictly ONLY the raw JSON without markdown formatting.`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      temperature: 0.2
+    }
+  });
+
+  let parsed: any;
+  try {
+    const text = response?.text || '{}';
+    let cleanedText = text;
+    if (text.includes('```json')) {
+      cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    }
+    parsed = JSON.parse(cleanedText);
+  } catch(e) {
+    throw new Error("Failed to parse Gemini JSON response for finding visuals.");
+  }
+
+  if (!parsed || !parsed.shots) {
+    throw new Error("Invalid format returned by AI. Missing shots array.");
+  }
+
+  for (const shot of parsed.shots) {
+    let bestVisual = null;
+    const allQueries = shot.search_queries || [];
+    
+    for (const query of allQueries) {
+        if (!query) continue;
+        const result = await searchWebImages(query);
+        
+        if (result && (!bestVisual || result.score > bestVisual.score)) {
+            bestVisual = {
+                url: result.url,
+                score: result.score,
+                source: result.source,
+                query: query
+            };
+            if (result.score >= 90) break;
+        }
+    }
+    
+    if (bestVisual) {
+        shot.selected_visual = bestVisual.url;
+        shot.relevance_score = bestVisual.score;
+        shot.source = `${bestVisual.source} (${bestVisual.query})`;
+    } else {
+        shot.selected_visual = null;
+        shot.relevance_score = 0;
+        shot.source = 'None found';
+    }
+  }
+
+  return parsed.shots;
+};
+
+export const findVisualsForScript = async (script: string) => {
+  const ai = getAiClient();
+  if (!ai) throw new Error("API Key missing");
+
+  const prompt = `You are a Senior AI Video Pipeline Architect and Director Agent.
+Your task is to act as an "Auto Video Director and Editor" for a news reel.
+
+STEP 1 - DIRECTOR AGENT
+Split the story into scenes based on the script. Define the purpose (Hook, Main Fact, Evidence, Context, Impact, Public Reaction, Government Action, Closing), timing, and visual/motion/graphics/sfx needs.
+Output story_type, emotion, importance, estimated_duration.
+
+STEP 2 - ASSET PLANNER & PACING
+A professional digital editor of a news channel changes visuals every 1-2 seconds to keep high energy.
+For each scene, plan MULTIPLE SHOTS. Each shot should last 1-2 seconds.
+Generate "visual_requirements", "text_animation", "graphics", and "sfx" for each shot.
+
+STEP 3 - VISUAL HIERARCHY
+For every shot generate: "real", "context", and "symbolic" visual queries.
+CRITICAL RULE: Always convert abstract concepts into physically searchable visual objects, locations, people, documents, vehicles, buildings, inspections, equipment, maps, symbols or actions. Never use abstract terms like "lax system" or "corruption" as visual requirements. Instead use concrete items like "unfinished construction", "broken mechanism", "red tape documents", or "fire safety inspection".
+
+STEP 4, 5 - SEARCH AND SCORING STRATEGY
+Provide 3 short, English search queries per shot (max 3 words each) that represent the Real, Context, and Symbolic needs.
+
+STEP 6 - MOTION PLANNER
+Select motion for each shot from: slow_zoom_in, slow_zoom_out, push_in, push_out, pan_left, pan_right, parallax, dynamic_crop, spotlight_focus, counter_animation, split_screen.
+
+STEP 7 - GRAPHICS & TEXT PLANNER
+Select overlays for each shot (e.g., breaking_banner, warning_banner, exclusive_tag, notice_counter, red_arrow, map_pin, location_card).
+Select modern text animations (e.g., typewriter, kinetic_typography, neon_glow, glitch_text, highlight_reveal).
+
+STEP 8 - SFX PLANNER
+Select shot-specific SFX (e.g., alert_hit, siren_short, success_hit, shine, paper_flip, whoosh, impact_hit, tension_rise).
+
+STEP 9 - FFMPEG INSTRUCTIONS
+Generate the intended FFmpeg editing parameters for each shot: start, end, motion, transition, text_animation, graphics, sfx.
+
+STEP 10 - FINAL OUTPUT
+Return ONE complete storyboard JSON containing exactly this structure:
+{
+  "story_type": "",
+  "emotion": "",
+  "importance": "",
+  "estimated_duration": 25,
+  "scenes": [
+    {
+      "scene_id": 1,
+      "purpose": "Hook",
+      "voiceover_text": "...",
+      "shots": [
+        {
+          "shot_id": 1,
+          "duration": 2,
+          "visual_requirements": ["..."],
+          "visual_hierarchy": {
+            "real": ["..."],
+            "context": ["..."],
+            "symbolic": ["..."]
+          },
+          "search_queries": ["...", "...", "..."],
+          "motion": "slow_zoom_in",
+          "transition": "fade",
+          "text_animation": "glitch_text",
+          "graphics": ["breaking_banner"],
+          "sfx": ["alert_hit"],
+          "ffmpeg_instructions": {
+            "start": 0,
+            "end": 2,
+            "motion": "slow_zoom_in",
+            "transition": "fade",
+            "text_animation": "glitch_text",
+            "graphics": ["breaking_banner"],
+            "sfx": ["alert_hit"]
+          }
+        }
+      ]
+    }
+  ]
+}
+
+Return strictly ONLY the raw JSON without markdown formatting.
+
+Script to analyze:
+${script}`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      temperature: 0.2
+    }
+  });
+
+  let parsed: any;
+  try {
+    const text = response?.text || '{}';
+    let cleanedText = text;
+    if (text.includes('```json')) {
+      cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    }
+    parsed = JSON.parse(cleanedText);
+  } catch(e) {
+    throw new Error("Failed to parse Gemini JSON response for finding visuals.");
+  }
+
+  if (!parsed || !parsed.scenes) {
+    throw new Error("Invalid format returned by AI. Missing scenes array.");
+  }
+
+  // Flatten scenes into shots to match the existing UI/Render pipeline
+  const flattenedShots = [];
+  let globalShotIndex = 1;
+
+  for (const scene of parsed.scenes) {
+    if (scene.shots && Array.isArray(scene.shots)) {
+      for (const shot of scene.shots) {
+        flattenedShots.push({
+          scene_number: globalShotIndex++, // mapped to UI scene_number
+          scene_group_id: scene.scene_id || Math.random().toString(36).substring(7),
+          shot_id_in_scene: shot.shot_id || 1,
+          voiceover_text: scene.voiceover_text,
+          purpose: scene.purpose,
+          visual_requirements: shot.visual_requirements,
+          visual_hierarchy: shot.visual_hierarchy,
+          search_queries: shot.search_queries,
+          motion: shot.motion,
+          transition: shot.transition,
+          text_animation: shot.text_animation,
+          graphics: shot.graphics,
+          sfx: shot.sfx,
+          ffmpeg_instructions: shot.ffmpeg_instructions
+        });
+      }
+    } else {
+      // Fallback if AI didn't follow the nested structure perfectly
+      flattenedShots.push({
+        ...scene,
+        scene_number: globalShotIndex++
+      });
+    }
+  }
+
+  parsed.scenes = flattenedShots;
+
+  for (let i = 0; i < parsed.scenes.length; i++) {
+    const scene = parsed.scenes[i];
+    scene.scene_number = i + 1;
+    
+    let bestVisual = null;
+    const allQueries = scene.search_queries || [];
+    
+    for (const query of allQueries) {
+        if (!query) continue;
+        const result = await searchWebImages(query);
+        
+        if (result && (!bestVisual || result.score > bestVisual.score)) {
+            bestVisual = {
+                url: result.url,
+                score: result.score,
+                source: result.source,
+                query: query
+            };
+            if (result.score >= 90) break;
+        }
+    }
+    
+    if (bestVisual) {
+        scene.selected_visual = bestVisual.url;
+        scene.relevance_score = bestVisual.score;
+        scene.source = `${bestVisual.source} (${bestVisual.query})`;
+    } else {
+        scene.selected_visual = null;
+        scene.relevance_score = 0;
+        scene.source = 'None found';
+    }
+  }
+
+  return parsed;
 };
 
 export const generateFullReelScript = async (

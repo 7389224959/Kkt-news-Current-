@@ -1,20 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { RefreshCw, Zap, X, Image as ImageIcon, Video, Upload, Settings, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Article } from '../types';
-import { generateFullReelScript, generateReelAudio, generateAiImage } from '../services/geminiService';
+import { generateFullReelScript, generateReelAudio, generateAiImage, findVisualsForScript, planScenesForScript, findShotsForScene } from '../services/geminiService';
 import { pcmBase64ToWavUrl, pcmBase64ToWavDataUri } from '../src/utils/audioUtils';
 import { uploadImage } from '../services/supabase';
 import { saveSiteSettings } from '../services/articleService';
-
-function handleError(e: any, prefix: string) {
-  const errMsg = e.message || String(e);
-  if (!errMsg.includes("API Key provided is INVALID") && !errMsg.includes("API_KEY_INVALID")) {
-     console.error(e);
-  } else {
-     console.warn(errMsg);
-  }
-  alert(prefix + ': ' + errMsg);
-}
 
 export default function ReelWizard({ articles, settings, onClose, autoStart = false }: { articles: Article[], settings: any, onClose: () => void, autoStart?: boolean }) {
   const [step, setStep] = useState(1);
@@ -44,6 +34,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
   const [isPublishing, setIsPublishing] = useState(false);
   const [status, setStatus] = useState('');
   const [scenes, setScenes] = useState<any[]>([]);
+  const [plannedScenes, setPlannedScenes] = useState<any[]>([]);
+  const [currentSceneIndex, setCurrentSceneIndex] = useState<number>(0);
 
   const activeTemplates = settings?.reelTemplates?.filter((t: any) => t.isActive) || [];
 
@@ -114,7 +106,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       });
       setStep(2);
     } catch (e: any) {
-      handleError(e, 'Error');
+      console.error(e);
+      alert('Error: ' + e.message);
     } finally {
       setIsGenerating(false);
       setStatus('');
@@ -262,7 +255,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
          setStep(4);
       }
     } catch(e: any) {
-      handleError(e, '1-Click Auto failed');
+      console.error(e);
+      alert('1-Click Auto failed: ' + e.message);
       setStep(1);
     } finally {
       setIsGenerating(false);
@@ -310,7 +304,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       setAudioDataUri(pcmBase64ToWavDataUri(base64Audio));
       setStep(3);
     } catch (e: any) {
-      handleError(e, 'Voice error');
+      console.error(e);
+      alert('Voice error: ' + e.message);
     } finally {
       setIsGenerating(false);
       setStatus('');
@@ -324,8 +319,9 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       const prompt = selectedArticle?.title || "Indian news";
       const base64 = await generateAiImage(prompt);
       setCustomMediaUrl(`data:image/jpeg;base64,${base64}`);
-    } catch(e: any) {
-      handleError(e, "AI Image generation failed");
+    } catch(e) {
+      console.error(e);
+      alert("AI Image generation failed.");
     } finally {
       setIsGenerating(false);
       setStatus('');
@@ -339,35 +335,67 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       const prompt = selectedArticle?.title || "Indian news";
       const base64 = await generateAiImage(prompt);
       setOverlayMediaUrl(`data:image/jpeg;base64,${base64}`);
-    } catch(e: any) {
-      handleError(e, "AI Image generation failed");
+    } catch(e) {
+      console.error(e);
+      alert("AI Image generation failed.");
     } finally {
       setIsGenerating(false);
       setStatus('');
     }
   }
 
-  const handleFindVisuals = async () => {
+  const handlePlanScenes = async () => {
     setIsGenerating(true);
-    setStatus('Analyzing script and finding visuals scene-by-scene...');
+    setStatus('Analyzing script and dividing into logical scenes...');
     try {
-      const res = await fetch('/api/find-visuals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script: scriptData.fullScript || scriptData.voiceoverScript })
-      });
-      if (!res.ok) {
-        let errStr = await res.text();
-        try {
-          const errObj = JSON.parse(errStr);
-          if (errObj.error) errStr = errObj.error;
-        } catch(e) {}
-        throw new Error(errStr);
-      }
-      const data = await res.json();
-      setScenes(data.scenes || []);
+      const data = await planScenesForScript(scriptData.fullScript || scriptData.voiceoverScript);
+      setPlannedScenes(data.scenes || []);
+      setCurrentSceneIndex(0);
+      setScenes([]); // Clear existing shots
     } catch(e: any) {
-      handleError(e, 'Error finding visuals');
+      console.error(e);
+      alert('Error planning scenes: ' + e.message);
+    } finally {
+      setIsGenerating(false);
+      setStatus('');
+    }
+  };
+
+  const handleGenerateShotsForScene = async (sceneIndex: number) => {
+    const scene = plannedScenes[sceneIndex];
+    if (!scene) return;
+    
+    setIsGenerating(true);
+    setStatus(`Directing Scene ${sceneIndex + 1} and planning fast-paced shots...`);
+    try {
+      const shots = await findShotsForScene(scene.voiceover_text, scene.purpose);
+      
+      const newFormattedShots = shots.map((shot: any) => ({
+        scene_number: scenes.length + shot.shot_id, // Global shot index roughly
+        scene_group_id: scene.scene_id || `group_${sceneIndex}`,
+        shot_id_in_scene: shot.shot_id,
+        voiceover_text: scene.voiceover_text,
+        purpose: shot.purpose || scene.purpose,
+        information_added: shot.information_added,
+        visual_requirements: shot.visual_requirements,
+        visual_hierarchy: shot.visual_hierarchy,
+        search_queries: shot.search_queries,
+        selected_visual: shot.selected_visual,
+        relevance_score: shot.relevance_score,
+        source: shot.source,
+        motion: shot.motion,
+        transition: shot.transition,
+        text_animation: shot.text_animation,
+        graphics: shot.graphics,
+        sfx: shot.sfx,
+        ffmpeg_instructions: shot.ffmpeg_instructions
+      }));
+      
+      setScenes(prev => [...prev, ...newFormattedShots]);
+      setCurrentSceneIndex(sceneIndex + 1);
+    } catch(e: any) {
+      console.error(e);
+      alert(`Error generating shots for scene ${sceneIndex + 1}: ` + e.message);
     } finally {
       setIsGenerating(false);
       setStatus('');
@@ -464,12 +492,33 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       const objectUrl = URL.createObjectURL(blob);
       setVideoBase64(objectUrl);
     } catch(e: any) {
-      handleError(e, 'Render error');
+      console.error(e);
+      alert('Render error: ' + e.message);
     } finally {
       setIsGenerating(false);
       setStatus('');
     }
   };
+
+  const groupedScenes = useMemo(() => {
+    const groups: any[] = [];
+    const map = new Map();
+    scenes.forEach((shot: any, index: number) => {
+      const groupId = shot.scene_group_id || `group_${index}`;
+      if (!map.has(groupId)) {
+        const newGroup = {
+          id: groupId,
+          voiceover_text: shot.voiceover_text,
+          purpose: shot.purpose,
+          shots: []
+        };
+        map.set(groupId, newGroup);
+        groups.push(newGroup);
+      }
+      map.get(groupId).shots.push({ ...shot, originalIndex: index });
+    });
+    return groups;
+  }, [scenes]);
 
   if (activeTemplates.length === 0) {
     return <div className="p-6 bg-white rounded-lg"><h2 className="text-xl font-bold">No Active Templates</h2><p>Please create and activate a template in the Templates tab.</p><button onClick={onClose} className="mt-4 px-4 py-2 bg-gray-200 rounded">Close</button></div>;
@@ -608,42 +657,192 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
 
               {visualMode === 'scenes' && (
                 <div className="p-4 border rounded">
-                  <button onClick={handleFindVisuals} disabled={isGenerating} className="px-4 py-3 bg-pink-100 border-pink-300 text-pink-800 font-bold rounded flex gap-2 items-center mb-4 text-sm w-full justify-center hover:bg-pink-200">
-                    {isGenerating ? <RefreshCw className="animate-spin" size={18}/> : <Zap size={18} />} Analyze Script & Find Visuals For Scenes
-                  </button>
-                  
-                  {scenes.length > 0 && (
-                    <div className="space-y-4">
-                      <h5 className="font-bold border-b pb-2">Logical Scenes ({scenes.length})</h5>
-                      <div className="max-h-96 overflow-y-auto pr-2 space-y-4">
-                      {scenes.map((scene: any, idx) => (
-                        <div key={idx} className="bg-gray-50 border rounded p-3 shadow-sm">
-                          <div className="flex justify-between items-start mb-2">
-                             <div className="font-bold text-sm bg-gray-200 px-2 rounded">Scene {scene.scene_number}</div>
-                             <div className={`text-xs px-2 py-1 border rounded font-semibold ${(scene.relevance_score || 0) >= 75 ? 'bg-green-100 text-green-800 border-green-300' : 'bg-yellow-100 text-yellow-800 border-yellow-300'}`}>Score: {scene.relevance_score || 0}/100</div>
-                          </div>
-                          <p className="text-sm text-gray-700 italic border-l-2 border-pink-400 pl-2 mb-2">"{scene.voiceover_text}"</p>
-                          <div className="flex flex-col sm:flex-row gap-4 mt-3">
-                             {scene.selected_visual ? 
-                               <img src={scene.selected_visual} className="w-24 h-24 object-cover rounded shadow-sm border border-gray-300" />
-                             :
-                               <div className="w-24 h-24 bg-gray-200 rounded flex items-center justify-center text-xs text-center border border-gray-300 p-1 text-gray-500">No Target Match<br/>(AI suggested)</div>
-                             }
-                             <div className="flex-1 text-sm">
-                               <p className="mb-1 text-gray-600"><span className="font-semibold text-black">Source:</span> {scene.source || 'None'}</p>
-                               {scene.ai_prompt && !scene.selected_visual && <p className="mb-2 text-xs text-indigo-600"><span className="font-semibold text-black">Suggested Topic:</span> {scene.ai_prompt}</p>}
-                               <div className="space-y-1">
-                                  <label className="block text-xs font-semibold text-gray-700">Replace/Set visual URL (Image/Video):</label>
-                                  <input type="text" className="w-full px-2 py-1.5 border rounded text-xs bg-white focus:ring-1 focus:ring-pink-500" placeholder="Paste URL..." value={scene.selected_visual || ''} onChange={(e) => {
-                                     const newScenes = [...scenes];
-                                     newScenes[idx].selected_visual = e.target.value;
-                                     setScenes(newScenes);
-                                  }} />
+                  {plannedScenes.length === 0 ? (
+                    <button onClick={handlePlanScenes} disabled={isGenerating} className="px-4 py-3 bg-pink-100 border-pink-300 text-pink-800 font-bold rounded flex gap-2 items-center text-sm w-full justify-center hover:bg-pink-200">
+                      {isGenerating ? <RefreshCw className="animate-spin" size={18}/> : <Zap size={18} />} Step 1: Analyze Script & Divide into Scenes
+                    </button>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between border-b pb-4">
+                        <h5 className="font-bold">Scene Planning ({currentSceneIndex} of {plannedScenes.length} Completed)</h5>
+                        <button onClick={() => { setPlannedScenes([]); setScenes([]); setCurrentSceneIndex(0); }} className="text-xs text-red-600 hover:text-red-800 border border-red-200 px-2 py-1 rounded">Reset All</button>
+                      </div>
+                      
+                      <div className="max-h-96 overflow-y-auto pr-2 space-y-6">
+                        {plannedScenes.map((scene, sceneIdx) => {
+                          if (sceneIdx > currentSceneIndex) return null; // Don't show future scenes yet
+                          
+                          // Find shots for this scene in 'scenes' array
+                          const shotsForThisScene = groupedScenes.find((g: any) => g.id === scene.scene_id || g.voiceover_text === scene.voiceover_text)?.shots || [];
+                          
+                          return (
+                            <div key={sceneIdx} className={`bg-white border ${sceneIdx === currentSceneIndex ? 'border-indigo-400 ring-1 ring-indigo-400 shadow-md' : 'border-gray-200 shadow-sm'} rounded-lg p-4`}>
+                               <div className="flex items-center justify-between mb-2 border-b pb-2">
+                                 <div className="flex items-center gap-2">
+                                   <div className={`font-bold text-sm px-2 py-0.5 rounded ${sceneIdx === currentSceneIndex ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-800'}`}>Scene {sceneIdx + 1}</div>
+                                   <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{scene.purpose}</span>
+                                 </div>
+                                 {sceneIdx < currentSceneIndex && <div className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-200">✓ Completed</div>}
                                </div>
-                             </div>
-                          </div>
-                        </div>
-                      ))}
+                               <p className="text-sm text-gray-800 italic border-l-2 border-indigo-400 pl-3 mb-4 bg-indigo-50/30 p-2 rounded-r">"{scene.voiceover_text}"</p>
+                               
+                               {shotsForThisScene.length === 0 ? (
+                                 <button onClick={() => handleGenerateShotsForScene(sceneIdx)} disabled={isGenerating} className="w-full py-3 bg-indigo-50 text-indigo-700 font-bold rounded border border-indigo-300 hover:bg-indigo-100 flex items-center justify-center gap-2 text-sm shadow-sm transition-all">
+                                   {isGenerating && sceneIdx === currentSceneIndex ? <RefreshCw className="animate-spin" size={16}/> : <Zap size={16}/>} 
+                                   Step 2: Direct Scene & Plan Fast-Paced Shots
+                                 </button>
+                               ) : (
+                                 <div className="space-y-4">
+                                   {shotsForThisScene.map((shot: any, shotLocalIdx: number) => {
+                                     const idx = shot.originalIndex;
+                                     return (
+                                       <div key={idx} className="border border-gray-100 rounded bg-gray-50 p-3">
+                                          <div className="flex justify-between items-start mb-2">
+                                             <div className="flex items-center gap-2">
+                                                <div className="font-bold text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded inline-block">Shot {shot.scene_number}</div>
+                                                {shot.purpose && <div className="text-[10px] font-semibold text-gray-600 bg-gray-200 px-1.5 py-0.5 rounded">{shot.purpose}</div>}
+                                             </div>
+                                             {shot.relevance_score !== undefined && (
+                                               <div className={`text-[10px] px-1.5 py-0.5 border rounded font-semibold ${(shot.relevance_score || 0) >= 75 ? 'bg-green-100 text-green-800 border-green-300' : 'bg-yellow-100 text-yellow-800 border-yellow-300'}`}>Score: {shot.relevance_score}/100</div>
+                                             )}
+                                          </div>
+                                          {shot.information_added && (
+                                            <div className="text-xs text-gray-700 italic bg-white p-2 rounded border border-gray-200 mb-3 shadow-sm border-l-2 border-l-blue-400">
+                                              Info Added: {shot.information_added}
+                                            </div>
+                                          )}
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {/* Visual Asset Planner */}
+                                            <div className="bg-white p-3 rounded border border-gray-100">
+                                               <h6 className="font-semibold text-xs text-gray-700 uppercase tracking-wider mb-2 flex items-center gap-1"><ImageIcon size={12}/> Visual Asset</h6>
+                                               {shot.search_queries && shot.search_queries.length > 0 ? (
+                                                 <div className="mb-2">
+                                                   <div className="text-[10px] text-gray-500 font-bold mb-1">SEARCH QUERIES:</div>
+                                                   <div className="flex flex-wrap gap-1">
+                                                     {shot.search_queries.map((q: string, i: number) => (
+                                                        <span key={i} className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 border border-blue-200 rounded">{q}</span>
+                                                     ))}
+                                                   </div>
+                                                 </div>
+                                               ) : (
+                                                 shot.visual_requirements && shot.visual_requirements.map((req: string, i: number) => (
+                                                   <p key={i} className="text-[10px] text-gray-600 mb-2 whitespace-normal break-words font-medium">{req}</p>
+                                                 ))
+                                               )}
+                                               <div className="flex gap-2 mt-2">
+                                                 {shot.selected_visual ? 
+                                                   <img src={shot.selected_visual} className="w-16 h-16 object-cover rounded shadow-sm border border-gray-300" />
+                                                 :
+                                                   <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center text-[10px] text-center border border-gray-300 p-1 text-gray-500 leading-tight">No Target<br/>Visual</div>
+                                                 }
+                                                 <div className="flex-1">
+                                                    <label className="block text-[10px] font-bold text-gray-700 mb-1">SET VISUAL URL (IMAGE/VIDEO):</label>
+                                                    <input type="text" className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs bg-white focus:ring-1 focus:ring-indigo-500 mb-1" placeholder="Paste URL..." value={shot.selected_visual || ''} onChange={(e) => {
+                                                       const newScenes = [...scenes];
+                                                       newScenes[idx].selected_visual = e.target.value;
+                                                       setScenes(newScenes);
+                                                    }} />
+                                                    <div className="flex items-center gap-2">
+                                                       <span className="text-[10px] text-gray-500">Or upload:</span>
+                                                       <input type="file" accept="image/*,video/mp4" className="text-[10px] w-full" onChange={(e) => {
+                                                          const file = e.target.files?.[0];
+                                                          if (!file) return;
+                                                          const reader = new FileReader();
+                                                          reader.onloadend = () => {
+                                                             const newScenes = [...scenes];
+                                                             newScenes[idx].selected_visual = reader.result as string;
+                                                             setScenes(newScenes);
+                                                          };
+                                                          reader.readAsDataURL(file);
+                                                       }} />
+                                                    </div>
+                                                    {shot.motion && <div className="text-[10px] mt-1 text-indigo-600 font-medium">Motion: {shot.motion}</div>}
+                                                 </div>
+                                               </div>
+                                            </div>
+                                            
+                                            {/* Elements Asset Planner */}
+                                            <div className="bg-white p-3 rounded border border-gray-100 space-y-3">
+                                               <div>
+                                                 <h6 className="font-semibold text-[10px] text-gray-700 uppercase tracking-wider mb-1">Text & Animations</h6>
+                                                 {shot.text_animation ? (
+                                                   <div className="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded border border-purple-200 inline-block mb-2">Animation: {shot.text_animation}</div>
+                                                 ) : <div className="text-[10px] text-gray-400 mb-2">No text animation</div>}
+                                               </div>
+                                               <div>
+                                                 <h6 className="font-semibold text-[10px] text-gray-700 uppercase tracking-wider mb-1">Graphics & Overlays</h6>
+                                                 {shot.graphics && shot.graphics.length > 0 ? (
+                                                   <div className="flex flex-wrap gap-1 mb-1">
+                                                     {shot.graphics.map((g: string, i: number) => (
+                                                       <span key={i} className="text-[10px] bg-pink-100 text-pink-800 px-1.5 py-0.5 rounded border border-pink-200">{g}</span>
+                                                     ))}
+                                                   </div>
+                                                 ) : <div className="text-[10px] text-gray-400 mb-1">No graphics requested</div>}
+                                                 <input type="text" className="w-full px-2 py-1 border border-gray-300 rounded text-[10px] bg-white mb-1" placeholder="Custom graphic URL (optional)..." value={shot.custom_graphic || ''} onChange={(e) => {
+                                                    const newScenes = [...scenes];
+                                                    newScenes[idx].custom_graphic = e.target.value;
+                                                    setScenes(newScenes);
+                                                 }} />
+                                                 <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] text-gray-500">Upload:</span>
+                                                    <input type="file" accept="image/*,video/webm" className="text-[10px] w-full" onChange={(e) => {
+                                                       const file = e.target.files?.[0];
+                                                       if (!file) return;
+                                                       const reader = new FileReader();
+                                                       reader.onloadend = () => {
+                                                          const newScenes = [...scenes];
+                                                          newScenes[idx].custom_graphic = reader.result as string;
+                                                          setScenes(newScenes);
+                                                       };
+                                                       reader.readAsDataURL(file);
+                                                    }} />
+                                                 </div>
+                                               </div>
+                                               
+                                               <div>
+                                                 <h6 className="font-semibold text-[10px] text-gray-700 uppercase tracking-wider mb-1">Sound Effects (SFX)</h6>
+                                                 {shot.sfx && shot.sfx.length > 0 ? (
+                                                   <div className="flex flex-wrap gap-1 mb-1">
+                                                     {shot.sfx.map((s: string, i: number) => (
+                                                       <span key={i} className="text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded border border-yellow-200">{s}</span>
+                                                     ))}
+                                                   </div>
+                                                 ) : <div className="text-[10px] text-gray-400 mb-1">No SFX requested</div>}
+                                                 <input type="text" className="w-full px-2 py-1 border border-gray-300 rounded text-[10px] bg-white mb-1" placeholder="Custom SFX URL (optional)..." value={shot.custom_sfx || ''} onChange={(e) => {
+                                                    const newScenes = [...scenes];
+                                                    newScenes[idx].custom_sfx = e.target.value;
+                                                    setScenes(newScenes);
+                                                 }} />
+                                                 <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] text-gray-500">Upload:</span>
+                                                    <input type="file" accept="audio/*" className="text-[10px] w-full" onChange={(e) => {
+                                                       const file = e.target.files?.[0];
+                                                       if (!file) return;
+                                                       const reader = new FileReader();
+                                                       reader.onloadend = () => {
+                                                          const newScenes = [...scenes];
+                                                          newScenes[idx].custom_sfx = reader.result as string;
+                                                          setScenes(newScenes);
+                                                       };
+                                                       reader.readAsDataURL(file);
+                                                    }} />
+                                                 </div>
+                                               </div>
+                                            </div>
+                                          </div>
+                                       </div>
+                                     );
+                                   })}
+                                   {sceneIdx === currentSceneIndex && sceneIdx < plannedScenes.length - 1 && (
+                                      <button onClick={() => setCurrentSceneIndex(sceneIdx + 1)} className="mt-4 w-full py-2 bg-gray-800 text-white font-bold rounded flex gap-2 items-center justify-center hover:bg-gray-900 shadow">
+                                        Confirm & Next Scene <ChevronRight size={18} />
+                                      </button>
+                                   )}
+                                 </div>
+                               )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
