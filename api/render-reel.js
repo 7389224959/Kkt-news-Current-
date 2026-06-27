@@ -33,7 +33,15 @@ const downloadFile = async (url, dest) => {
 
   // Unwrap duckduckgo proxy URLs if they exist in state
   if (url.startsWith("https://external-content.duckduckgo.com/iu/?u=")) {
-    url = decodeURIComponent(url.replace("https://external-content.duckduckgo.com/iu/?u=", ""));
+    try {
+      const parsedUrl = new URL(url);
+      const uParam = parsedUrl.searchParams.get("u");
+      if (uParam) {
+        url = uParam;
+      }
+    } catch(e) {
+      // ignore parse error
+    }
   }
 
   const response = await fetch(url, {

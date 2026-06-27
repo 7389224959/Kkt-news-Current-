@@ -9,35 +9,46 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ error: 'Query is required' });
   }
 
+  // Remove any negatives added for DuckDuckGo
+  const cleanQuery = query.replace(/-\w+/g, '').trim();
+
   try {
-    const res1 = await fetch(`https://duckduckgo.com/?q=${encodeURIComponent(query)}`, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" }
-    });
-    const html = await res1.text();
-    const vqdMatch = html.match(/vqd=["']([^"']+)["']/) || html.match(/vqd=([a-zA-Z0-9-]+)/);
+    const url = `https://www.bing.com/images/search?q=${encodeURIComponent(cleanQuery)}&form=HDRSC2&first=1&tsc=ImageHoverTitle`;
     
-    if (!vqdMatch) {
-      return res.status(500).json({ error: 'Failed to extract VQD token from search provider' });
-    }
-    const vqd = vqdMatch[1];
-    
-    const res2 = await fetch(`https://duckduckgo.com/i.js?l=us-en&o=json&q=${encodeURIComponent(query)}&vqd=${vqd}&f=,,,&p=1`, {
+    const response = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" }
     });
     
-    const data = await res2.json();
+    const html = await response.text();
     let images: any[] = [];
     
-    if (data.results && data.results.length > 0) {
-       images = data.results.slice(0, 20).map((r: any) => ({
-           url: r.image, // Original high resolution image URL
-           original: r.image,
-           thumbnail: r.thumbnail,
-           title: r.title || '',
-           width: r.width,
-           height: r.height,
-           source: 'DuckDuckGo API'
-       }));
+    const regex = /m="({[^}]+})"/g;
+    let match;
+    while ((match = regex.exec(html)) !== null) {
+      if (images.length >= 20) break;
+      try {
+        // Unescape HTML entities in the JSON string
+        const jsonStr = match[1].replace(/&quot;/g, '"');
+        const data = JSON.parse(jsonStr);
+        if (data.murl) {
+            const urlLower = data.murl.toLowerCase();
+            // Skip invalid extensions if any exist
+            if (urlLower.endsWith('.wav') || urlLower.endsWith('.ogg') || urlLower.endsWith('.mp3') || urlLower.endsWith('.svg')) {
+                continue;
+            }
+            images.push({
+                url: data.murl,
+                original: data.murl,
+                thumbnail: data.turl || data.murl,
+                title: data.t || '',
+                width: 0, // Not always readily available without further parsing
+                height: 0,
+                source: 'Bing Images'
+            });
+        }
+      } catch(e) {
+        // ignore parse errors for individual images
+      }
     }
     
     res.status(200).json({ images });
