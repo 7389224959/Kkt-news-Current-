@@ -1,3 +1,7 @@
+import { chromium as playwright } from 'playwright-core';
+import chromium from '@sparticuz/chromium';
+import { chromium as localChromium } from 'playwright';
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -9,100 +13,79 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ error: 'Query is required' });
   }
 
+  let browser;
   try {
-    // 1. Get VQD token
-    const res1 = await fetch(`https://duckduckgo.com/?q=${encodeURIComponent(query)}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      }
+    const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+    
+    if (isProd) {
+      browser = await playwright.launch({
+        args: chromium.args,
+        executablePath: await chromium.executablePath(),
+        headless: true,
+      });
+    } else {
+      browser = await localChromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled'] });
+    }
+    
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     });
-    const html = await res1.text();
-    const vqdMatch = html.match(/vqd="([^"]+)"/) || html.match(/vqd=([^&]+)/);
+    const page = await context.newPage();
+    
+    // Spoof webdriver
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    });
     
     let images: any[] = [];
     
-    if (vqdMatch) {
-      const vqd = vqdMatch[1];
-      
-      // 2. Search images
-      const res2 = await fetch(`https://duckduckgo.com/i.js?l=us-en&o=json&q=${encodeURIComponent(query)}&vqd=${vqd}&f=,,,,,&p=1`, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'application/json, text/javascript, */*; q=0.01',
-          'Referer': 'https://duckduckgo.com/'
-        }
-      });
-      
-      if (res2.ok) {
-        const data = await res2.json();
-        if (data.results && data.results.length > 0) {
-          images = data.results.slice(0, 5).map((img: any) => ({
-            url: img.image,
-            source: 'DuckDuckGo'
-          }));
-        }
-      } else {
-        console.error("DuckDuckGo API search failed with status:", res2.status);
-      }
-    } else {
-       console.warn("No VQD token found for query:", query);
-    }
+    // First try DuckDuckGo
+    await page.goto(`https://duckduckgo.com/?q=${encodeURIComponent(query)}&t=h_&iax=images&ia=images`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('img.tile--img__img', { timeout: 3000 }).catch(() => page.waitForTimeout(1000));
 
-    // Fallback to Bing Images if DDG failed (DDG often blocks cloud IPs with a captcha)
-    if (images.length === 0) {
-      try {
-        const bingRes = await fetch(`https://www.bing.com/images/search?q=${encodeURIComponent(query)}&form=HDRSC2&first=1`, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-          }
-        });
-        
-        if (bingRes.ok) {
-          const html2 = await bingRes.text();
-          const matches = html2.match(/murl&quot;:&quot;(.*?)&quot;/g);
-          
-          if (matches) {
-             images = matches.slice(0, 5).map(m => {
-               const url = m.replace('murl&quot;:&quot;', '').replace('&quot;', '');
-               return { url, source: 'Bing Images (DDG Fallback)' };
-             });
-          }
-        }
-      } catch (err) {
-        console.error("Bing search fallback error:", err);
-      }
-    }
-
-    // Fallback to Yahoo if DDG yielded no images
-    if (images.length === 0) {
-        const yahooRes = await fetch(`https://images.search.yahoo.com/search/images?p=${encodeURIComponent(query)}`, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9'
-          }
-        });
-        
-        if (yahooRes.ok) {
-           const yahooHtml = await yahooRes.text();
-           const imgRegex = /<img[^>]+(?:src|data-src)=['"]([^'"]+)['"]/g;
-           let match;
-           while ((match = imgRegex.exec(yahooHtml)) !== null) {
-             let src = match[1];
-             if (src.startsWith('http') && !src.includes('yahoo.com/assets')) {
-               src = src.replace(/&amp;/g, '&');
-               images.push({ url: src, source: 'DuckDuckGo (via Yahoo Fallback)' });
-               if (images.length >= 5) break;
-             }
+    images = await page.evaluate(() => {
+      const imgElements = document.querySelectorAll('img.tile--img__img, img');
+      const results = [];
+      for (let i = 0; i < imgElements.length; i++) {
+        const src = imgElements[i].getAttribute('src') || imgElements[i].getAttribute('data-src') || (imgElements[i] as HTMLImageElement).src;
+        if (src && (src.includes('external-content') || src.startsWith('http')) && !src.includes('duckduckgo.com/assets')) {
+           let url = src;
+           if (url.startsWith('//')) {
+             url = 'https:' + url;
            }
+           results.push({ url, source: 'DuckDuckGo' });
+           if (results.length >= 5) break;
         }
+      }
+      return results;
+    });
+
+    // Fallback to Yahoo if DDG blocked us or yielded no images
+    if (images.length === 0) {
+        await page.goto(`https://images.search.yahoo.com/search/images?p=${encodeURIComponent(query)}`, { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(2000);
+        
+        images = await page.evaluate(() => {
+            const imgElements = document.querySelectorAll('img');
+            const results = [];
+            for (let i = 0; i < imgElements.length; i++) {
+                const src = imgElements[i].getAttribute('src') || (imgElements[i] as HTMLImageElement).src;
+                if (src && src.startsWith('http')) {
+                    results.push({ url: src, source: 'DuckDuckGo (via Yahoo Fallback)' });
+                    if (results.length >= 5) break;
+                }
+            }
+            return results;
+        });
     }
 
     res.status(200).json({ images });
   } catch (error: any) {
-    console.error('Image search error:', error);
+    console.error('Playwright error:', error);
     res.status(500).json({ error: 'Failed to search images', details: error.message });
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
   }
 }
