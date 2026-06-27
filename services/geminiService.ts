@@ -2331,184 +2331,170 @@ Return strictly ONLY the raw JSON without markdown formatting.`;
   return parsed.shots;
 };
 
+export const BAD_VISUAL_KEYWORDS = [
+  "money stack", "money stacks", "currency bundle", "charts", "graphs", "pie chart",
+  "stock market screen", "illustration", "clipart", "meme", "logo", "screenshot", "vector"
+];
+
+const QUERY_TEMPLATES: Record<string, string[]> = {
+  location: ["{entity} aerial view", "{entity} city drone", "{entity} skyline", "{entity} landmark"],
+  government: ["{entity} government announcement", "{entity} official press conference", "{entity} state government project", "{entity} government office"],
+  construction: ["{entity} construction site", "{entity} building project", "{entity} under construction"],
+  industrial_project: ["{entity} industrial park construction India", "{entity} textile manufacturing facility", "{entity} factory construction project", "{entity} industrial development India"],
+  industry: ["{entity} factory interior", "{entity} manufacturing plant", "{entity} industrial machine"],
+  employment: ["{entity} factory workers India", "{entity} women workforce India", "{entity} garment workers", "{entity} employment generation"],
+  education: ["{entity} school students India", "{entity} college campus", "{entity} education system"],
+  healthcare: ["{entity} hospital building", "{entity} medical facility", "{entity} doctors at work"],
+  crime: ["{entity} police investigation", "{entity} crime scene tape", "{entity} police patrol"],
+  sports: ["{entity} sports stadium", "{entity} athletes playing", "{entity} sports tournament"],
+  transport: ["{entity} traffic highway", "{entity} railway station", "{entity} public transport"],
+  technology: ["{entity} tech park", "{entity} software developers", "{entity} data center"],
+  celebration: ["{entity} festival celebration", "{entity} cultural event", "{entity} public gathering"],
+  environment: ["{entity} nature landscape", "{entity} forest trees", "{entity} environmental conservation"],
+  disaster: ["{entity} natural disaster aftermath", "{entity} flood damage", "{entity} rescue operation"],
+  agriculture: ["{entity} farmers field", "{entity} agriculture farming", "{entity} crops harvesting"],
+  finance: ["{entity} banking finance", "{entity} economic growth", "{entity} investment"],
+  person: ["{entity} public figure", "{entity} speaking to media", "{entity} portrait"],
+};
+
 export const findVisualsForScript = async (script: string) => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
-  const prompt = `You are a Senior AI Video Pipeline Architect and Director Agent.
-Your task is to act as an "Auto Video Director and Editor" for a news reel.
+  // Step 1: Local Scene Splitter (No AI)
+  const sentences = script
+    .split(/(?<=[.!?|।])\s+|\n+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 5);
+  
+  const localScenes = sentences.map((text, idx) => ({
+    id: idx + 1,
+    text: text
+  }));
 
-STEP 1 - DIRECTOR AGENT
-Split the story into scenes based on the script. Define the purpose (Hook, Main Fact, Evidence, Context, Impact, Public Reaction, Government Action, Closing), timing, and visual/motion/graphics/sfx needs.
-Output story_type, emotion, importance, estimated_duration.
+  // Step 2: Lightweight Gemini Classification
+  const prompt = `You are a visual classifier.
+Input scenes:
+${JSON.stringify(localScenes, null, 2)}
 
-STEP 2 - ASSET PLANNER & PACING
-A professional digital editor of a news channel changes visuals every 1-2 seconds to keep high energy.
-For each scene, plan MULTIPLE SHOTS. Each shot should last 1-2 seconds.
-Generate "visual_requirements", "text_animation", "graphics", and "sfx" for each shot.
+Classify each scene strictly into ONE of these visualTypes:
+location, government, construction, industrial_project, industry, employment, education, healthcare, crime, sports, transport, technology, celebration, environment, disaster, agriculture, finance, person.
 
-STEP 3 - VISUAL HIERARCHY
-For every shot generate: "real", "context", and "symbolic" visual queries.
-CRITICAL RULE: Always convert abstract concepts into physically searchable visual objects, locations, people, documents, vehicles, buildings, inspections, equipment, maps, symbols or actions. Never use abstract terms like "lax system" or "corruption" as visual requirements. Instead use concrete items like "unfinished construction", "broken mechanism", "red tape documents", or "fire safety inspection".
+Return ONLY a JSON array:
+[
+  {
+    "sceneId": 1,
+    "visualType": "location",
+    "entity": "Nava Raipur"
+  }
+]`;
 
-STEP 4, 5 - SEARCH AND SCORING STRATEGY
-Provide 3 short, English search queries per shot (max 3 words each) that represent the Real, Context, and Symbolic needs.
+  let classifications: any[] = [];
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: { responseMimeType: "application/json", temperature: 0.1 }
+    });
+    const text = response?.text || '[]';
+    classifications = JSON.parse(text.replace(/```json/g, "").replace(/```/g, "").trim());
+  } catch (e) {
+    console.error("Classification error:", e);
+  }
 
-STEP 6 - MOTION PLANNER
-Select motion for each shot from: slow_zoom_in, slow_zoom_out, push_in, push_out, pan_left, pan_right, parallax, dynamic_crop, spotlight_focus, counter_animation, split_screen.
+  // Map classification back to scenes
+  const scenesWithQueries = localScenes.map(scene => {
+    const cls = classifications.find(c => c.sceneId === scene.id) || { visualType: 'location', entity: 'India' };
+    
+    // Step 3: Rule-based Query Generator
+    const templates = QUERY_TEMPLATES[cls.visualType] || ["{entity} high quality", "{entity} documentary footage"];
+    const search_queries = templates.map(t => t.replace(/{entity}/g, cls.entity || 'India'));
 
-STEP 7 - GRAPHICS & TEXT PLANNER
-Select overlays for each shot (e.g., breaking_banner, warning_banner, exclusive_tag, notice_counter, red_arrow, map_pin, location_card).
-Select modern text animations (e.g., typewriter, kinetic_typography, neon_glow, glitch_text, highlight_reveal).
-
-STEP 8 - SFX PLANNER
-Select shot-specific SFX (e.g., alert_hit, siren_short, success_hit, shine, paper_flip, whoosh, impact_hit, tension_rise).
-
-STEP 9 - FFMPEG INSTRUCTIONS
-Generate the intended FFmpeg editing parameters for each shot: start, end, motion, transition, text_animation, graphics, sfx.
-
-STEP 10 - FINAL OUTPUT
-Return ONE complete storyboard JSON containing exactly this structure:
-{
-  "story_type": "",
-  "emotion": "",
-  "importance": "",
-  "estimated_duration": 25,
-  "scenes": [
-    {
-      "scene_id": 1,
-      "purpose": "Hook",
-      "voiceover_text": "...",
-      "shots": [
-        {
-          "shot_id": 1,
-          "duration": 2,
-          "visual_requirements": ["..."],
-          "visual_hierarchy": {
-            "real": ["..."],
-            "context": ["..."],
-            "symbolic": ["..."]
-          },
-          "search_queries": ["...", "...", "..."],
-          "motion": "slow_zoom_in",
-          "transition": "fade",
-          "text_animation": "glitch_text",
-          "graphics": ["breaking_banner"],
-          "sfx": ["alert_hit"],
-          "ffmpeg_instructions": {
-            "start": 0,
-            "end": 2,
-            "motion": "slow_zoom_in",
-            "transition": "fade",
-            "text_animation": "glitch_text",
-            "graphics": ["breaking_banner"],
-            "sfx": ["alert_hit"]
-          }
-        }
-      ]
-    }
-  ]
-}
-
-Return strictly ONLY the raw JSON without markdown formatting.
-
-Script to analyze:
-${script}`;
-
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      temperature: 0.2
-    }
+    return {
+      scene_id: scene.id,
+      scene_number: scene.id,
+      scene_group_id: `group_${scene.id}`,
+      shot_id_in_scene: 1,
+      voiceover_text: scene.text,
+      purpose: cls.visualType,
+      search_queries,
+      entity: cls.entity,
+      visualType: cls.visualType
+    };
   });
 
-  let parsed: any;
-  try {
-    const text = response?.text || '{}';
-    let cleanedText = text;
-    if (text.includes('```json')) {
-      cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-    }
-    parsed = JSON.parse(cleanedText);
-  } catch(e) {
-    throw new Error("Failed to parse Gemini JSON response for finding visuals.");
-  }
-
-  if (!parsed || !parsed.scenes) {
-    throw new Error("Invalid format returned by AI. Missing scenes array.");
-  }
-
-  // Flatten scenes into shots to match the existing UI/Render pipeline
-  const flattenedShots = [];
-  let globalShotIndex = 1;
-
-  for (const scene of parsed.scenes) {
-    if (scene.shots && Array.isArray(scene.shots)) {
-      for (const shot of scene.shots) {
-        flattenedShots.push({
-          scene_number: globalShotIndex++, // mapped to UI scene_number
-          scene_group_id: scene.scene_id || Math.random().toString(36).substring(7),
-          shot_id_in_scene: shot.shot_id || 1,
-          voiceover_text: scene.voiceover_text,
-          purpose: scene.purpose,
-          visual_requirements: shot.visual_requirements,
-          visual_hierarchy: shot.visual_hierarchy,
-          search_queries: shot.search_queries,
-          motion: shot.motion,
-          transition: shot.transition,
-          text_animation: shot.text_animation,
-          graphics: shot.graphics,
-          sfx: shot.sfx,
-          ffmpeg_instructions: shot.ffmpeg_instructions
-        });
-      }
-    } else {
-      // Fallback if AI didn't follow the nested structure perfectly
-      flattenedShots.push({
-        ...scene,
-        scene_number: globalShotIndex++
-      });
-    }
-  }
-
-  parsed.scenes = flattenedShots;
-
-  for (let i = 0; i < parsed.scenes.length; i++) {
-    const scene = parsed.scenes[i];
-    scene.scene_number = i + 1;
-    
-    let bestVisual = null;
-    const allQueries = scene.search_queries || [];
-    
-    for (const query of allQueries) {
+  // Step 4: Search and Image Scoring
+  const finalShots = [];
+  
+  for (let scene of scenesWithQueries) {
+     let bestVisual = null;
+     
+     for (const query of scene.search_queries) {
         if (!query) continue;
-        const result = await searchWebImages(query);
         
-        if (result && (!bestVisual || result.score > bestVisual.score)) {
-            bestVisual = {
-                url: result.url,
-                score: result.score,
-                source: result.source,
-                query: query
-            };
-            if (result.score >= 90) break;
+        try {
+          const res = await fetch('/api/search-images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: query + ' -illustration -clipart -logo -vector' })
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            const images = data.images || [];
+            
+            for (const img of images) {
+              // Step 5: Bad visual filter
+              const isBad = BAD_VISUAL_KEYWORDS.some(bad => 
+                (img.title && img.title.toLowerCase().includes(bad)) || 
+                (img.original && img.original.toLowerCase().includes(bad))
+              );
+              if (isBad) continue;
+              
+              // Simple Image Scoring System
+              let score = 0;
+              const titleLower = (img.title || '').toLowerCase();
+              const entityLower = (scene.entity || '').toLowerCase();
+              const typeLower = (scene.visualType || '').toLowerCase();
+              
+              if (entityLower && titleLower.includes(entityLower)) score += 40; // Entity Match
+              if (typeLower && titleLower.includes(typeLower)) score += 30; // Visual Type Match
+              score += 20; // Keyword base match since it returned in search
+              if (img.width && img.width > 1000) score += 10; // Resolution Quality
+              
+              if (!bestVisual || score > bestVisual.score) {
+                 bestVisual = {
+                   url: img.url,
+                   score: score,
+                   source: img.source,
+                   query: query
+                 };
+              }
+            }
+          }
+        } catch(e) {
+          console.error("Search error", e);
         }
-    }
-    
-    if (bestVisual) {
-        scene.selected_visual = bestVisual.url;
-        scene.relevance_score = bestVisual.score;
-        scene.source = `${bestVisual.source} (${bestVisual.query})`;
-    } else {
-        scene.selected_visual = null;
-        scene.relevance_score = 0;
-        scene.source = 'None found';
-    }
+        
+        if (bestVisual && bestVisual.score >= 70) break;
+     }
+     
+     finalShots.push({
+       ...scene,
+       selected_visual: bestVisual ? bestVisual.url : null,
+       relevance_score: bestVisual ? bestVisual.score : 0,
+       source: bestVisual ? `${bestVisual.source} (${bestVisual.query})` : 'None found',
+       // Fallbacks for compatibility with Reel Render
+       motion: 'slow_zoom_in',
+       transition: 'fade',
+       text_animation: 'glitch_text',
+       graphics: [],
+       sfx: [],
+       ffmpeg_instructions: {}
+     });
   }
 
-  return parsed;
+  return { scenes: finalShots };
 };
 
 export const generateFullReelScript = async (

@@ -29,10 +29,11 @@ export default async function handler(req: any, res: any) {
     let images: any[] = [];
     
     if (data.results && data.results.length > 0) {
-       images = data.results.slice(0, 10).map((r: any) => ({
-           url: `https://external-content.duckduckgo.com/iu/?u=${encodeURIComponent(r.image)}`, // High resolution image URL proxied via DDG
+       images = data.results.slice(0, 20).map((r: any) => ({
+           url: r.image, // Original high resolution image URL
            original: r.image,
            thumbnail: r.thumbnail,
+           title: r.title || '',
            width: r.width,
            height: r.height,
            source: 'DuckDuckGo API'

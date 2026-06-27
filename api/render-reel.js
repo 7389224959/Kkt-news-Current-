@@ -31,7 +31,16 @@ const downloadFile = async (url, dest) => {
     url = `http://localhost:${process.env.PORT || 3000}${url}`;
   }
 
-  const response = await fetch(url);
+  // Unwrap duckduckgo proxy URLs if they exist in state
+  if (url.startsWith("https://external-content.duckduckgo.com/iu/?u=")) {
+    url = decodeURIComponent(url.replace("https://external-content.duckduckgo.com/iu/?u=", ""));
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+  });
   if (!response.ok)
     throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
   const arrayBuffer = await response.arrayBuffer();
@@ -574,9 +583,6 @@ export default async function handler(req, res) {
         for (let i = 0; i < downloadedVisuals.length; i++) {
           const item = downloadedVisuals[i];
           let inputOpts = ["-stream_loop", "-1", "-an"];
-          if (item.file.toLowerCase().endsWith('.gif') || item.file.toLowerCase().endsWith('.webp')) {
-            inputOpts.push("-ignore_loop", "0");
-          }
           command = command
               .input(item.file)
               .inputOptions(inputOpts);

@@ -346,15 +346,15 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
 
   const handlePlanScenes = async () => {
     setIsGenerating(true);
-    setStatus('Analyzing script and dividing into logical scenes...');
+    setStatus('Auto Finding Visuals... (Splitting script, classifying, and searching images)');
     try {
-      const data = await planScenesForScript(scriptData.fullScript || scriptData.voiceoverScript);
+      const data = await findVisualsForScript(scriptData.fullScript || scriptData.voiceoverScript);
       setPlannedScenes(data.scenes || []);
-      setCurrentSceneIndex(0);
-      setScenes([]); // Clear existing shots
+      setScenes(data.scenes || []); // Automatically populate all shots
+      setCurrentSceneIndex((data.scenes || []).length);
     } catch(e: any) {
       console.error(e);
-      alert('Error planning scenes: ' + e.message);
+      alert('Error finding visuals: ' + e.message);
     } finally {
       setIsGenerating(false);
       setStatus('');
@@ -659,7 +659,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
                 <div className="p-4 border rounded">
                   {plannedScenes.length === 0 ? (
                     <button onClick={handlePlanScenes} disabled={isGenerating} className="px-4 py-3 bg-pink-100 border-pink-300 text-pink-800 font-bold rounded flex gap-2 items-center text-sm w-full justify-center hover:bg-pink-200">
-                      {isGenerating ? <RefreshCw className="animate-spin" size={18}/> : <Zap size={18} />} Step 1: Analyze Script & Divide into Scenes
+                      {isGenerating ? <RefreshCw className="animate-spin" size={18}/> : <Zap size={18} />} Auto Find All Visuals
                     </button>
                   ) : (
                     <div className="space-y-6">
