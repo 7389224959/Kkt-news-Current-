@@ -940,79 +940,132 @@ export const fetchDailyNews = async (
 
   try {
     const prompt = `
-      You are a professional Indian news journalist writing for a fast-growing Hindi news website.
+      VIRAL NEWS SCORING ENGINE (KKT NEWS)
 
-      Current Date & Time: ${today} ${currentTime}
+      You are an expert news editor for short-form social media content.
+      Your task is to analyze the fetched CANDIDATE ARTICLES below and assign a Virality Score from 0-100 based on public interest, emotional impact, practical relevance, curiosity, controversy, and shareability.
 
-      CRITICAL CONTEXT - STRICT RULE AGAINST DUPLICATION:
-      We aim for complete variety. We MUST strictly avoid publishing news on the same topics we have covered in our last 30 articles!
-      Here are the headlines of our most recently published articles:
+      Your goal is NOT to select the most important journalism.
+      Your goal is to select stories that ordinary people are most likely to watch, discuss, share, and react to on Facebook Reels, Instagram Reels, and YouTube Shorts.
+
+      STEP 1: REJECT LOW-INTEREST STORIES
+      Immediately assign LOW priority unless extraordinary circumstances exist:
+      - Routine government meetings, Department transfers, Ceremonial events, Generic press conferences, Political greetings, Award distributions, Weather updates without danger, Minor local notices, Corporate announcements affecting few people, Repeated updates on same story
+
+      STEP 2: SCORE VIRALITY
+      A. HUMAN IMPACT (0-25)
+      +25 Direct impact on public money, jobs, safety, education, health
+      +20 Large number of people affected
+      +15 Community-level impact
+      +5 Limited audience impact
+      +0 No practical impact
+
+      B. EMOTIONAL TRIGGER (0-20)
+      +20 Shock, Anger, Fear
+      +18 Inspiration, Hope
+      +15 Happiness, Sadness
+      +10 Sympathy
+      +0 Emotionally neutral
+
+      C. CRIME & CONFLICT (0-20)
+      +20 Murder, Major scam, Corruption
+      +18 Assault, Police action, Political clash
+      +15 Court drama, Gang activity
+      +12 Theft
+      +0 No conflict
+
+      D. CURIOSITY FACTOR (0-15)
+      +15 Unexpected event, Strange incident, Rare occurrence
+      +12 Mystery, Viral video
+      +10 Celebrity controversy
+      +5 Predictable event
+      +0 Completely ordinary
+
+      E. LOCAL RELEVANCE (0-10)
+      +10 Chhattisgarh-specific issue
+      +8 Nearby district issue
+      +6 State-level matter
+      +4 National issue
+      +2 International issue
+      +0 Irrelevant to target audience
+
+      F. DISCUSSION POTENTIAL (0-10)
+      +10 Highly debatable
+      +8 Political issue, Social issue, Religious controversy
+      +7 Public policy impact
+      +0 No discussion value
+
+      STEP 3: SPECIAL VIRAL BONUSES
+      Add bonuses:
+      +15 Child involved, Woman safety issue, Viral CCTV footage, Viral social media trend, Corruption exposed, Government benefit affecting citizens
+      +12 Rescue operation, Heroic act
+      +10 Celebrity involved, Election-related controversy, Major accident, Natural disaster
+
+      STEP 4: PENALTIES
+      Subtract:
+      -20 Purely informational
+      -15 Duplicate of recent news (Check Recent Titles provided below)
+      -15 Technical announcement
+      -10 Excessively bureaucratic, No emotional element, No visual storytelling potential
+
+      STEP 5: VISUAL POTENTIAL SCORE
+      Rate 0-10 (10 = Crime scene, rescue, protest, accident, viral video; 0 = PDF notification)
+
+      FINAL CALCULATION
+      Final Score = Human Impact + Emotional Trigger + Crime & Conflict + Curiosity + Local Relevance + Discussion Potential + Bonuses - Penalties + Visual Potential
+      Cap at 100.
+
+      PRIORITY RULES
+      90-100 = BREAKING VIRAL
+      75-89 = HIGH PRIORITY
+      60-74 = MEDIUM PRIORITY
+      40-59 = LOW PRIORITY
+      0-39 = SKIP
+
+      IMPORTANT: Prefer stories involving Crime, Corruption, Public money, Government schemes, Accidents, Rescues, Viral videos, Political conflict, Social issues. Avoid selecting news solely because it is politically important.
+
+      CRITICAL CONTEXT - RECENT TITLES (APPLY DUPLICATE PENALTY IF MATCH):
       ${recentTitlesList}
       
       YOUR TASK:
       1. Review the CANDIDATE ARTICLES below.
-      2. Choose EXACTLY ONE candidate article that discusses a COMPLETELY DIFFERENT topic than ALL 30 of the ones listed above.
-      3. If an article covers a topic strongly related to any of the headlines above (even if there is a new update on it), SKIP IT! Pick the candidate that introduces the most significantly novel development or is about a completely different issue.
-      4. Write a 100% SEO-optimized, fact-based, human-like Hindi news article (450–650 words) based ONLY on your chosen candidate.
+      2. Evaluate their Virality Score based on the rules above.
+      3. Choose EXACTLY ONE candidate article that has the HIGHEST Virality Score.
+      4. If the HIGHEST score is below 40 (SKIP), you must still return an empty array [].
+      5. Otherwise, write a 100% SEO-optimized, fact-based, human-like Hindi news article (450–650 words) based ONLY on your chosen candidate.
       
       CANDIDATE ARTICLES:
       ${promptContext}
 
-      For a Hindi news website 'Khabar Kal Tak'.
+      ARTICLE WRITING RULES (For the chosen candidate):
+      1. Headline: Powerful, clickable Hindi headline (8–12 words)
+      2. Breaking Summary: 2 short lines summarizing the news (viral style)
+      3. Main Content: 3–5 SEO subheadings (Markdown ##), deeply journalistic, deeply human, no HTML tags.
+      4. User Value Section: "आम लोगों पर इसका क्या असर पड़ेगा?" or "आपको क्या करना चाहिए?"
+      5. ONLY use provided candidate text. Provide exact Source Link and Image.
 
-      Follow these strict rules for the article:
-      1. Headline
-      Create a powerful, clickable Hindi headline (8–12 words)
-      Include main keyword
-      2. Breaking Summary (VERY IMPORTANT)
-      Write 2 short lines summarizing the news (viral style)
-      3. Introduction (50–80 words)
-      Answer: क्या, कब, कहां, किसने
-      4. Main Content & Unique Angle (CRITICAL)
-      Use 3–5 SEO subheadings (Use Markdown ## for subheadings, NO HTML tags)
-      Include real facts, numbers, and latest updates FROM THE CHOSEN CANDIDATE TEXT ONLY.
-      Do not sound like a standard news feed; inject deep journalistic analysis.
-      5. Human Touch, Values & Emotion (IMPORTANT)
-      Write in a deeply human manner. 
-      Incorporate the values of common people (आम जनता की भावनाएं) into your writing.
-      Ensure the narrative conveys REQUIRED EMOTIONS (e.g., outrage, hope, sadness, pride).
-      6. User Value Section
-      Add a section like:
-      👉 “आम लोगों पर इसका क्या असर पड़ेगा?”
-      👉 “आपको क्या करना चाहिए?”
-      7. Conclusion
-      2–3 lines summarizing impact
-      8. SEO Rules & Formatting (CRITICAL)
-      Article length: Structure the length based ONLY on available facts from the source. Do not force stretch the article.
-      Keep paragraphs very short (2–3 lines maximum)
-      Use Markdown formatting (like **bold**, ## Headings). DO NOT output any HTML tags.
-      Use simple Hindi (mix of Hindi + easy English words)
-      9. Tone
-      Human-like, not robotic.
-      Deeply engaging, informative, and highly emotional.
-
-      STRICT REQUIREMENTS:
-      1. **ONLY USE PROVIDED CANDIDATE TEXT**: 
-         - DO NOT invent or search for external facts. 
-      2. **SOURCE LINKS**:
-         - You MUST provide the exact Source Link for the candidate you chose.
-
-      Output a JSON array CONTAINING EXACTLY ONE OBJECT. Do not include any markdown formatting or code blocks outside the JSON.
+      OUTPUT FORMAT
+      Return a JSON array CONTAINING EXACTLY ONE OBJECT (or empty [] if all candidates score < 40). Do not include any markdown formatting or code blocks outside the JSON.
       
       JSON Structure:
       [
         {
+          "viral_score": 87,
+          "priority": "HIGH",
+          "reason": ["Strong emotional impact", "Crime related"],
+          "recommended_for_reel": true,
+          "hook_angle": "curiosity",
           "title": "HEADLINE (Hindi)",
           "candidateId": "MUST be the integer CANDIDATE ID from the chosen candidate",
           "excerpt": "SUMMARY (Hindi)",
-          "content": "A single string containing the full article including Intro, Main Content, Data, User Value, Conclusion formatted nicely in Markdown WITHOUT SEO elements",
+          "content": "A single string containing the full article formatted nicely in Markdown WITHOUT SEO elements",
           "category": "State News" | "Politics" | "Crime" | "National" | "Sports" | "Entertainment" | "Lifestyle",
           "author": "Professional Journalist",
           "sourceUrl": "Return the EXACT Source Link string from the chosen CANDIDATE. Do not change it.",
           "sourceImageUrl": "Return the EXACT Source Image URL string from the chosen CANDIDATE. Do not change it.",
           "imageGenerationPlan": {
-            "primarySubject": "Name of main subject/person for hero cutout (if applicable), e.g. 'Narendra Modi', 'Amit Shah'. MUST be a well-known entity on Wikipedia.",
-            "englishImagePrompt": "A highly detailed, 1-sentence English description of the scene that perfectly describes the news event. E.g. 'Police arresting a suspect near a modern Indian bank building'. NO NAMES OF PEOPLE OR TEXT."
+            "primarySubject": "Name of main subject/person for hero cutout (if applicable)",
+            "englishImagePrompt": "A highly detailed, 1-sentence English description of the scene that perfectly describes the news event. NO NAMES OF PEOPLE OR TEXT."
           },
           "tags": ["Tag 1", "Tag 2"],
           "seoTitle": "A 60 character SEO optimized title",
@@ -1181,6 +1234,10 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
 
     if (!Array.isArray(rawArticles)) {
       throw new Error("AI response is not an array.");
+    }
+    
+    if (rawArticles.length === 0) {
+      throw new Error("No viral news found in the candidates (all scored < 40).");
     }
 
     // Helper for delay
