@@ -629,7 +629,7 @@ export default async function handler(req, res) {
         )
         .inputFormat("lavfi");
 
-      let durationLimit = Math.max(30, (audioPath ? exactAudioDuration : 15)) + delayTime;
+      let durationLimit = (audioPath ? exactAudioDuration : 15) + delayTime;
 
       let outOpts = [
         "-c:v libx264",
