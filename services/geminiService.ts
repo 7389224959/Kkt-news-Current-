@@ -1934,7 +1934,7 @@ RULES:
 - Script language: Hybrid Hindi + simple Hinglish mix
 - DO NOT end lines with "है" (hai)
 - Max 6-8 words per line
-- Total duration should be 8-15 seconds (around 4-6 lines)
+- Total duration MUST BE a minimum of 30 seconds (around 75 to 90 words, approximately 12-16 lines)
 - First, classify the news (Breaking, Local, Entertainment, Tragedy, Tech). Then generate a hook based on the category. DO NOT use "बड़ी खबर" unless it's a major event. Use context-appropriate hooks like "क्या आपको पता है...", "वायरल हो रहा है...", or "[शहर] से अपडेट...".
 - Add pauses using "..." to control pacing
 - Keep it conversational, engaging, and not overly formal
@@ -2515,13 +2515,13 @@ Use ONLY facts from the article. NEVER hallucinate names, numbers, quotes, cause
 ARTICLE TEXT:
 ${articleContent}
 
-Format rules for high engagement (TARGET DURATION AROUND 30 SECONDS, MAXIMUM 60-70 WORDS):
-0–5 sec: HOOK (First, classify the news into a category: Breaking, Local, Entertainment, Tragedy, Tech. Generate a dynamic, context-aware hook strictly based on the category. DO NOT use generic "बड़ी खबर" (Breaking News) unless it's a major national/international event. For small/local news use "क्या आपको पता है..." or "[शहर] से आज की अपडेट...". For entertainment use "वायरल हो रहा है...". For tragedy use "एक गंभीर मामला...". Be creative and dynamic, maintaining an appropriate tone for the news type).
-5–15 sec: What happened (The core fact delivered with clear professional urgency)
-15–25 sec: Why important (Impact and crucial details without filler)
-25–30 sec: Professional Sign-off (Dynamic and professional sign-off that psychologically compels viewers to engage. MUST include a question asking for viewers' opinions or suggestions on the matter to drive comments, followed by a powerful call to action to 'like' and 'follow' for more updates. DO NOT use 'subscribe', strictly use 'follow'. E.g., "आपकी इस पर क्या राय है? कमेंट में बताएं और ऐसी ही खबरों के लिए हमें फॉलो करें").
+Format rules for high engagement (TARGET DURATION MINIMUM 30 SECONDS, AT LEAST 75-90 WORDS):
+0–10 sec: HOOK (First, classify the news into a category: Breaking, Local, Entertainment, Tragedy, Tech. Generate a dynamic, context-aware hook strictly based on the category. DO NOT use generic "बड़ी खबर" (Breaking News) unless it's a major national/international event. For small/local news use "क्या आपको पता है..." or "[शहर] से आज की अपडेट...". For entertainment use "वायरल हो रहा है...". For tragedy use "एक गंभीर मामला...". Be creative and dynamic, maintaining an appropriate tone for the news type).
+10–25 sec: What happened (The core fact delivered with clear professional urgency, including specific details and context)
+25–35 sec: Why important (Impact and crucial details without filler)
+35–45+ sec: Professional Sign-off (Dynamic and professional sign-off that psychologically compels viewers to engage. MUST include a question asking for viewers' opinions or suggestions on the matter to drive comments, followed by a powerful call to action to 'like' and 'follow' for more updates. DO NOT use 'subscribe', strictly use 'follow'. E.g., "आपकी इस पर क्या राय है? कमेंट में बताएं और ऐसी ही खबरों के लिए हमें फॉलो करें").
 
-- STRICT WORD LIMIT: The entire voiceoverScript MUST be between 60 to 75 words to ensure a 30-second duration.
+- STRICT WORD LIMIT: The entire voiceoverScript MUST be at least 75 to 90 words to ensure a MINIMUM 30-second duration.
 - Sentences MUST be short, clear, and punchy. No long storytelling.
 - Tone MUST be like a fast-paced professional TV news anchor (authoritative, clear, highly energetic and urgent, yet highly compelling and engaging).
 ${hasSubtitles ? `
