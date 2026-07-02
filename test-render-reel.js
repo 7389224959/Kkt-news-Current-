@@ -26,11 +26,22 @@ const downloadFile = async (url, dest) => {
     url = `http://localhost:${process.env.PORT || 3000}${url}`;
   }
   
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  fs.writeFileSync(dest, buffer);
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn(`Failed to fetch ${url}: ${response.statusText}, using fallback image`);
+      const base64BlackPixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+      fs.writeFileSync(dest, Buffer.from(base64BlackPixel, 'base64'));
+      return;
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    fs.writeFileSync(dest, buffer);
+  } catch (error) {
+    console.warn(`Error fetching ${url}: ${error.message}, using fallback image`);
+    const base64BlackPixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+    fs.writeFileSync(dest, Buffer.from(base64BlackPixel, 'base64'));
+  }
 };
 
 export default async function handler(req, res) {

@@ -44,16 +44,26 @@ const downloadFile = async (url, dest) => {
     }
   }
 
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    });
+    if (!response.ok) {
+      console.warn(`Failed to fetch ${url}: ${response.statusText}, using fallback image`);
+      const base64BlackPixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+      fs.writeFileSync(dest, Buffer.from(base64BlackPixel, 'base64'));
+      return;
     }
-  });
-  if (!response.ok)
-    throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  fs.writeFileSync(dest, buffer);
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    fs.writeFileSync(dest, buffer);
+  } catch (error) {
+    console.warn(`Error fetching ${url}: ${error.message}, using fallback image`);
+    const base64BlackPixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+    fs.writeFileSync(dest, Buffer.from(base64BlackPixel, 'base64'));
+  }
 };
 
 export default async function handler(req, res) {

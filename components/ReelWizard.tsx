@@ -249,7 +249,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
          } else {
             hashtagsStr = '\n\n#kktnews';
          }
-         const fbMessage = (updatedScriptData.headline || article.title || 'Check out our latest reel!') + hashtagsStr;
+         const fbMessage = updatedScriptData.facebookCaption || ((updatedScriptData.headline || article.title || 'Check out our latest reel!') + hashtagsStr);
          await doPublishReel(blob, fbMessage);
       } else {
          setStep(4);
@@ -1140,7 +1140,7 @@ function ReelEditorView({
     } else {
        hashtagsStr = '\n\n#kktnews';
     }
-    const fbMessage = (scriptData.headline || selectedArticle?.title || 'Check out our latest reel!') + hashtagsStr;
+    const fbMessage = scriptData.facebookCaption || ((scriptData.headline || selectedArticle?.title || 'Check out our latest reel!') + hashtagsStr);
     await doPublishReel(blob, fbMessage);
   };
 

@@ -1780,7 +1780,7 @@ STYLE GUIDELINES FOR CAPTION:
 BRANDING & LINKS (MANDATORY):
 - Add "Khabar Kal Tak (KKT NEWS)" naturally in the post caption
 - You MUST append the article link to the end of the caption: ${articleUrl}
-- You MUST include relevant hashtags (e.g. #KhabarKalTak #KKTNews #Breaking etc.)
+- You MUST include strictly 2 to 5 highly relevant hashtags. Ensure the hashtags directly relate to the news topic, involving location, person, or any specific trending tag related to the story. DO NOT use generic or too many hashtags.
 - DO NOT add a category tag (e.g. do not write [Category: ...]).
 
 STEP 1: GENERATE HEADLINE FOR IMAGE
@@ -2389,8 +2389,9 @@ Return strictly ONLY the raw JSON without markdown formatting.`;
 };
 
 export const BAD_VISUAL_KEYWORDS = [
-  "money stack", "money stacks", "currency bundle", "charts", "graphs", "pie chart",
-  "stock market screen", "illustration", "clipart", "meme", "logo", "screenshot", "vector"
+  "money stack", "money stacks", "currency bundle", "money bundles", "charts", "graphs", "pie chart",
+  "stock market screen", "illustration", "clipart", "meme", "logo", "screenshot", "vector",
+  "alamy", "shutterstock", "getty", "istock", "dreamstime", "foreign government logos", "researchgate", "map"
 ];
 
 const QUERY_TEMPLATES: Record<string, string[]> = {
@@ -2430,9 +2431,31 @@ export const findVisualsForScript = async (script: string) => {
   }));
 
   // Step 2: Lightweight Gemini Classification
-  const prompt = `You are a visual classifier.
+  const prompt = `You are a visual classifier for Indian news.
 Input scenes:
 ${JSON.stringify(localScenes, null, 2)}
+
+Detect ENTITY, VISUAL TYPE, and NEWS INTENT from each scene.
+Prioritize actual locations, projects, people, and organizations mentioned in the news as the ENTITY.
+Do NOT output generic entities like "investment", "employment", "city", "women workforce", or "development".
+Instead, extract highly specific entities like "Nava Raipur textile park", "Chhattisgarh industrial project", etc.
+
+IMPORTANT:
+The "intent" and "entity" must form concise IMAGE SEARCH QUERIES, NOT scene descriptions.
+The "intent" should be short keywords, NOT full sentences or action descriptions.
+
+BAD (Scene descriptions):
+"Reporting police investigation initiated on commission directive India"
+"Introducing a serious case from Jagdalpur India"
+"Highlighting the warning against superstition fraud India"
+
+GOOD (Image search keywords):
+"Jagdalpur police station"
+"Jagdalpur city Chhattisgarh"
+"Police investigation"
+"Fraud arrest"
+"Superstition awareness campaign"
+"Crime investigation office"
 
 Classify each scene strictly into ONE of these visualTypes:
 location, government, construction, industrial_project, industry, employment, education, healthcare, crime, sports, transport, technology, celebration, environment, disaster, agriculture, finance, person.
@@ -2441,8 +2464,9 @@ Return ONLY a JSON array:
 [
   {
     "sceneId": 1,
-    "visualType": "location",
-    "entity": "Nava Raipur"
+    "entity": "Nava Raipur textile park",
+    "visualType": "industrial_project",
+    "intent": "textile manufacturing India"
   }
 ]`;
 
@@ -2461,11 +2485,27 @@ Return ONLY a JSON array:
 
   // Map classification back to scenes
   const scenesWithQueries = localScenes.map(scene => {
-    const cls = classifications.find(c => c.sceneId === scene.id) || { visualType: 'location', entity: 'India' };
+    const cls = classifications.find(c => c.sceneId === scene.id) || { visualType: 'location', entity: 'India', intent: 'news' };
     
-    // Step 3: Rule-based Query Generator
-    const templates = QUERY_TEMPLATES[cls.visualType] || ["{entity} high quality", "{entity} documentary footage"];
-    const search_queries = templates.map(t => t.replace(/{entity}/g, cls.entity || 'India'));
+    // Step 3: Rule-based Query Generator with Geography Awareness
+    const geography = "India";
+    const entity = cls.entity || '';
+    const intent = cls.intent || '';
+    
+    // Generate entity-first search queries, avoiding generic terms
+    const search_queries = [];
+    if (entity && entity.toLowerCase() !== 'india') {
+       search_queries.push(`${entity} ${intent} ${geography}`.trim());
+       search_queries.push(`${entity} ${cls.visualType} ${geography}`.trim());
+       search_queries.push(`${entity} ${geography}`.trim());
+    } else {
+       search_queries.push(`${intent} ${cls.visualType} ${geography}`.trim());
+       search_queries.push(`${intent} ${geography}`.trim());
+    }
+
+    // Filter out undefined/empty and heavily generic queries
+    const filtered_queries = [...new Set(search_queries)]
+        .filter(q => q.length > 5 && !['investment', 'employment', 'city', 'women workforce', 'development'].includes(q.toLowerCase().trim()));
 
     return {
       scene_id: scene.id,
@@ -2474,8 +2514,9 @@ Return ONLY a JSON array:
       shot_id_in_scene: 1,
       voiceover_text: scene.text,
       purpose: cls.visualType,
-      search_queries,
+      search_queries: filtered_queries,
       entity: cls.entity,
+      intent: cls.intent,
       visualType: cls.visualType
     };
   });
@@ -2508,16 +2549,38 @@ Return ONLY a JSON array:
               );
               if (isBad) continue;
               
-              // Simple Image Scoring System
+              // Step 6: Image Scoring System
               let score = 0;
               const titleLower = (img.title || '').toLowerCase();
+              const urlLower = (img.original || '').toLowerCase();
               const entityLower = (scene.entity || '').toLowerCase();
+              const intentLower = (scene.intent || '').toLowerCase();
               const typeLower = (scene.visualType || '').toLowerCase();
               
-              if (entityLower && titleLower.includes(entityLower)) score += 40; // Entity Match
-              if (typeLower && titleLower.includes(typeLower)) score += 30; // Visual Type Match
-              score += 20; // Keyword base match since it returned in search
-              if (img.width && img.width > 1000) score += 10; // Resolution Quality
+              const matchesWords = (text: string, target: string) => {
+                 if (!target) return false;
+                 const targetWords = target.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+                 if (targetWords.length === 0) return text.includes(target.toLowerCase());
+                 return targetWords.some(w => text.includes(w));
+              };
+
+              const textToMatch = titleLower + ' ' + urlLower;
+
+              // Entity Match = 40
+              if (entityLower && entityLower !== 'india' && matchesWords(textToMatch, entityLower)) score += 40;
+              
+              // Intent Match = 30
+              if (intentLower && matchesWords(textToMatch, intentLower)) score += 30;
+              
+              // Context Match = 20
+              if (typeLower && matchesWords(textToMatch, typeLower)) score += 20;
+              
+              // Quality = 10 (Using an assumed width if not present, but preferring higher resolution signals if possible. Bing usually returns decent res, we can add 10 if title looks very descriptive)
+              if (img.width && img.width > 1000) {
+                 score += 10;
+              } else if (titleLower.length > 20) {
+                 score += 10;
+              }
               
               if (!bestVisual || score > bestVisual.score) {
                  bestVisual = {
@@ -2590,6 +2653,7 @@ Subtitles Requirements (CRITICAL):
 Categorization & Style:
 - "reelType": Breaking News, Explainer, Debate, or Useful Update.
 - "stylePreset": breaking_news (Fast zoom, red urgency), explainer (Clean style, slower pacing), debate, useful_update.
+- "facebookCaption": Write an engaging caption for Facebook Reels. IMPORTANT: Limit hashtags to 2-5 strictly. Ensure the hashtags are highly relevant to the news topic involving location, person, or any topic related trending tag.
 
 Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly escape inner quotes):
 {
@@ -2599,7 +2663,8 @@ Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly 
   ${hasTicker ? '"ticker": "Scrolling breaking news text",' : ""}
   "reelType": "string",
   "stylePreset": "string",
-  "visualKeywords": "3-5 keywords for searching stock footage"
+  "visualKeywords": "3-5 keywords for searching stock footage",
+  "facebookCaption": "String containing the facebook reel caption with 2-5 highly relevant hashtags"
 }`;
 
   try {
@@ -2698,7 +2763,7 @@ User request: "${editPrompt}"
 
 Please return the updated Data and Styles in JSON format matching this schema. Note that sizes should be numeric strings like "60", and colors should be basic strings like "red", "yellow", "white", or hex. Only return valid JSON. Do not change the script unless the user explicitly asks to rewrite text.
 {
-  "scriptData": { "headline": "...", "ticker": "...", "subtitles": ["...", "..."], "voiceoverScript": "..." },
+  "scriptData": { "headline": "...", "ticker": "...", "subtitles": ["...", "..."], "voiceoverScript": "...", "facebookCaption": "..." },
   "styleOverrides": { "headlineSize": "60", "headlineColor": "white", "tickerSize": "40", "tickerColor": "white", "tickerBg": "red@0.8", "subtitleSize": "45", "subtitleColor": "yellow"  }
 }`;
 
