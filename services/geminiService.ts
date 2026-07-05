@@ -1992,7 +1992,7 @@ RULES:
 - DO NOT end lines with "है" (hai)
 - Max 6-8 words per line
 - Total duration MUST BE a minimum of 30 seconds (around 75 to 90 words, approximately 12-16 lines)
-- First, classify the news (Breaking, Local, Entertainment, Tragedy, Tech). Then generate a hook based on the category. DO NOT use "बड़ी खबर" unless it's a major event. Use context-appropriate hooks like "क्या आपको पता है...", "वायरल हो रहा है...", or "[शहर] से अपडेट...".
+- NEVER start a reel with "बड़ी खबर", "ब्रेकिंग न्यूज", "ताजा अपडेट", or "[Location] से बड़ी खबर". Instead, start with: The most shocking fact, The biggest consequence, The strongest emotion, or The main conflict.
 - Add pauses using "..." to control pacing
 - Keep it conversational, engaging, and not overly formal
 
@@ -2431,42 +2431,59 @@ export const findVisualsForScript = async (script: string) => {
   }));
 
   // Step 2: Lightweight Gemini Classification
-  const prompt = `You are a visual classifier for Indian news.
+  const prompt = `You are a visual query generator for Indian news reels.
 Input scenes:
 ${JSON.stringify(localScenes, null, 2)}
 
-Detect ENTITY, VISUAL TYPE, and NEWS INTENT from each scene.
-Prioritize actual locations, projects, people, and organizations mentioned in the news as the ENTITY.
-Do NOT output generic entities like "investment", "employment", "city", "women workforce", or "development".
-Instead, extract highly specific entities like "Nava Raipur textile park", "Chhattisgarh industrial project", etc.
+Generate highly visual-intent-driven search queries for each scene.
 
-IMPORTANT:
-The "intent" and "entity" must form concise IMAGE SEARCH QUERIES, NOT scene descriptions.
-The "intent" should be short keywords, NOT full sentences or action descriptions.
+IMPORTANT: Generate queries for what should be visible on screen, not for what the news topic is.
 
-BAD (Scene descriptions):
-"Reporting police investigation initiated on commission directive India"
-"Introducing a serious case from Jagdalpur India"
-"Highlighting the warning against superstition fraud India"
+BAD:
+- sexual harassment case India
+- fraud case India
+- murder case India
+- corruption case India
+- professor Raman Bengari photo India
 
-GOOD (Image search keywords):
-"Jagdalpur police station"
-"Jagdalpur city Chhattisgarh"
-"Police investigation"
-"Fraud arrest"
-"Superstition awareness campaign"
-"Crime investigation office"
+GOOD:
+- college campus India
+- university building Chhattisgarh
+- classroom lecture India
+- police station investigation
+- government office meeting
+- court building India
+- crime investigation team
+- students in college corridor
 
-Classify each scene strictly into ONE of these visualTypes:
-location, government, construction, industrial_project, industry, employment, education, healthcare, crime, sports, transport, technology, celebration, environment, disaster, agriculture, finance, person.
+NEW RULES:
+
+1. For each scene generate: entityQuery, visualQuery, fallbackQuery.
+
+2. entityQuery: Use actual person/place/organization if likely to have images.
+Examples: Raipur city, Jagdalpur police, Chhattisgarh Women's Commission. Diversify queries (e.g. "Raipur aerial view", "Raipur city skyline" instead of just "Raipur India").
+
+3. visualQuery: Describe what should appear visually.
+Examples: college campus India, police investigation office, government meeting room, factory workers India, court hearing building.
+
+4. fallbackQuery: Generate a generic but visually relevant backup query.
+Examples: university building India, law enforcement India, office discussion India.
+
+5. Never generate queries containing: reporting, introducing, highlighting, detailing, discussing, explaining, revealing, case, incident, matter, controversy (unless they are part of a real entity name).
+
+6. For crime news: Generate visual equivalents (e.g., college campus India, student complaint desk, police investigation office) instead of "sexual harassment case".
+
+7. For education news: Generate visual equivalents (e.g., college building, classroom teaching, students studying).
+
+8. For government news: Generate visual equivalents (e.g., government office, official meeting, state commission office).
 
 Return ONLY a JSON array:
 [
   {
     "sceneId": 1,
-    "entity": "Nava Raipur textile park",
-    "visualType": "industrial_project",
-    "intent": "textile manufacturing India"
+    "entityQuery": "Nava Raipur aerial view",
+    "visualQuery": "industrial park construction India",
+    "fallbackQuery": "factory manufacturing facility India"
   }
 ]`;
 
@@ -2485,23 +2502,12 @@ Return ONLY a JSON array:
 
   // Map classification back to scenes
   const scenesWithQueries = localScenes.map(scene => {
-    const cls = classifications.find(c => c.sceneId === scene.id) || { visualType: 'location', entity: 'India', intent: 'news' };
+    const cls = classifications.find(c => c.sceneId === scene.id) || {};
     
-    // Step 3: Rule-based Query Generator with Geography Awareness
-    const geography = "India";
-    const entity = cls.entity || '';
-    const intent = cls.intent || '';
-    
-    // Generate entity-first search queries, avoiding generic terms
     const search_queries = [];
-    if (entity && entity.toLowerCase() !== 'india') {
-       search_queries.push(`${entity} ${intent} ${geography}`.trim());
-       search_queries.push(`${entity} ${cls.visualType} ${geography}`.trim());
-       search_queries.push(`${entity} ${geography}`.trim());
-    } else {
-       search_queries.push(`${intent} ${cls.visualType} ${geography}`.trim());
-       search_queries.push(`${intent} ${geography}`.trim());
-    }
+    if (cls.entityQuery) search_queries.push(cls.entityQuery.trim());
+    if (cls.visualQuery) search_queries.push(cls.visualQuery.trim());
+    if (cls.fallbackQuery) search_queries.push(cls.fallbackQuery.trim());
 
     // Filter out undefined/empty and heavily generic queries
     const filtered_queries = [...new Set(search_queries)]
@@ -2510,14 +2516,14 @@ Return ONLY a JSON array:
     return {
       scene_id: scene.id,
       scene_number: scene.id,
-      scene_group_id: `group_${scene.id}`,
+      scene_group_id: "group_" + scene.id,
       shot_id_in_scene: 1,
       voiceover_text: scene.text,
-      purpose: cls.visualType,
+      purpose: 'visual',
       search_queries: filtered_queries,
-      entity: cls.entity,
-      intent: cls.intent,
-      visualType: cls.visualType
+      entity: cls.entityQuery || '',
+      intent: cls.visualQuery || '',
+      visualType: 'visual'
     };
   });
 
@@ -2582,13 +2588,61 @@ Return ONLY a JSON array:
                  score += 10;
               }
               
-              if (!bestVisual || score > bestVisual.score) {
-                 bestVisual = {
-                   url: img.url,
-                   score: score,
-                   source: img.source,
-                   query: query
-                 };
+              img.score = score;
+            }
+            
+            // Sort images by score descending
+            const sortedImages = images
+              .filter((img: any) => img.score !== undefined)
+              .sort((a: any, b: any) => b.score - a.score);
+              
+            // Take top 5 candidates to check in parallel
+            const topCandidates = sortedImages.slice(0, 5);
+            
+            if (topCandidates.length > 0) {
+              const checkImageLoad = (url: string): Promise<boolean> => {
+                return new Promise((resolve) => {
+                  const image = new Image();
+                  const timeoutId = setTimeout(() => {
+                    image.src = '';
+                    resolve(false);
+                  }, 2500); // 2.5s timeout
+                  
+                  image.onload = () => {
+                    clearTimeout(timeoutId);
+                    resolve(true);
+                  };
+                  
+                  image.onerror = () => {
+                    clearTimeout(timeoutId);
+                    resolve(false);
+                  };
+                  
+                  image.src = url;
+                });
+              };
+              
+              const checks = await Promise.all(
+                topCandidates.map(async (c: any, i: number) => {
+                  const isLoadable = await checkImageLoad(c.url);
+                  return { isLoadable, index: i, candidate: c };
+                })
+              );
+              
+              const validCandidates = checks
+                .filter(c => c.isLoadable)
+                .sort((a, b) => a.index - b.index);
+              
+              if (validCandidates.length > 0) {
+                const bestValid = validCandidates[0].candidate;
+                if (!bestVisual || bestValid.score > bestVisual.score) {
+                   bestVisual = {
+                     url: bestValid.url,
+                     score: bestValid.score,
+                     source: bestValid.source,
+                     query: query
+                   };
+                }
               }
             }
           }
@@ -2603,7 +2657,7 @@ Return ONLY a JSON array:
        ...scene,
        selected_visual: bestVisual ? bestVisual.url : null,
        relevance_score: bestVisual ? bestVisual.score : 0,
-       source: bestVisual ? `${bestVisual.source} (${bestVisual.query})` : 'None found',
+       source: bestVisual ? bestVisual.source + " (" + bestVisual.query + ")" : 'None found',
        // Fallbacks for compatibility with Reel Render
        motion: 'slow_zoom_in',
        transition: 'fade',
@@ -2636,7 +2690,7 @@ ARTICLE TEXT:
 ${articleContent}
 
 Format rules for high engagement (TARGET DURATION MINIMUM 30 SECONDS, AT LEAST 75-90 WORDS):
-0–10 sec: HOOK (First, classify the news into a category: Breaking, Local, Entertainment, Tragedy, Tech. Generate a dynamic, context-aware hook strictly based on the category. DO NOT use generic "बड़ी खबर" (Breaking News) unless it's a major national/international event. For small/local news use "क्या आपको पता है..." or "[शहर] से आज की अपडेट...". For entertainment use "वायरल हो रहा है...". For tragedy use "एक गंभीर मामला...". Be creative and dynamic, maintaining an appropriate tone for the news type).
+0–10 sec: HOOK (NEVER start a reel with "बड़ी खबर", "ब्रेकिंग न्यूज", "ताजा अपडेट", or "[Location] से बड़ी खबर". Instead, start with: The most shocking fact, The biggest consequence, The strongest emotion, or The main conflict. Make it dynamic and context-aware).
 10–25 sec: What happened (The core fact delivered with clear professional urgency, including specific details and context)
 25–35 sec: Why important (Impact and crucial details without filler)
 35–45+ sec: Professional Sign-off (Dynamic and professional sign-off that psychologically compels viewers to engage. MUST include a question asking for viewers' opinions or suggestions on the matter to drive comments, followed by a powerful call to action to 'like' and 'follow' for more updates. DO NOT use 'subscribe', strictly use 'follow'. E.g., "आपकी इस पर क्या राय है? कमेंट में बताएं और ऐसी ही खबरों के लिए हमें फॉलो करें").
