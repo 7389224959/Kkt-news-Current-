@@ -244,7 +244,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
          setStatus('Step 4/4: Publishing to Facebook...');
          let hashtagsStr = '';
          if (article && article.tags && article.tags.length > 0) {
-            const selectedTags = article.tags.slice(0, 3);
+            const selectedTags = article.tags.slice(0, 2);
             hashtagsStr = '\n\n' + selectedTags.map((t: string) => '#' + t.replace(/\\s+/g, '')).join(' ') + ' #kktnews';
          } else {
             hashtagsStr = '\n\n#kktnews';
@@ -1135,7 +1135,7 @@ function ReelEditorView({
     
     let hashtagsStr = '';
     if (selectedArticle && selectedArticle.tags && selectedArticle.tags.length > 0) {
-       const selectedTags = selectedArticle.tags.slice(0, 3);
+       const selectedTags = selectedArticle.tags.slice(0, 2);
        hashtagsStr = '\n\n' + selectedTags.map((t: string) => '#' + t.replace(/\\s+/g, '')).join(' ') + ' #kktnews';
     } else {
        hashtagsStr = '\n\n#kktnews';

@@ -1780,7 +1780,7 @@ STYLE GUIDELINES FOR CAPTION:
 BRANDING & LINKS (MANDATORY):
 - Add "Khabar Kal Tak (KKT NEWS)" naturally in the post caption
 - You MUST append the article link to the end of the caption: ${articleUrl}
-- You MUST include strictly 2 to 5 highly relevant hashtags. Ensure the hashtags directly relate to the news topic, involving location, person, or any specific trending tag related to the story. DO NOT use generic or too many hashtags.
+- You MUST include strictly 1 to 3 highly relevant hashtags. Ensure the hashtags directly relate to the news topic, involving location, person, or any specific trending tag related to the story. DO NOT use generic or too many hashtags.
 - DO NOT add a category tag (e.g. do not write [Category: ...]).
 
 STEP 1: GENERATE HEADLINE FOR IMAGE
@@ -1815,7 +1815,7 @@ Output STRICT JSON formatting:
   "summary": "<REQUIRED: 1-2 sentence news summary or key bullet points. Enclose important keywords in *asterisks* for highlights>",
   "branding": "KKT NEWS",
   "caption": "<The final news post caption following the STYLE GUIDELINES and BRANDING & LINKS rules above. This string must include the article url!>",
-  "hashtags": ["#KhabarKalTak", "#tag1", "#tag2"],
+  "hashtags": ["#KhabarKalTak", "#tag1"],
   "image_prompt": "..."
 }
 
@@ -2707,7 +2707,7 @@ Subtitles Requirements (CRITICAL):
 Categorization & Style:
 - "reelType": Breaking News, Explainer, Debate, or Useful Update.
 - "stylePreset": breaking_news (Fast zoom, red urgency), explainer (Clean style, slower pacing), debate, useful_update.
-- "facebookCaption": Write an engaging caption for Facebook Reels. IMPORTANT: Limit hashtags to 2-5 strictly. Ensure the hashtags are highly relevant to the news topic involving location, person, or any topic related trending tag.
+- "facebookCaption": Write an engaging caption for Facebook Reels. IMPORTANT: Limit hashtags to 1-3 strictly. Ensure the hashtags are highly relevant to the news topic involving location, person, or any topic related trending tag.
 
 Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly escape inner quotes):
 {
@@ -2718,7 +2718,7 @@ Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly 
   "reelType": "string",
   "stylePreset": "string",
   "visualKeywords": "3-5 keywords for searching stock footage",
-  "facebookCaption": "String containing the facebook reel caption with 2-5 highly relevant hashtags"
+  "facebookCaption": "String containing the facebook reel caption with 1-3 highly relevant hashtags"
 }`;
 
   try {
