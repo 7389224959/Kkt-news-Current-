@@ -56,7 +56,7 @@ const Header: React.FC = () => {
             <button className="p-2 hover:bg-slate-800 rounded-full transition-colors text-gray-300 hover:text-white" title="Search">
               <Search size={20} />
             </button>
-            <Link to="/membership" className="hidden sm:flex items-center gap-2 bg-red-600 hover:bg-red-700 px-4 py-1.5 rounded-full text-xs font-bold uppercase transition-colors shadow-sm">
+            <Link to="/join-us" className="hidden sm:flex items-center gap-2 bg-red-600 hover:bg-red-700 px-4 py-1.5 rounded-full text-xs font-bold uppercase transition-colors shadow-sm">
               Join Us
             </Link>
             <button className="p-2 hover:bg-slate-800 rounded-full transition-colors relative text-gray-300 hover:text-white">
@@ -88,7 +88,7 @@ const Header: React.FC = () => {
             ))}
             <div className="pt-4 border-t border-slate-700 space-y-3">
               <Link 
-                to="/membership" 
+                to="/join-us" 
                 className="block py-3 text-center bg-red-600 rounded-lg text-white font-bold uppercase tracking-widest shadow-lg" 
                 onClick={() => setIsMenuOpen(false)}
               >

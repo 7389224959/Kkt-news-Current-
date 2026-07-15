@@ -25,7 +25,7 @@ import { compressImage, overlayTextOnImage } from '../src/utils/imageUtils';
 import { 
   Plus, Edit, Trash2, Save, X, LogOut, LayoutDashboard, 
   Image as ImageIcon, Type, Settings, Globe, FileText, Sparkles, RefreshCw, TrendingUp,
-  ChevronRight, MapPin, ArrowUp, ArrowDown, Heart, Lock, AlertTriangle, Upload, Zap, Shield, Wand2, ExternalLink, CheckCircle
+  ChevronRight, MapPin, ArrowUp, ArrowDown, Heart, Lock, AlertTriangle, Upload, Zap, Shield, Wand2, ExternalLink, CheckCircle, Briefcase
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import NewsImage from '../components/NewsImage';
@@ -40,7 +40,7 @@ const Admin: React.FC = () => {
   const { refreshData: refreshGlobalData } = useApp();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates'>('articles');
+  const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates' | 'job_applications'>('articles');
   const [viralTemplateTab, setViralTemplateTab] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -1624,6 +1624,12 @@ const Admin: React.FC = () => {
           >
             <ImageIcon size={18} /> Templates
           </button>
+          <button 
+            onClick={() => setActiveTab('job_applications')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md font-bold transition-colors ${activeTab === 'job_applications' ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
+            <Briefcase size={18} /> Job Applications
+          </button>
         </div>
 
         {/* Global Error Alert */}
@@ -2485,6 +2491,114 @@ const Admin: React.FC = () => {
                    }
                  }}
               />
+            )}
+          </div>
+        )}
+
+        {/* --- TAB: JOB APPLICATIONS --- */}
+        {activeTab === 'job_applications' && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2"><Briefcase className="text-red-600" /> Job Applications</h2>
+            {articles.filter(a => a.category === Category.JOB_APPLICATION).length === 0 ? (
+              <div className="p-8 text-center text-gray-500 bg-white rounded-lg border border-gray-100">
+                No job applications received yet.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {articles.filter(a => a.category === Category.JOB_APPLICATION).map(article => {
+                  let data: any = {};
+                  try {
+                    data = JSON.parse(article.content);
+                  } catch(e) {}
+                  
+                  return (
+                    <div key={article.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative">
+                      <div className="p-6">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h3 className="text-xl font-bold text-slate-900">{data.fullName || article.author}</h3>
+                            <div className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                              <MapPin size={14} /> {data.city || 'N/A'}, {data.district || 'N/A'}
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => { if(window.confirm('Delete this application?')) { deleteArticle(article.id!).then(()=>refreshData()) } }}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete Application"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                          <div>
+                            <span className="text-gray-500 block text-xs">Mobile</span>
+                            <span className="font-medium text-slate-800">{data.mobileNumber || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500 block text-xs">WhatsApp</span>
+                            <span className="font-medium text-slate-800">{data.whatsappNumber || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500 block text-xs">Age</span>
+                            <span className="font-medium text-slate-800">{data.age || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500 block text-xs">Education</span>
+                            <span className="font-medium text-slate-800">{data.education || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500 block text-xs">Experience</span>
+                            <span className="font-medium text-slate-800">{data.experience || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500 block text-xs">Vehicle</span>
+                            <span className="font-medium text-slate-800">{data.vehicleAvailable || 'N/A'}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="mb-6">
+                          <span className="text-gray-500 block text-xs mb-1">Reason to Join</span>
+                          <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">{data.reasonToJoin || 'N/A'}</p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
+                          <div>
+                            <span className="text-gray-500 block text-xs mb-2">ID Card</span>
+                            {data.idCardUrl ? (
+                              <a href={data.idCardUrl} target="_blank" rel="noopener noreferrer" className="block relative group rounded-lg overflow-hidden border border-slate-200">
+                                {data.idCardUrl.endsWith('.pdf') ? (
+                                  <div className="h-24 bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-slate-200 transition-colors">
+                                    <FileText size={24} />
+                                    <span className="ml-2 text-sm font-medium">View PDF</span>
+                                  </div>
+                                ) : (
+                                  <img src={data.idCardUrl} alt="ID Card" className="w-full h-24 object-cover group-hover:scale-105 transition-transform" />
+                                )}
+                              </a>
+                            ) : (
+                              <span className="text-sm text-gray-400">Not provided</span>
+                            )}
+                          </div>
+                          <div>
+                            <span className="text-gray-500 block text-xs mb-2">Passport Photo</span>
+                            {data.photoUrl ? (
+                              <a href={data.photoUrl} target="_blank" rel="noopener noreferrer" className="block relative group rounded-lg overflow-hidden border border-slate-200">
+                                <img src={data.photoUrl} alt="Passport Photo" className="w-full h-24 object-cover group-hover:scale-105 transition-transform" />
+                              </a>
+                            ) : (
+                              <span className="text-sm text-gray-400">Not provided</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-slate-50 px-6 py-3 border-t border-slate-100 text-xs text-gray-500 flex justify-between">
+                        <span>Submitted: {new Date(article.published_at || article.created_at || '').toLocaleString()}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}

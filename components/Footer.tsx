@@ -35,10 +35,11 @@ const Footer: React.FC = () => {
           <div>
             <h4 className="text-white font-bold text-lg mb-6 uppercase tracking-wider border-b-2 border-red-600 pb-2 inline-block">उपयोगी लिंक</h4>
             <ul className="space-y-3 text-sm font-medium">
-              <li><a href="#" className="hover:text-red-500 transition-colors">हमारे बारे में</a></li>
+              <li><Link to="/about" className="hover:text-red-500 transition-colors">हमारे बारे में (About Us)</Link></li>
               <li><a href="#" className="hover:text-red-500 transition-colors">संपादकीय टीम</a></li>
               <li><a href="#" className="hover:text-red-500 transition-colors">आचार संहिता</a></li>
               <li><a href="#" className="hover:text-red-500 transition-colors">विज्ञापन दें</a></li>
+              <li><Link to="/join-us" className="hover:text-red-500 transition-colors text-red-400 font-bold">करियर (Join Us)</Link></li>
               <li><Link to="/privacy" className="hover:text-red-500 transition-colors">गोपनीयता नीति (Privacy Policy)</Link></li>
               <li><Link to="/terms" className="hover:text-red-500 transition-colors">सेवा की शर्तें (Terms of Service)</Link></li>
             </ul>
@@ -49,10 +50,8 @@ const Footer: React.FC = () => {
             <h4 className="text-white font-bold text-lg mb-6 uppercase tracking-wider border-b-2 border-red-600 pb-2 inline-block">न्यूज़ सेक्शन</h4>
             <ul className="space-y-3 text-sm font-medium">
               <li><Link to="/category/state" className="hover:text-red-500 transition-colors">राज्य समाचार</Link></li>
-              <li><Link to="/category/politics" className="hover:text-red-500 transition-colors">राजनीति</Link></li>
               <li><Link to="/category/crime" className="hover:text-red-500 transition-colors">क्राइम फाइल</Link></li>
               <li><Link to="/rti" className="hover:text-red-500 transition-colors">RTI & लीगल</Link></li>
-              <li><Link to="/category/jobs" className="hover:text-red-500 transition-colors">नौकरी और शिक्षा</Link></li>
             </ul>
           </div>
 

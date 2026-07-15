@@ -355,7 +355,7 @@ const ArticleDetail: React.FC = () => {
                 )}
                 
                 <div className="markdown-body">
-                  <Markdown>{article.content}</Markdown>
+                  <Markdown>{(article.content || '').replace(/<!-- additionalImages:[\s\S]*?-->/g, '')}</Markdown>
                 </div>
                 
                 {article.author === "Sankalp Jha" && (settings?.adminPhoto || settings?.adminDesignation) && (

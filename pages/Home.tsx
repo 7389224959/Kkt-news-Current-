@@ -55,7 +55,7 @@ const Home: React.FC = () => {
   // Filter if category is present in URL
   const filteredArticles = sortArticlesByDate(category 
     ? articles.filter(a => a.category === getCategoryFromSlug(category))
-    : articles);
+    : articles.filter(a => a.category !== Category.JOB_APPLICATION));
 
   const pageTitle = category && category !== 'all' 
     ? `${category.charAt(0).toUpperCase() + category.slice(1)} न्यूज़ | Khabar Kal Tak`
@@ -98,10 +98,11 @@ const Home: React.FC = () => {
   }
 
   // Default Home Layout
-  const sortedAll = sortArticlesByDate(articles);
+  const validArticles = articles.filter(a => a.category !== Category.JOB_APPLICATION);
+  const sortedAll = sortArticlesByDate(validArticles);
   const featuredArticle = sortedAll.find(a => a.isFeatured) || sortedAll[0];
-  const trendingArticles = sortedAll.filter(a => a.isTrending && a.id !== featuredArticle.id).slice(0, 5);
-  const otherArticles = sortedAll.filter(a => a.id !== featuredArticle.id && !trendingArticles.find(t => t.id === a.id));
+  const trendingArticles = sortedAll.filter(a => a.isTrending && a.id !== featuredArticle?.id).slice(0, 5);
+  const otherArticles = sortedAll.filter(a => a.id !== featuredArticle?.id && !trendingArticles.find(t => t.id === a.id));
 
   return (
     <div className="bg-white min-h-screen pb-20">

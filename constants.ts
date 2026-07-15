@@ -165,13 +165,10 @@ export const MOCK_ARTICLES: Article[] = [
 export const NAV_LINKS = [
   { label: 'Home', path: '/' },
   { label: 'Chhattisgarh News', path: '/category/state' },
-  { label: 'Nation Update', path: '/category/politics' },
   { label: 'Crime', path: '/category/crime' },
   { label: 'Submit Tip or Complaint', path: '/rti' },
-  { label: 'Jobs', path: '/category/jobs' },
   { label: 'Sports', path: '/category/sports' },
-  { label: 'Entertainment', path: '/category/bollywood' },
-  { label: 'Lifestyle', path: '/category/lifestyle' },
-  { label: 'Viral Today', path: '/category/viral' },
-  { label: 'War Room', path: '/category/war-room' },
+  { label: 'Terms and Conditions', path: '/terms' },
+  { label: 'About Us', path: '/about' },
+  { label: 'Join Us', path: '/join-us' },
 ];

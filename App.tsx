@@ -14,6 +14,7 @@ const ArticleDetail = lazy(() => import('./pages/ArticleDetail'));
 const Admin = lazy(() => import('./pages/Admin'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+const JoinUs = lazy(() => import('./pages/JoinUs'));
 
 // Loading fallback
 const PageLoader = () => (
@@ -53,8 +54,10 @@ const App: React.FC = () => {
                     <Route path="/rti" element={<PlaceholderPage title="RTI Drafting Help" />} />
                     <Route path="/complaint" element={<PlaceholderPage title="File a Complaint" />} />
                     <Route path="/membership" element={<PlaceholderPage title="Membership Plans" />} />
+                    <Route path="/about" element={<PlaceholderPage title="About Us" />} />
                     <Route path="/privacy" element={<PrivacyPolicy />} />
                     <Route path="/terms" element={<TermsOfService />} />
+                    <Route path="/join-us" element={<JoinUs />} />
                     
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
