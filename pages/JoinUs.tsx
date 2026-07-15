@@ -32,6 +32,7 @@ const JoinUs = () => {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     fullName: '',
+    emailId: '',
     mobileNumber: '',
     whatsappNumber: '',
     district: '',
@@ -85,10 +86,10 @@ const JoinUs = () => {
 
       if (error) throw error;
 
-      alert('Thank you for your application! Our team will contact you soon.');
+      alert('Applied successfully..you will notified within 48 hours through email or sms');
       setFormStep(1);
       setFormData({
-        fullName: '', mobileNumber: '', whatsappNumber: '', district: '', city: '',
+        fullName: '', emailId: '', mobileNumber: '', whatsappNumber: '', district: '', city: '',
         age: '', education: '', experience: '', vehicleAvailable: 'Yes', reasonToJoin: ''
       });
       setIdCardFile(null);
@@ -482,9 +483,15 @@ const JoinUs = () => {
                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
                     <h3 className="text-xl font-bold text-slate-900 mb-6">Personal Details</h3>
                     <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">Full Name *</label>
-                        <input required type="text" name="fullName" value={formData.fullName} onChange={handleInputChange} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-600 outline-none transition-all" placeholder="Enter your full name" />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Full Name *</label>
+                          <input required type="text" name="fullName" value={formData.fullName} onChange={handleInputChange} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-600 outline-none transition-all" placeholder="Enter your full name" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Email ID *</label>
+                          <input required type="email" name="emailId" value={formData.emailId} onChange={handleInputChange} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-600 outline-none transition-all" placeholder="Enter your email" />
+                        </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>

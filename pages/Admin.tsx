@@ -2537,6 +2537,10 @@ const Admin: React.FC = () => {
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                          <div className="col-span-2">
+                            <span className="text-gray-500 block text-xs">Email ID</span>
+                            <span className="font-medium text-slate-800">{data.emailId || 'N/A'}</span>
+                          </div>
                           <div>
                             <span className="text-gray-500 block text-xs">Mobile</span>
                             <span className="font-medium text-slate-800">{data.mobileNumber || 'N/A'}</span>
