@@ -51,7 +51,7 @@ const Footer: React.FC = () => {
             <ul className="space-y-3 text-sm font-medium">
               <li><Link to="/category/state" className="hover:text-red-500 transition-colors">राज्य समाचार</Link></li>
               <li><Link to="/category/crime" className="hover:text-red-500 transition-colors">क्राइम फाइल</Link></li>
-              <li><Link to="/rti" className="hover:text-red-500 transition-colors">RTI & लीगल</Link></li>
+              <li><Link to="/category/rti" className="hover:text-red-500 transition-colors">RTI & लीगल</Link></li>
             </ul>
           </div>
 

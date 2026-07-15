@@ -166,7 +166,7 @@ export const NAV_LINKS = [
   { label: 'Home', path: '/' },
   { label: 'Chhattisgarh News', path: '/category/state' },
   { label: 'Crime', path: '/category/crime' },
-  { label: 'Submit Tip or Complaint', path: '/rti' },
+  { label: 'Submit Tip or Complaint', path: '/submit-tip' },
   { label: 'Sports', path: '/category/sports' },
   { label: 'Terms and Conditions', path: '/terms' },
   { label: 'About Us', path: '/about' },

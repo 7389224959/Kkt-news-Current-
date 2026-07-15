@@ -12,6 +12,7 @@ export enum Category {
   VIRAL = 'Viral Today',
   WAR_ROOM = 'War Room',
   JOB_APPLICATION = 'job_application',
+  TIP_COMPLAINT = 'tip_complaint',
 }
 
 export interface Article {

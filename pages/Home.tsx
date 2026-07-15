@@ -55,7 +55,7 @@ const Home: React.FC = () => {
   // Filter if category is present in URL
   const filteredArticles = sortArticlesByDate(category 
     ? articles.filter(a => a.category === getCategoryFromSlug(category))
-    : articles.filter(a => a.category !== Category.JOB_APPLICATION));
+    : articles.filter(a => a.category !== Category.JOB_APPLICATION && a.category !== Category.TIP_COMPLAINT));
 
   const pageTitle = category && category !== 'all' 
     ? `${category.charAt(0).toUpperCase() + category.slice(1)} न्यूज़ | Khabar Kal Tak`
@@ -98,7 +98,7 @@ const Home: React.FC = () => {
   }
 
   // Default Home Layout
-  const validArticles = articles.filter(a => a.category !== Category.JOB_APPLICATION);
+  const validArticles = articles.filter(a => a.category !== Category.JOB_APPLICATION && a.category !== Category.TIP_COMPLAINT);
   const sortedAll = sortArticlesByDate(validArticles);
   const featuredArticle = sortedAll.find(a => a.isFeatured) || sortedAll[0];
   const trendingArticles = sortedAll.filter(a => a.isTrending && a.id !== featuredArticle?.id).slice(0, 5);

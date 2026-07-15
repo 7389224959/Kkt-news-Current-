@@ -95,7 +95,7 @@ const Header: React.FC = () => {
                 Join Us
               </Link>
               <Link 
-                to="/rti" 
+                to="/submit-tip" 
                 className="block py-3 text-center bg-slate-700 rounded-lg text-white font-bold uppercase tracking-widest border border-slate-600" 
                 onClick={() => setIsMenuOpen(false)}
               >

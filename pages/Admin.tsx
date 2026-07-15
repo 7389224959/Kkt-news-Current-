@@ -40,7 +40,7 @@ const Admin: React.FC = () => {
   const { refreshData: refreshGlobalData } = useApp();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates' | 'job_applications'>('articles');
+  const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates' | 'job_applications' | 'tip_complaints'>('articles');
   const [viralTemplateTab, setViralTemplateTab] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -1630,6 +1630,12 @@ const Admin: React.FC = () => {
           >
             <Briefcase size={18} /> Job Applications
           </button>
+          <button 
+            onClick={() => setActiveTab('tip_complaints')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md font-bold transition-colors ${activeTab === 'tip_complaints' ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
+            <AlertTriangle size={18} /> Tips & Complaints
+          </button>
         </div>
 
         {/* Global Error Alert */}
@@ -2082,7 +2088,7 @@ const Admin: React.FC = () => {
             {/* List */}
             <div className="lg:col-span-2 order-1 lg:order-2">
                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                 <h2 className="font-bold text-xl text-slate-800">Articles List ({articles.length})</h2>
+                 <h2 className="font-bold text-xl text-slate-800">Articles List ({articles.filter(a => a.category !== Category.JOB_APPLICATION && a.category !== Category.TIP_COMPLAINT).length})</h2>
                  <div className="flex flex-wrap gap-2">
                    <button 
                      onClick={handleAutoRobot}
@@ -2136,12 +2142,12 @@ const Admin: React.FC = () => {
 
                
                <div className="space-y-4">
-                 {articles.map((article, index) => (
+                 {articles.filter(a => a.category !== Category.JOB_APPLICATION && a.category !== Category.TIP_COMPLAINT).map((article, index, filteredArticlesArray) => (
                    <div key={article.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex gap-4">
                       <div className="flex flex-col justify-center gap-1 mr-2">
                         <button 
                           type="button" 
-                          onClick={(e) => { e.stopPropagation(); moveArticleUp(index); }} 
+                          onClick={(e) => { e.stopPropagation(); moveArticleUp(articles.indexOf(article)); }} 
                           disabled={index === 0}
                           className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                           title="Move Up"
@@ -2150,8 +2156,8 @@ const Admin: React.FC = () => {
                         </button>
                         <button 
                           type="button" 
-                          onClick={(e) => { e.stopPropagation(); moveArticleDown(index); }} 
-                          disabled={index === articles.length - 1}
+                          onClick={(e) => { e.stopPropagation(); moveArticleDown(articles.indexOf(article)); }} 
+                          disabled={index === filteredArticlesArray.length - 1}
                           className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                           title="Move Down"
                         >
@@ -2591,6 +2597,83 @@ const Admin: React.FC = () => {
                             )}
                           </div>
                         </div>
+                      </div>
+                      <div className="bg-slate-50 px-6 py-3 border-t border-slate-100 text-xs text-gray-500 flex justify-between">
+                        <span>Submitted: {new Date(article.published_at || article.created_at || '').toLocaleString()}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* --- TAB: TIPS & COMPLAINTS --- */}
+        {activeTab === 'tip_complaints' && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2"><AlertTriangle className="text-red-600" /> Tips & Complaints</h2>
+            {articles.filter(a => a.category === Category.TIP_COMPLAINT).length === 0 ? (
+              <div className="p-8 text-center text-gray-500 bg-white rounded-lg border border-gray-100">
+                No tips or complaints received yet.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-6">
+                {articles.filter(a => a.category === Category.TIP_COMPLAINT).map(article => {
+                  let data: any = {};
+                  try {
+                    data = JSON.parse(article.content);
+                  } catch(e) {}
+                  
+                  return (
+                    <div key={article.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative">
+                      <div className="p-6">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${data.type === 'tip' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                {data.type === 'tip' ? 'News Tip' : 'Complaint'}
+                              </span>
+                              <h3 className="text-xl font-bold text-slate-900">{data.subject || article.title}</h3>
+                            </div>
+                            <div className="text-sm text-gray-500 flex items-center gap-4 mt-2">
+                              <span className="flex items-center gap-1"><FileText size={14} /> {data.name || 'Anonymous'}</span>
+                              <span className="flex items-center gap-1"><MapPin size={14} /> {data.location || 'Unknown Location'}</span>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => { if(window.confirm('Delete this submission?')) { deleteArticle(article.id!).then(()=>refreshData()) } }}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete Submission"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-sm bg-slate-50 p-4 rounded-lg">
+                          <div>
+                            <span className="text-gray-500 block text-xs">Mobile</span>
+                            <span className="font-medium text-slate-800">{data.phone || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500 block text-xs">Email</span>
+                            <span className="font-medium text-slate-800">{data.email || 'N/A'}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="mb-6">
+                          <span className="text-gray-500 block text-xs mb-1">Detailed Information</span>
+                          <p className="text-sm text-slate-700 bg-white p-4 rounded-lg border border-slate-100 whitespace-pre-wrap">{data.details || 'N/A'}</p>
+                        </div>
+
+                        {data.evidenceUrl && (
+                          <div className="border-t border-slate-100 pt-4">
+                            <span className="text-gray-500 block text-xs mb-2">Supporting Evidence</span>
+                            <a href={data.evidenceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium">
+                              <ImageIcon size={16} /> View Attached Evidence
+                            </a>
+                          </div>
+                        )}
                       </div>
                       <div className="bg-slate-50 px-6 py-3 border-t border-slate-100 text-xs text-gray-500 flex justify-between">
                         <span>Submitted: {new Date(article.published_at || article.created_at || '').toLocaleString()}</span>
