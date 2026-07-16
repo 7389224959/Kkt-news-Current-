@@ -540,7 +540,6 @@ export const draftNewsReport = async (
       model: "gemini-2.5-flash",
       contents: { parts },
       config: {
-        responseMimeType: "application/json",
         tools: tools.length > 0 ? tools : undefined,
       },
     });
@@ -620,7 +619,6 @@ export const fetchTrendingKeywords = async (): Promise<
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
         temperature: 0.9,
       },
     });
@@ -1643,7 +1641,6 @@ export const fetchTickerHeadlines = async (
       contents: prompt,
       config: {
         tools: toolsConfig,
-        responseMimeType: "application/json",
         temperature: 0.9,
       },
     });
