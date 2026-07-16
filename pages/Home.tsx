@@ -157,117 +157,129 @@ const Home: React.FC = () => {
         {/* Categories Sections */}
         <div className="space-y-16">
           {/* State News Section */}
-          <section>
-            <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-8 bg-bhaskar-orange rounded-full"></div>
-                <h2 className="text-2xl font-black text-bhaskar-dark tracking-tight uppercase">Chhattisgarh News</h2>
+          {sortedAll.filter(a => a.category === Category.STATE).length > 0 && (
+            <section>
+              <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-8 bg-bhaskar-orange rounded-full"></div>
+                  <h2 className="text-2xl font-black text-bhaskar-dark tracking-tight uppercase">Chhattisgarh News</h2>
+                </div>
+                <Link to="/category/state" className="text-bhaskar-orange font-bold text-sm flex items-center gap-1 hover:underline">
+                  सभी देखें <ChevronRight size={16} />
+                </Link>
               </div>
-              <Link to="/category/state" className="text-bhaskar-orange font-bold text-sm flex items-center gap-1 hover:underline">
-                सभी देखें <ChevronRight size={16} />
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {sortedAll.filter(a => a.category === Category.STATE).slice(0, 4).map(article => (
-                <NewsCard key={article.id} article={article} />
-              ))}
-            </div>
-          </section>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {sortedAll.filter(a => a.category === Category.STATE).slice(0, 4).map(article => (
+                  <NewsCard key={article.id} article={article} />
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Politics Section */}
-          <section>
-            <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
-                <h2 className="text-2xl font-black text-bhaskar-dark tracking-tight uppercase">Nation Update</h2>
+          {sortedAll.filter(a => a.category === Category.POLITICS).length > 0 && (
+            <section>
+              <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
+                  <h2 className="text-2xl font-black text-bhaskar-dark tracking-tight uppercase">Nation Update</h2>
+                </div>
+                <Link to="/category/politics" className="text-blue-600 font-bold text-sm flex items-center gap-1 hover:underline">
+                  सभी देखें <ChevronRight size={16} />
+                </Link>
               </div>
-              <Link to="/category/politics" className="text-blue-600 font-bold text-sm flex items-center gap-1 hover:underline">
-                सभी देखें <ChevronRight size={16} />
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {sortedAll.filter(a => a.category === Category.POLITICS).slice(0, 4).map(article => (
-                <NewsCard key={article.id} article={article} />
-              ))}
-            </div>
-          </section>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {sortedAll.filter(a => a.category === Category.POLITICS).slice(0, 4).map(article => (
+                  <NewsCard key={article.id} article={article} />
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Sports & Entertainment Section */}
-          <section>
-            <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-8 bg-green-600 rounded-full"></div>
-                <h2 className="text-2xl font-black text-bhaskar-dark tracking-tight uppercase">Sports & Entertainment</h2>
+          {sortedAll.filter(a => a.category === Category.SPORTS || a.category === Category.BOLLYWOOD).length > 0 && (
+            <section>
+              <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-8 bg-green-600 rounded-full"></div>
+                  <h2 className="text-2xl font-black text-bhaskar-dark tracking-tight uppercase">Sports & Entertainment</h2>
+                </div>
+                <div className="flex gap-4">
+                  <Link to="/category/sports" className="text-green-600 font-bold text-sm flex items-center gap-1 hover:underline">
+                    खेल <ChevronRight size={16} />
+                  </Link>
+                  <Link to="/category/bollywood" className="text-green-600 font-bold text-sm flex items-center gap-1 hover:underline">
+                    मनोरंजन <ChevronRight size={16} />
+                  </Link>
+                </div>
               </div>
-              <div className="flex gap-4">
-                <Link to="/category/sports" className="text-green-600 font-bold text-sm flex items-center gap-1 hover:underline">
-                  खेल <ChevronRight size={16} />
-                </Link>
-                <Link to="/category/bollywood" className="text-green-600 font-bold text-sm flex items-center gap-1 hover:underline">
-                  मनोरंजन <ChevronRight size={16} />
-                </Link>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {sortedAll.filter(a => a.category === Category.SPORTS || a.category === Category.BOLLYWOOD).slice(0, 4).map(article => (
+                  <NewsCard key={article.id} article={article} />
+                ))}
               </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {sortedAll.filter(a => a.category === Category.SPORTS || a.category === Category.BOLLYWOOD).slice(0, 4).map(article => (
-                <NewsCard key={article.id} article={article} />
-              ))}
-            </div>
-          </section>
+            </section>
+          )}
 
           {/* War Room Section */}
-          <section>
-            <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-8 bg-red-700 rounded-full"></div>
-                <h2 className="text-2xl font-black text-bhaskar-dark tracking-tight uppercase">War Room</h2>
+          {sortedAll.filter(a => a.category === Category.WAR_ROOM).length > 0 && (
+            <section>
+              <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-8 bg-red-700 rounded-full"></div>
+                  <h2 className="text-2xl font-black text-bhaskar-dark tracking-tight uppercase">War Room</h2>
+                </div>
+                <Link to="/category/war-room" className="text-red-700 font-bold text-sm flex items-center gap-1 hover:underline">
+                  सभी देखें <ChevronRight size={16} />
+                </Link>
               </div>
-              <Link to="/category/war-room" className="text-red-700 font-bold text-sm flex items-center gap-1 hover:underline">
-                सभी देखें <ChevronRight size={16} />
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {sortedAll.filter(a => a.category === Category.WAR_ROOM).slice(0, 4).map(article => (
-                <NewsCard key={article.id} article={article} />
-              ))}
-            </div>
-          </section>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {sortedAll.filter(a => a.category === Category.WAR_ROOM).slice(0, 4).map(article => (
+                  <NewsCard key={article.id} article={article} />
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Viral Today Section */}
-          <section>
-            <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-8 bg-yellow-500 rounded-full"></div>
-                <h2 className="text-2xl font-black text-bhaskar-dark tracking-tight uppercase">Viral Today</h2>
+          {sortedAll.filter(a => a.category === Category.VIRAL).length > 0 && (
+            <section>
+              <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-8 bg-yellow-500 rounded-full"></div>
+                  <h2 className="text-2xl font-black text-bhaskar-dark tracking-tight uppercase">Viral Today</h2>
+                </div>
+                <Link to="/category/viral" className="text-yellow-600 font-bold text-sm flex items-center gap-1 hover:underline">
+                  सभी देखें <ChevronRight size={16} />
+                </Link>
               </div>
-              <Link to="/category/viral" className="text-yellow-600 font-bold text-sm flex items-center gap-1 hover:underline">
-                सभी देखें <ChevronRight size={16} />
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {sortedAll.filter(a => a.category === Category.VIRAL).slice(0, 4).map(article => (
-                <NewsCard key={article.id} article={article} />
-              ))}
-            </div>
-          </section>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {sortedAll.filter(a => a.category === Category.VIRAL).slice(0, 4).map(article => (
+                  <NewsCard key={article.id} article={article} />
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Lifestyle Section */}
-          <section>
-            <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-8 bg-purple-600 rounded-full"></div>
-                <h2 className="text-2xl font-black text-bhaskar-dark tracking-tight uppercase">Lifestyle</h2>
+          {sortedAll.filter(a => a.category === Category.LIFESTYLE).length > 0 && (
+            <section>
+              <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-8 bg-purple-600 rounded-full"></div>
+                  <h2 className="text-2xl font-black text-bhaskar-dark tracking-tight uppercase">Lifestyle</h2>
+                </div>
+                <Link to="/category/lifestyle" className="text-purple-600 font-bold text-sm flex items-center gap-1 hover:underline">
+                  सभी देखें <ChevronRight size={16} />
+                </Link>
               </div>
-              <Link to="/category/lifestyle" className="text-purple-600 font-bold text-sm flex items-center gap-1 hover:underline">
-                सभी देखें <ChevronRight size={16} />
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {sortedAll.filter(a => a.category === Category.LIFESTYLE).slice(0, 4).map(article => (
-                <NewsCard key={article.id} article={article} />
-              ))}
-            </div>
-          </section>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {sortedAll.filter(a => a.category === Category.LIFESTYLE).slice(0, 4).map(article => (
+                  <NewsCard key={article.id} article={article} />
+                ))}
+              </div>
+            </section>
+          )}
 
           {currentPage < totalPages && (
             <div className="mt-16 text-center">
