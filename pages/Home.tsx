@@ -5,6 +5,7 @@ import { Category } from '../types';
 
 import { sortArticlesByDate } from '../services/articleService';
 import NewsCard from '../components/NewsCard';
+import PromoBanner from '../components/PromoBanner';
 import NewsImage from '../components/NewsImage';
 import { ChevronRight, TrendingUp, Zap, Newspaper } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
@@ -115,6 +116,9 @@ const Home: React.FC = () => {
       </Helmet>
       
       <div className="container mx-auto px-4 py-6">
+        {/* Promotional Banner */}
+        <PromoBanner />
+        
         {/* Hero Section */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12">
           {/* Main Featured Story */}
