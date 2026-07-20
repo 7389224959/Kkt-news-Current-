@@ -25,7 +25,7 @@ import { compressImage, overlayTextOnImage } from '../src/utils/imageUtils';
 import { 
   Plus, Edit, Trash2, Save, X, LogOut, LayoutDashboard, 
   Image as ImageIcon, Type, Settings, Globe, FileText, Sparkles, RefreshCw, TrendingUp,
-  ChevronRight, MapPin, ArrowUp, ArrowDown, Heart, Lock, AlertTriangle, Upload, Zap, Shield, Wand2, ExternalLink, CheckCircle, Briefcase
+  ChevronRight, MapPin, ArrowUp, ArrowDown, Heart, Lock, AlertTriangle, Upload, Zap, Shield, Wand2, ExternalLink, CheckCircle, Briefcase, Users
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import NewsImage from '../components/NewsImage';
@@ -34,13 +34,18 @@ import ViralTemplatesAdmin from '../components/ViralTemplatesAdmin';
 import ViralTemplateEditor from '../components/ViralTemplateEditor';
 import AIImproveTemplate from '../components/AIImproveTemplate';
 import ReelWizard from '../components/ReelWizard';
+import { WorkerDashboard } from '../components/WorkerDashboard';
+import ManageWorkers from '../components/ManageWorkers';
 
 const Admin: React.FC = () => {
   const navigate = useNavigate();
   const { refreshData: refreshGlobalData } = useApp();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginMode, setLoginMode] = useState<'admin' | 'worker'>('admin');
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates' | 'job_applications' | 'tip_complaints'>('articles');
+  const [workerId, setWorkerId] = useState('');
+  const [workerPassword, setWorkerPassword] = useState('');
+  const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates' | 'job_applications' | 'tip_complaints' | 'workers'>('articles');
   const [viralTemplateTab, setViralTemplateTab] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -312,18 +317,39 @@ const Admin: React.FC = () => {
   // --- Auth Handlers ---
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === 'admin123') {
-      setIsAuthenticated(true);
-      sessionStorage.setItem('kkt_admin_logged_in', 'true');
-      refreshData();
+    if (loginMode === 'admin') {
+      if (password === 'admin123') {
+        setIsAuthenticated(true);
+        sessionStorage.setItem('kkt_admin_logged_in', 'true');
+        refreshData();
+      } else {
+        alert("Invalid Admin Password");
+      }
     } else {
-      alert("Invalid Password");
+      // Worker Login
+      const savedWorkers = localStorage.getItem('kkt_workers');
+      let validWorker = false;
+      if (savedWorkers) {
+        const workers = JSON.parse(savedWorkers);
+        const match = workers.find((w: any) => w.id === workerId.trim() && w.password === workerPassword);
+        if (match) validWorker = true;
+      }
+      
+      if (validWorker) {
+        setIsAuthenticated(true);
+        sessionStorage.setItem('kkt_admin_logged_in', 'true');
+        sessionStorage.setItem('kkt_worker_id', workerId);
+        refreshData();
+      } else {
+        alert("Invalid Worker ID or Password");
+      }
     }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
     sessionStorage.removeItem('kkt_admin_logged_in');
+    sessionStorage.removeItem('kkt_worker_id');
     navigate('/');
   };
 
@@ -1549,21 +1575,63 @@ const Admin: React.FC = () => {
             <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
               <Lock className="text-white" size={32} />
             </div>
-            <h1 className="text-3xl font-bold text-slate-900">KKT Admin</h1>
+            <h1 className="text-3xl font-bold text-slate-900">KKT Workspace</h1>
             <p className="text-gray-500">Secure News Desk Login</p>
+          </div>
+
+          <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
+            <button 
+              type="button"
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${loginMode === 'admin' ? 'bg-white shadow-sm text-slate-900' : 'text-gray-500 hover:text-gray-700'}`}
+              onClick={() => setLoginMode('admin')}
+            >
+              Admin
+            </button>
+            <button 
+              type="button"
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${loginMode === 'worker' ? 'bg-white shadow-sm text-slate-900' : 'text-gray-500 hover:text-gray-700'}`}
+              onClick={() => setLoginMode('worker')}
+            >
+              Worker
+            </button>
           </div>
           
           <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Password</label>
-              <input 
-                type="password" 
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none transition-all"
-                placeholder="Enter admin password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-              />
-            </div>
+            {loginMode === 'admin' ? (
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Admin Password</label>
+                <input 
+                  type="password" 
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none transition-all"
+                  placeholder="Enter admin password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                />
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Worker ID</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none transition-all"
+                    placeholder="Enter your worker ID"
+                    value={workerId}
+                    onChange={e => setWorkerId(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Password</label>
+                  <input 
+                    type="password" 
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none transition-all"
+                    placeholder="Enter your password"
+                    value={workerPassword}
+                    onChange={e => setWorkerPassword(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
             <button className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md">
               Login to Dashboard
             </button>
@@ -1572,7 +1640,7 @@ const Admin: React.FC = () => {
           
           <div className="mt-8 p-4 bg-blue-50 rounded-xl border border-blue-100">
             <p className="text-xs text-blue-700 leading-relaxed text-center">
-              <strong>Note:</strong> Access is restricted to authorized administrators.
+              <strong>Note:</strong> Access is restricted to authorized personnel.
             </p>
           </div>
         </div>
@@ -1581,6 +1649,12 @@ const Admin: React.FC = () => {
   }
 
   // --- Render Dashboard ---
+  const storedWorkerId = sessionStorage.getItem('kkt_worker_id');
+  const isWorker = storedWorkerId !== null;
+  if (isWorker) {
+    return <WorkerDashboard onLogout={handleLogout} workerId={storedWorkerId} />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Admin Nav */}
@@ -1635,6 +1709,12 @@ const Admin: React.FC = () => {
             className={`flex items-center gap-2 px-4 py-2 rounded-md font-bold transition-colors ${activeTab === 'tip_complaints' ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
           >
             <AlertTriangle size={18} /> Tips & Complaints
+          </button>
+          <button 
+            onClick={() => setActiveTab('workers')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md font-bold transition-colors ${activeTab === 'workers' ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
+            <Users size={18} /> Workers
           </button>
         </div>
 
@@ -2614,6 +2694,10 @@ const Admin: React.FC = () => {
         )}
 
         {/* --- TAB: TIPS & COMPLAINTS --- */}
+        {activeTab === 'workers' && (
+          <ManageWorkers />
+        )}
+
         {activeTab === 'tip_complaints' && (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2"><AlertTriangle className="text-red-600" /> Tips & Complaints</h2>

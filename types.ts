@@ -188,3 +188,39 @@ export interface User {
   name: string;
   role: 'Reader' | 'Citizen Reporter' | 'Admin';
 }
+
+export interface WorkerTask {
+  id: string;
+  title: string;
+  description?: string;
+  reward: string;
+  date: string; // e.g., "Oct 24, 2026"
+  deadline?: string;
+  priority: 'High' | 'Medium' | 'Low';
+  location: string;
+  status: 'Available' | 'Pending' | 'In Progress' | 'Completed';
+  assignedTo: string; // workerId
+  proofUrl?: string;
+}
+
+export interface Worker {
+  id: string; // e.g., KKT-W-2048
+  password?: string;
+  name: string;
+  designation: string;
+  rank: 'Bronze Agent' | 'Silver Agent' | 'Gold Agent' | 'Diamond Agent';
+  points: number;
+  totalPoints: number;
+  walletBalance: string;
+  photo?: string;
+  isActive: boolean;
+}
+
+export interface WorkerAsset {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  fileUrl: string;
+  fileName: string;
+  timestamp: string;
+}

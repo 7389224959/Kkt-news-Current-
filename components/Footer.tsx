@@ -86,7 +86,7 @@ const Footer: React.FC = () => {
           </p>
 
           <Link to="/admin" className="flex items-center gap-1.5 text-gray-600 hover:text-red-500 transition-colors text-xs font-bold uppercase tracking-widest">
-            <Lock size={14} /> एडमिन लॉगिन
+            <Lock size={14} /> एडमिन / वर्कर लॉगिन
           </Link>
         </div>
       </div>
