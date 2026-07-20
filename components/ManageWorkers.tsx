@@ -36,12 +36,23 @@ const ManageWorkers: React.FC = () => {
   });
 
   useEffect(() => {
-    const savedWorkers = localStorage.getItem('kkt_workers');
-    const savedTasks = localStorage.getItem('kkt_worker_tasks');
-    if (savedWorkers) setWorkers(JSON.parse(savedWorkers));
-    if (savedTasks) setTasks(JSON.parse(savedTasks));
-    const savedAssets = localStorage.getItem('kkt_worker_assets');
-    if (savedAssets) setAssets(JSON.parse(savedAssets));
+    const loadData = () => {
+      const savedWorkers = localStorage.getItem('kkt_workers');
+      const savedTasks = localStorage.getItem('kkt_worker_tasks');
+      if (savedWorkers) setWorkers(JSON.parse(savedWorkers));
+      if (savedTasks) setTasks(JSON.parse(savedTasks));
+      const savedAssets = localStorage.getItem('kkt_worker_assets');
+      if (savedAssets) setAssets(JSON.parse(savedAssets));
+    };
+    loadData();
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'kkt_workers' || e.key === 'kkt_worker_tasks' || e.key === 'kkt_worker_assets') {
+        loadData();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   const saveWorkers = (newWorkers: Worker[]) => {
@@ -208,8 +219,9 @@ const ManageWorkers: React.FC = () => {
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-gray-100 text-gray-600 text-xs uppercase tracking-wider">
+                    <th className="p-3">Profile</th>
                     <th className="p-3">ID</th>
-                    <th className="p-3">Name</th>
+                    <th className="p-3">Name & Contact</th>
                     <th className="p-3">Password</th>
                     <th className="p-3">Designation</th>
                     <th className="p-3">Actions</th>
@@ -217,12 +229,19 @@ const ManageWorkers: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-200 text-sm">
                   {workers.length === 0 ? (
-                    <tr><td colSpan={5} className="p-4 text-center text-gray-500">No workers found</td></tr>
+                    <tr><td colSpan={6} className="p-4 text-center text-gray-500">No workers found</td></tr>
                   ) : (
                     workers.map(w => (
                       <tr key={w.id} className="hover:bg-gray-50">
+                        <td className="p-3">
+                          {w.photo ? <img src={w.photo} alt={w.name} className="w-10 h-10 rounded-full object-cover border border-slate-200" /> : <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 font-bold">{w.name ? w.name.charAt(0) : '?'}</div>}
+                        </td>
                         <td className="p-3 font-mono font-bold text-slate-800">{w.id}</td>
-                        <td className="p-3">{w.name}</td>
+                        <td className="p-3">
+                          <div className="font-bold">{w.name}</div>
+                          {w.email && <div className="text-xs text-slate-500">{w.email}</div>}
+                          {w.mobile && <div className="text-xs text-slate-500">{w.mobile}</div>}
+                        </td>
                         <td className="p-3 font-mono text-gray-500">{w.password}</td>
                         <td className="p-3">{w.designation}</td>
                         <td className="p-3">

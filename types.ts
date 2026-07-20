@@ -214,6 +214,8 @@ export interface Worker {
   walletBalance: string;
   photo?: string;
   isActive: boolean;
+  email?: string;
+  mobile?: string;
 }
 
 export interface WorkerAsset {

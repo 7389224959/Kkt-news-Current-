@@ -24,7 +24,11 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
     rank: 'Silver Agent',
     points: 780,
     totalPoints: 1000,
-    walletBalance: '₹ 4,500'
+    walletBalance: '₹ 4,500',
+    photo: '',
+    email: '',
+    mobile: '',
+    password: ''
   });
 
   const [workerTasks, setWorkerTasks] = useState<any[]>([]);
@@ -46,6 +50,10 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
           points: me.points || 0,
           totalPoints: me.totalPoints || 1000,
           walletBalance: me.walletBalance || '₹ 0',
+          photo: me.photo || '',
+          email: me.email || '',
+          mobile: me.mobile || '',
+          password: me.password || '',
         }));
       }
     }
@@ -80,6 +88,17 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
     setWorkerTasks(updatedTasks.filter(t => t.assignedTo === finalWorkerId));
   };
 
+  
+  const handleUpdateProfile = (updatedData: any) => {
+    const savedWorkers = localStorage.getItem('kkt_workers');
+    if (savedWorkers) {
+      let workers = JSON.parse(savedWorkers);
+      workers = workers.map((w: any) => w.id === finalWorkerId ? { ...w, ...updatedData } : w);
+      localStorage.setItem('kkt_workers', JSON.stringify(workers));
+    }
+    setWorkerInfo(prev => ({ ...prev, ...updatedData }));
+  };
+
   const handleUpdateTaskStatus = (taskId: string, newStatus: string) => {
     const updatedTasks = allTasks.map(t => {
       if (t.id === taskId) {
@@ -96,10 +115,10 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'profile': return <DashboardHome workerInfo={workerInfo} workerTasks={workerTasks} />;
+      case 'profile': return <DashboardHome workerInfo={workerInfo} workerTasks={workerTasks} onUpdateProfile={handleUpdateProfile} />;
       case 'assets': return <WorkerAssets workerInfo={workerInfo} workerAssets={workerAssets} setWorkerAssets={setWorkerAssets} />;
       case 'tasks': return <TaskManagement workerTasks={workerTasks} allTasks={allTasks} onJoinTask={handleJoinTask} onUpdateTaskStatus={handleUpdateTaskStatus} />;
-      default: return <DashboardHome workerInfo={workerInfo} workerTasks={workerTasks} />;
+      default: return <DashboardHome workerInfo={workerInfo} workerTasks={workerTasks} onUpdateProfile={handleUpdateProfile} />;
     }
   };
 
@@ -162,7 +181,7 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
                 <p className="text-sm font-bold text-slate-800 leading-tight">{workerInfo.name}</p>
                 <p className="text-xs text-blue-600 font-medium">{workerInfo.rank}</p>
               </div>
-              <img src="https://i.pravatar.cc/150?img=32" alt="Profile" className="w-10 h-10 rounded-full border-2 border-white shadow-md object-cover cursor-pointer" />
+              <img src={workerInfo.photo || "https://i.pravatar.cc/150?img=32"} alt="Profile" className="w-10 h-10 rounded-full border-2 border-white shadow-md object-cover cursor-pointer bg-slate-200" />
               <button 
                 onClick={onLogout} 
                 className="ml-2 p-2 text-red-500 hover:bg-red-50 hover:text-red-700 rounded-full transition-colors"
@@ -184,26 +203,70 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
   );
 };
 
-function DashboardHome({ workerInfo, workerTasks }: { workerInfo: any; workerTasks: any[] }) {
+function DashboardHome({ workerInfo, workerTasks, onUpdateProfile }: { workerInfo: any; workerTasks: any[]; onUpdateProfile: (data: any) => void }) {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editForm, setEditForm] = React.useState({
+    name: workerInfo.name || '',
+    email: workerInfo.email || '',
+    mobile: workerInfo.mobile || '',
+    password: workerInfo.password || '',
+    photo: workerInfo.photo || ''
+  });
+
+  React.useEffect(() => {
+    setEditForm({
+      name: workerInfo.name || '',
+      email: workerInfo.email || '',
+      mobile: workerInfo.mobile || '',
+      password: workerInfo.password || '',
+      photo: workerInfo.photo || ''
+    });
+  }, [workerInfo]);
+
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdateProfile(editForm);
+    setIsEditing(false);
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditForm(prev => ({ ...prev, photo: reader.result as string }));
+      };
+      reader.readAsDataURL(e.target.files[0]);
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Hero */}
       <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
         <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
           <div className="relative group">
             <div className="absolute inset-0 bg-gradient-to-tr from-blue-500 to-amber-500 rounded-full blur-md opacity-50 group-hover:opacity-75 transition-opacity"></div>
-            <img src="https://i.pravatar.cc/150?img=32" alt="User" className="w-32 h-32 rounded-full border-4 border-white/20 relative z-10 object-cover" />
+            <img src={workerInfo.photo || "https://i.pravatar.cc/150?img=32"} alt="User" className="w-32 h-32 rounded-full border-4 border-white/20 relative z-10 object-cover bg-slate-800" />
             <div className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full border-2 border-slate-900 z-20">
               <CheckCircle size={16} />
             </div>
           </div>
           <div className="flex-1">
-            <p className="text-blue-300 font-medium mb-1">Welcome Back,</p>
-            <h1 className="text-4xl font-bold mb-2">{workerInfo.name}</h1>
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-blue-300 font-medium mb-1">Welcome Back,</p>
+                <h1 className="text-4xl font-bold mb-2">{workerInfo.name}</h1>
+              </div>
+              <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsEditing((prev) => !prev); }} className="relative z-[999] cursor-pointer bg-white/20 hover:bg-white/30 transition-colors border border-white/30 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 pointer-events-auto">
+                <Edit size={16} /> Edit Profile
+              </button>
+            </div>
             <div className="flex flex-wrap gap-4 text-sm mt-4">
               <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10"><Contact size={14} className="text-amber-400" /> ID: {workerInfo.id}</div>
               <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10"><MapPin size={14} className="text-red-400" /> {workerInfo.designation}</div>
+              {workerInfo.email && <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10">{workerInfo.email}</div>}
+              {workerInfo.mobile && <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10">{workerInfo.mobile}</div>}
             </div>
           </div>
           <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-6 rounded-2xl w-full md:w-64">
@@ -222,13 +285,62 @@ function DashboardHome({ workerInfo, workerTasks }: { workerInfo: any; workerTas
         </div>
       </div>
 
+
+      {isEditing && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="text-xl font-bold text-slate-900">Edit Profile</h3>
+              <button type="button" onClick={() => setIsEditing(false)} className="text-slate-400 hover:text-slate-600 transition-colors"><XCircle size={24} /></button>
+            </div>
+            <form onSubmit={handleSaveProfile} className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Full Name</label>
+                  <input type="text" value={editForm.name} onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="Worker Name" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Email Address</label>
+                  <input type="email" value={editForm.email} onChange={e => setEditForm(prev => ({ ...prev, email: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="worker@example.com" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Mobile Number</label>
+                  <input type="text" value={editForm.mobile} onChange={e => setEditForm(prev => ({ ...prev, mobile: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="+91 9876543210" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Change Password</label>
+                  <input type="password" value={editForm.password} onChange={e => setEditForm(prev => ({ ...prev, password: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="Leave blank to keep current" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Profile Photo</label>
+                  <div className="flex items-center gap-4">
+                    {editForm.photo ? (
+                      <img src={editForm.photo} alt="Preview" className="w-12 h-12 rounded-full object-cover border border-slate-200" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 text-slate-400">
+                        <Camera size={20} />
+                      </div>
+                    )}
+                    <input type="file" accept="image/*" onChange={handlePhotoUpload} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-all cursor-pointer" />
+                  </div>
+                </div>
+              </div>
+              <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end gap-3">
+                <button type="button" onClick={() => setIsEditing(false)} className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl font-medium hover:bg-slate-50 transition-colors">Cancel</button>
+                <button type="submit" className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { title: "Tasks Completed", value: workerTasks.length > 0 ? workerTasks.filter((t: any) => t.status === 'Completed').length.toString() : "142", trend: "+12 this week", icon: CheckSquare, color: "bg-emerald-500" },
-          { title: "Pending Tasks", value: workerTasks.length > 0 ? workerTasks.filter((t: any) => t.status !== 'Completed').length.toString() : "8", trend: "3 high priority", icon: Clock, color: "bg-amber-500" },
-          { title: "Monthly Earnings", value: workerInfo.walletBalance || "₹12,450", trend: "+15% vs last month", icon: Wallet, color: "bg-blue-500" },
-          { title: "Performance Score", value: "94%", trend: "Top 5% in region", icon: Trophy, color: "bg-purple-500" }
+          { title: "Tasks Completed", value: workerTasks.filter((t: any) => t.status === 'Completed').length.toString(), trend: "", icon: CheckSquare, color: "bg-emerald-500" },
+          { title: "Pending Tasks", value: workerTasks.filter((t: any) => t.status !== 'Completed').length.toString(), trend: "", icon: Clock, color: "bg-amber-500" },
+          { title: "Monthly Earnings", value: workerInfo.walletBalance || "₹ 0", trend: "", icon: Wallet, color: "bg-blue-500" },
+          { title: "Performance Score", value: workerInfo.totalPoints > 0 ? Math.round((workerInfo.points / workerInfo.totalPoints) * 100) + "%" : "0%", trend: "", icon: Trophy, color: "bg-purple-500" }
         ].map((stat, i) => (
           <div key={i} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex justify-between items-start mb-4">
