@@ -3,8 +3,9 @@ import { motion } from 'framer-motion';
 import {
   LayoutDashboard, CheckSquare, Wallet, Trophy, Award, BookOpen, Users, Clock, 
   Contact, Bell, User, Search, MessageSquare, LogOut, ChevronRight, Download, Share2, 
-  CheckCircle, XCircle, Edit, MapPin, Calendar, Camera, Folder, Upload, Trash2
+  CheckCircle, XCircle, Edit, MapPin, Calendar, Camera, Folder, Upload, Trash2 
 } from 'lucide-react';
+import { getWorkers, saveWorker, getTasks, saveTask, getAssets, saveAsset, deleteAsset } from '../services/workerService';
 
 
 
@@ -36,9 +37,8 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
   const [allTasks, setAllTasks] = useState<any[]>([]);
 
   React.useEffect(() => {
-    const savedWorkers = localStorage.getItem('kkt_workers');
-    if (savedWorkers) {
-      const workers = JSON.parse(savedWorkers);
+    const loadData = async () => {
+      const workers = await getWorkers();
       const me = workers.find((w: any) => w.id === finalWorkerId);
       if (me) {
         setWorkerInfo(prev => ({
@@ -56,59 +56,55 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
           password: me.password || '',
         }));
       }
-    }
 
-    const savedTasks = localStorage.getItem('kkt_worker_tasks');
-    if (savedTasks) {
-      const parsedTasks = JSON.parse(savedTasks);
-      setAllTasks(parsedTasks);
-      const myTasks = parsedTasks.filter((t: any) => t.assignedTo === finalWorkerId);
+      const tasks = await getTasks();
+      setAllTasks(tasks);
+      const myTasks = tasks.filter((t: any) => t.assignedTo === finalWorkerId);
       setWorkerTasks(myTasks);
-    }
-    
-    const savedAssets = localStorage.getItem('kkt_worker_assets');
-    if (savedAssets) {
-      const parsedAssets = JSON.parse(savedAssets);
-      setWorkerAssets(parsedAssets.filter((a: any) => a.receiverId === 'all' || a.receiverId === finalWorkerId || a.senderId === finalWorkerId));
-    }
+
+      const assets = await getAssets();
+      setWorkerAssets(assets.filter((a: any) => a.receiverId === 'all' || a.receiverId === finalWorkerId || a.senderId === finalWorkerId));
+    };
+    loadData();
   }, [finalWorkerId]);
 
 
 
 
-  const handleJoinTask = (taskId: string) => {
+  const handleJoinTask = async (taskId: string) => {
     const updatedTasks = allTasks.map(t => {
       if (t.id === taskId) {
         return { ...t, assignedTo: finalWorkerId, status: 'Pending' };
       }
       return t;
     });
-    localStorage.setItem('kkt_worker_tasks', JSON.stringify(updatedTasks));
     setAllTasks(updatedTasks);
     setWorkerTasks(updatedTasks.filter(t => t.assignedTo === finalWorkerId));
+    const targetTask = updatedTasks.find(t => t.id === taskId);
+    if (targetTask) await saveTask(targetTask);
   };
 
   
-  const handleUpdateProfile = (updatedData: any) => {
-    const savedWorkers = localStorage.getItem('kkt_workers');
-    if (savedWorkers) {
-      let workers = JSON.parse(savedWorkers);
-      workers = workers.map((w: any) => w.id === finalWorkerId ? { ...w, ...updatedData } : w);
-      localStorage.setItem('kkt_workers', JSON.stringify(workers));
-    }
+  const handleUpdateProfile = async (updatedData: any) => {
     setWorkerInfo(prev => ({ ...prev, ...updatedData }));
+    const workers = await getWorkers();
+    const targetWorker = workers.find((w: any) => w.id === finalWorkerId);
+    if (targetWorker) {
+      await saveWorker({ ...targetWorker, ...updatedData });
+    }
   };
 
-  const handleUpdateTaskStatus = (taskId: string, newStatus: string) => {
+  const handleUpdateTaskStatus = async (taskId: string, newStatus: string) => {
     const updatedTasks = allTasks.map(t => {
       if (t.id === taskId) {
         return { ...t, status: newStatus };
       }
       return t;
     });
-    localStorage.setItem('kkt_worker_tasks', JSON.stringify(updatedTasks));
     setAllTasks(updatedTasks);
     setWorkerTasks(updatedTasks.filter(t => t.assignedTo === finalWorkerId));
+    const targetTask = updatedTasks.find(t => t.id === taskId);
+    if (targetTask) await saveTask(targetTask);
   };
 
   const [activeTab, setActiveTab] = useState('profile');
@@ -741,12 +737,12 @@ function ReferralCenter({ workerInfo }: { workerInfo: any }) {
 function WorkerAssets({ workerInfo, workerAssets, setWorkerAssets }: { workerInfo: any, workerAssets: any[], setWorkerAssets: (assets: any[]) => void }) {
   const [assetFile, setAssetFile] = React.useState<File | null>(null);
 
-  const handleUploadAsset = (e: React.FormEvent) => {
+  const handleUploadAsset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assetFile) return alert('Select a file');
     
     const reader = new FileReader();
-    reader.onloadend = () => {
+    reader.onloadend = async () => {
       const newAsset = {
         id: Date.now().toString(),
         senderId: workerInfo.id,
@@ -756,27 +752,18 @@ function WorkerAssets({ workerInfo, workerAssets, setWorkerAssets }: { workerInf
         timestamp: new Date().toISOString()
       };
       
-      const savedAssets = localStorage.getItem('kkt_worker_assets');
-      const parsedAssets = savedAssets ? JSON.parse(savedAssets) : [];
-      const updatedAssets = [...parsedAssets, newAsset];
-      localStorage.setItem('kkt_worker_assets', JSON.stringify(updatedAssets));
-      
       const newMyAssets = [...workerAssets, newAsset];
       setWorkerAssets(newMyAssets);
       setAssetFile(null);
+      await saveAsset(newAsset);
     };
     reader.readAsDataURL(assetFile);
   };
 
-  const handleDeleteAsset = (id: string) => {
+  const handleDeleteAsset = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this asset?')) {
-      const savedAssets = localStorage.getItem('kkt_worker_assets');
-      if (savedAssets) {
-        let parsedAssets = JSON.parse(savedAssets);
-        parsedAssets = parsedAssets.filter((a: any) => a.id !== id);
-        localStorage.setItem('kkt_worker_assets', JSON.stringify(parsedAssets));
-      }
       setWorkerAssets(workerAssets.filter(a => a.id !== id));
+      await deleteAsset(id);
     }
   };
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, CheckSquare, Plus, Trash2, Edit } from 'lucide-react';
 import { Worker, WorkerTask, WorkerAsset } from '../types';
 import { Folder, Upload } from 'lucide-react';
+import { getWorkers, saveWorker, deleteWorker, getTasks, saveTask, deleteTask, getAssets, saveAsset, deleteAsset } from '../services/workerService';
 
 const ManageWorkers: React.FC = () => {
   const [workers, setWorkers] = useState<Worker[]>([]);
@@ -36,37 +37,23 @@ const ManageWorkers: React.FC = () => {
   });
 
   useEffect(() => {
-    const loadData = () => {
-      const savedWorkers = localStorage.getItem('kkt_workers');
-      const savedTasks = localStorage.getItem('kkt_worker_tasks');
-      if (savedWorkers) setWorkers(JSON.parse(savedWorkers));
-      if (savedTasks) setTasks(JSON.parse(savedTasks));
-      const savedAssets = localStorage.getItem('kkt_worker_assets');
-      if (savedAssets) setAssets(JSON.parse(savedAssets));
+    const loadData = async () => {
+      const w = await getWorkers();
+      const t = await getTasks();
+      const a = await getAssets();
+      setWorkers(w);
+      setTasks(t);
+      setAssets(a);
     };
     loadData();
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'kkt_workers' || e.key === 'kkt_worker_tasks' || e.key === 'kkt_worker_assets') {
-        loadData();
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  const saveWorkers = (newWorkers: Worker[]) => {
-    setWorkers(newWorkers);
-    localStorage.setItem('kkt_workers', JSON.stringify(newWorkers));
-  };
 
-  const saveTasks = (newTasks: WorkerTask[]) => {
-    setTasks(newTasks);
-    localStorage.setItem('kkt_worker_tasks', JSON.stringify(newTasks));
-  };
+
+
 
   
-  const handleUploadAsset = (e: React.FormEvent) => {
+  const handleUploadAsset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedWorkerForAsset || !assetFile) return alert('Select a worker and a file');
     
@@ -82,21 +69,21 @@ const ManageWorkers: React.FC = () => {
       };
       const updatedAssets = [...assets, newAsset];
       setAssets(updatedAssets);
-      localStorage.setItem('kkt_worker_assets', JSON.stringify(updatedAssets));
       setAssetFile(null);
+      saveAsset(newAsset);
     };
     reader.readAsDataURL(assetFile);
   };
 
-  const handleDeleteAsset = (id: string) => {
+  const handleDeleteAsset = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this asset?')) {
       const updatedAssets = assets.filter(a => a.id !== id);
       setAssets(updatedAssets);
-      localStorage.setItem('kkt_worker_assets', JSON.stringify(updatedAssets));
+      await deleteAsset(id);
     }
   };
 
-  const handleAddWorker = (e: React.FormEvent) => {
+  const handleAddWorker = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newWorker.id || !newWorker.password || !newWorker.name) return alert('Fill required fields');
     
@@ -106,7 +93,7 @@ const ManageWorkers: React.FC = () => {
     }
 
     const workerToAdd = { ...newWorker, id: newWorker.id } as Worker;
-    saveWorkers([...workers, workerToAdd]);
+    setWorkers([...workers, workerToAdd]); await saveWorker(workerToAdd);
     setShowAddWorker(false);
     setNewWorker({
       id: '',
@@ -121,15 +108,19 @@ const ManageWorkers: React.FC = () => {
     });
   };
 
-  const handleDeleteWorker = (id: string) => {
+  const handleDeleteWorker = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this worker?')) {
-      saveWorkers(workers.filter(w => w.id !== id));
+      setWorkers(workers.filter(w => w.id !== id)); await deleteWorker(id);
       // Also delete assigned tasks
-      saveTasks(tasks.filter(t => t.assignedTo !== id));
+      const tasksToDelete = tasks.filter(t => t.assignedTo === id);
+      setTasks(tasks.filter(t => t.assignedTo !== id));
+      for (const t of tasksToDelete) {
+        await deleteTask(t.id);
+      }
     }
   };
 
-  const handleAddTask = (e: React.FormEvent) => {
+  const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTask.title || !newTask.assignedTo) return alert('Fill required fields');
     
@@ -137,7 +128,7 @@ const ManageWorkers: React.FC = () => {
     const finalStatus = newTask.assignedTo === 'all' ? 'Available' : 'Pending';
     
     const taskToAdd = { ...newTask, id: Date.now().toString(), status: finalStatus } as WorkerTask;
-    saveTasks([...tasks, taskToAdd]);
+    setTasks([...tasks, taskToAdd]); await saveTask(taskToAdd);
     setShowAddTask(false);
     setNewTask({
       title: '',
@@ -148,9 +139,9 @@ const ManageWorkers: React.FC = () => {
     });
   };
 
-  const handleDeleteTask = (id: string) => {
+  const handleDeleteTask = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this task?')) {
-      saveTasks(tasks.filter(t => t.id !== id));
+      setTasks(tasks.filter(t => t.id !== id)); await deleteTask(id);
     }
   };
 

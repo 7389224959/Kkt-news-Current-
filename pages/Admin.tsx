@@ -327,22 +327,21 @@ const Admin: React.FC = () => {
       }
     } else {
       // Worker Login
-      const savedWorkers = localStorage.getItem('kkt_workers');
-      let validWorker = false;
-      if (savedWorkers) {
-        const workers = JSON.parse(savedWorkers);
+      import('../services/workerService').then(async ({ getWorkers }) => {
+        const workers = await getWorkers();
+        let validWorker = false;
         const match = workers.find((w: any) => w.id === workerId.trim() && w.password === workerPassword);
         if (match) validWorker = true;
-      }
-      
-      if (validWorker) {
-        setIsAuthenticated(true);
-        sessionStorage.setItem('kkt_admin_logged_in', 'true');
-        sessionStorage.setItem('kkt_worker_id', workerId);
-        refreshData();
-      } else {
-        alert("Invalid Worker ID or Password");
-      }
+        
+        if (validWorker) {
+          setIsAuthenticated(true);
+          sessionStorage.setItem('kkt_admin_logged_in', 'true');
+          sessionStorage.setItem('kkt_worker_id', workerId);
+          refreshData();
+        } else {
+          alert("Invalid Worker ID or Password");
+        }
+      });
     }
   };
 
