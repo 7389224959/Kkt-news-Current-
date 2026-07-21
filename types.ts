@@ -201,6 +201,9 @@ export interface WorkerTask {
   status: 'Available' | 'Pending' | 'In Progress' | 'Completed';
   assignedTo: string; // workerId
   proofUrl?: string;
+  videoInstructions?: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
 }
 
 export interface Worker {

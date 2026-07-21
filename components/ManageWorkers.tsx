@@ -28,8 +28,11 @@ const ManageWorkers: React.FC = () => {
     isActive: true
   });
 
+  const [taskFile, setTaskFile] = useState<File | null>(null);
   const [newTask, setNewTask] = useState<Partial<WorkerTask>>({
     title: '',
+    description: '',
+    videoInstructions: '',
     reward: '₹ ',
     date: new Date().toLocaleDateString(),
     status: 'Available',
@@ -124,19 +127,38 @@ const ManageWorkers: React.FC = () => {
     e.preventDefault();
     if (!newTask.title || !newTask.assignedTo) return alert('Fill required fields');
     
-    // Set correct status based on assignment
     const finalStatus = 'Available';
     
-    const taskToAdd = { ...newTask, id: Date.now().toString(), status: finalStatus } as WorkerTask;
-    setTasks([...tasks, taskToAdd]); await saveTask(taskToAdd);
-    setShowAddTask(false);
-    setNewTask({
-      title: '',
-      reward: '₹ ',
-      date: new Date().toLocaleDateString(),
-      status: 'Available',
-      assignedTo: ''
-    });
+    const finalizeTask = async (attachmentUrl?: string, attachmentName?: string) => {
+      const taskToAdd = { 
+        ...newTask, 
+        id: Date.now().toString(), 
+        status: finalStatus,
+        attachmentUrl: attachmentUrl || '',
+        attachmentName: attachmentName || ''
+      } as WorkerTask;
+      
+      setTasks([...tasks, taskToAdd]); await saveTask(taskToAdd);
+      setShowAddTask(false);
+      setNewTask({
+        title: '',
+        description: '',
+        videoInstructions: '',
+        reward: '₹ ',
+        date: new Date().toLocaleDateString(),
+        status: 'Available',
+        assignedTo: ''
+      });
+      setTaskFile(null);
+    };
+
+    if (taskFile) {
+      const reader = new FileReader();
+      reader.onloadend = () => finalizeTask(reader.result as string, taskFile.name);
+      reader.readAsDataURL(taskFile);
+    } else {
+      finalizeTask();
+    }
   };
 
   const handleDeleteTask = async (id: string) => {
@@ -269,6 +291,18 @@ const ManageWorkers: React.FC = () => {
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Task Title *</label>
                   <input type="text" value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} className="w-full border rounded-lg px-3 py-2" required placeholder="e.g. Cover Local Election Rally" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Task Description</label>
+                  <textarea value={newTask.description} onChange={e => setNewTask({...newTask, description: e.target.value})} className="w-full border rounded-lg px-3 py-2" rows={3} placeholder="Describe the task details, requirements, etc." />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Video Instructions URL</label>
+                  <input type="url" value={newTask.videoInstructions} onChange={e => setNewTask({...newTask, videoInstructions: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="https://..." />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Upload Attachment</label>
+                  <input type="file" onChange={e => setTaskFile(e.target.files?.[0] || null)} className="w-full border rounded-lg px-3 py-1.5 text-sm file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Reward</label>
