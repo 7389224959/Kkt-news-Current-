@@ -1,3 +1,4 @@
+import { downloadSafe } from '../src/utils/fileUtils';
 import React, { useState, useEffect } from 'react';
 import { Users, CheckSquare, Plus, Trash2, Edit } from 'lucide-react';
 import { Worker, WorkerTask, WorkerAsset } from '../types';
@@ -57,6 +58,7 @@ const ManageWorkers: React.FC = () => {
 
   
   const handleUploadAsset = async (e: React.FormEvent) => {
+
     e.preventDefault();
     if (!selectedWorkerForAsset || !assetFile) return alert('Select a worker and a file');
     
@@ -405,7 +407,7 @@ const ManageWorkers: React.FC = () => {
                       <tr key={a.id} className="hover:bg-gray-50">
                         <td className="p-3 font-bold text-slate-800 flex items-center gap-2">
                           <Folder size={16} className="text-blue-500"/>
-                          <a href={a.fileUrl} target="_blank" rel="noreferrer" className="hover:underline">{a.fileName}</a>
+                          <button type="button" onClick={() => downloadSafe(a.fileUrl, a.fileName)} className="hover:underline text-left">{a.fileName}</button>
                         </td>
                         <td className="p-3">{a.senderId === 'admin' ? 'Admin' : workers.find(w => w.id === a.senderId)?.name || a.senderId}</td>
                         <td className="p-3">{a.receiverId === 'all' ? 'All Workers' : (a.receiverId === 'admin' ? 'Admin' : workers.find(w => w.id === a.receiverId)?.name || a.receiverId)}</td>

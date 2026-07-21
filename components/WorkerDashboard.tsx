@@ -1,3 +1,4 @@
+import { downloadSafe } from '../src/utils/fileUtils';
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -442,7 +443,7 @@ function TaskManagement({ workerId, workerTasks, allTasks, onJoinTask, onUpdateT
             {activeTask.attachmentUrl && (
               <div className="mb-4">
                 <h3 className="text-lg font-bold text-slate-800 mb-2">Attached Files</h3>
-                <a href={activeTask.attachmentUrl} download={activeTask.attachmentName || "attachment"} className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 transition-colors group">
+                <button type="button" onClick={() => downloadSafe(activeTask.attachmentUrl, activeTask.attachmentName || "attachment")} className="w-full text-left flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 transition-colors group">
                   <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                     <Download size={20} />
                   </div>
@@ -450,7 +451,7 @@ function TaskManagement({ workerId, workerTasks, allTasks, onJoinTask, onUpdateT
                     <div className="font-medium text-slate-800 group-hover:text-blue-700">{activeTask.attachmentName || 'Download Attachment'}</div>
                     <div className="text-xs text-slate-500">Click to download</div>
                   </div>
-                </a>
+                </button>
               </div>
             )}
           </div>
@@ -870,6 +871,7 @@ function WorkerAssets({ workerInfo, workerAssets, setWorkerAssets }: { workerInf
   const [assetFile, setAssetFile] = React.useState<File | null>(null);
 
   const handleUploadAsset = async (e: React.FormEvent) => {
+
     e.preventDefault();
     if (!assetFile) return alert('Select a file');
     
@@ -936,7 +938,7 @@ function WorkerAssets({ workerInfo, workerAssets, setWorkerAssets }: { workerInf
                 <tr key={a.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4 font-medium text-slate-900 flex items-center gap-2">
                     <Folder size={18} className="text-blue-500"/>
-                    <a href={a.fileUrl} target="_blank" rel="noreferrer" className="hover:underline">{a.fileName}</a>
+                    <button type="button" onClick={() => downloadSafe(a.fileUrl, a.fileName)} className="hover:underline text-left">{a.fileName}</button>
                   </td>
                   <td className="px-6 py-4">
                     {a.senderId === workerInfo.id ? (
