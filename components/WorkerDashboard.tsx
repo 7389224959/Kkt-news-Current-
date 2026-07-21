@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
   LayoutDashboard, CheckSquare, Wallet, Trophy, Award, BookOpen, Users, Clock, 
   Contact, Bell, User, Search, MessageSquare, LogOut, ChevronRight, Download, Share2, 
-  CheckCircle, XCircle, Edit, MapPin, Calendar, Camera, Folder, Upload, Trash2 
+  CheckCircle, XCircle, Edit, MapPin, Calendar, Camera, ArrowLeft, Folder, Upload, Trash2 
 } from 'lucide-react';
 import { getWorkers, saveWorker, getTasks, saveTask, getAssets, saveAsset, deleteAsset } from '../services/workerService';
 
