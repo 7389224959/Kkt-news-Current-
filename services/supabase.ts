@@ -1,7 +1,29 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = (typeof process !== 'undefined' && (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL)) || (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_URL);
-const supabaseKey = (typeof process !== 'undefined' && (process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY)) || (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY);
+const getEnv = (key: string) => {
+  if (typeof process !== 'undefined' && process.env[key]) {
+    return process.env[key];
+  }
+  try {
+    // Statically replaceable by Vite
+    // @ts-ignore
+    if (key === 'VITE_SUPABASE_URL' && typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_SUPABASE_URL) {
+      // @ts-ignore
+      return import.meta.env.VITE_SUPABASE_URL;
+    }
+    // @ts-ignore
+    if (key === 'VITE_SUPABASE_ANON_KEY' && typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_SUPABASE_ANON_KEY) {
+      // @ts-ignore
+      return import.meta.env.VITE_SUPABASE_ANON_KEY;
+    }
+  } catch (e) {
+    // Ignore
+  }
+  return undefined;
+};
+
+const supabaseUrl = getEnv('VITE_SUPABASE_URL') || getEnv('SUPABASE_URL');
+const supabaseKey = getEnv('VITE_SUPABASE_ANON_KEY') || getEnv('SUPABASE_ANON_KEY');
 
 if (!supabaseUrl || !supabaseKey || !supabaseUrl.startsWith('http')) {
   console.error('Supabase URL and Anon Key are required and URL must be valid. Please check your environment variables.');

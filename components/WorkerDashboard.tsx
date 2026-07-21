@@ -113,7 +113,7 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
     switch (activeTab) {
       case 'profile': return <DashboardHome workerInfo={workerInfo} workerTasks={workerTasks} onUpdateProfile={handleUpdateProfile} />;
       case 'assets': return <WorkerAssets workerInfo={workerInfo} workerAssets={workerAssets} setWorkerAssets={setWorkerAssets} />;
-      case 'tasks': return <TaskManagement workerTasks={workerTasks} allTasks={allTasks} onJoinTask={handleJoinTask} onUpdateTaskStatus={handleUpdateTaskStatus} />;
+      case 'tasks': return <TaskManagement workerId={finalWorkerId} workerTasks={workerTasks} allTasks={allTasks} onJoinTask={handleJoinTask} onUpdateTaskStatus={handleUpdateTaskStatus} />;
       default: return <DashboardHome workerInfo={workerInfo} workerTasks={workerTasks} onUpdateProfile={handleUpdateProfile} />;
     }
   };
@@ -354,7 +354,7 @@ function DashboardHome({ workerInfo, workerTasks, onUpdateProfile }: { workerInf
   );
 }
 
-function TaskManagement({ workerTasks, allTasks, onJoinTask, onUpdateTaskStatus }: { workerTasks: any[], allTasks: any[], onJoinTask: (id: string) => void, onUpdateTaskStatus: (id: string, status: string) => void }) {
+function TaskManagement({ workerId, workerTasks, allTasks, onJoinTask, onUpdateTaskStatus }: { workerId?: string, workerTasks: any[], allTasks: any[], onJoinTask: (id: string) => void, onUpdateTaskStatus: (id: string, status: string) => void }) {
   const [taskFilter, setTaskFilter] = React.useState('Available');
 
   const getStatusColor = (status: string) => {
@@ -366,7 +366,7 @@ function TaskManagement({ workerTasks, allTasks, onJoinTask, onUpdateTaskStatus 
 
   const getFilteredTasks = () => {
     if (taskFilter === 'Available') {
-      return allTasks.filter((t: any) => t.status === 'Available' && t.assignedTo === 'all');
+      return allTasks.filter((t: any) => t.status === 'Available' && (t.assignedTo === 'all' || t.assignedTo === workerId));
     }
     if (taskFilter === 'Pending') {
       return workerTasks.filter((t: any) => t.status === 'Pending' || t.status === 'In Progress');

@@ -125,7 +125,7 @@ const ManageWorkers: React.FC = () => {
     if (!newTask.title || !newTask.assignedTo) return alert('Fill required fields');
     
     // Set correct status based on assignment
-    const finalStatus = newTask.assignedTo === 'all' ? 'Available' : 'Pending';
+    const finalStatus = 'Available';
     
     const taskToAdd = { ...newTask, id: Date.now().toString(), status: finalStatus } as WorkerTask;
     setTasks([...tasks, taskToAdd]); await saveTask(taskToAdd);
