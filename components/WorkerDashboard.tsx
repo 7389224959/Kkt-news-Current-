@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard, CheckSquare, Wallet, Trophy, Award, BookOpen, Users, Clock, 
-  Contact, Bell, User, Search, MessageSquare, LogOut, ChevronRight, Download, Share2, 
+  Contact, Bell, User, Search, MessageSquare, LogOut, ChevronRight, Loader2, Download, Share2, 
   CheckCircle, XCircle, Edit, MapPin, Calendar, Camera, ArrowLeft, Folder, Upload, Trash2 
 } from 'lucide-react';
 import { getWorkers, saveWorker, getTasks, saveTask, getAssets, saveAsset, deleteAsset } from '../services/workerService';
@@ -18,14 +18,15 @@ const navItems = [
 export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string }> = ({ onLogout, workerId }) => {
   const finalWorkerId = workerId || 'KKT-W-2048';
   
+  const [isLoading, setIsLoading] = useState(true);
   const [workerInfo, setWorkerInfo] = useState({
-    name: 'Sankalp Sharma',
+    name: '',
     id: finalWorkerId,
-    designation: 'Field Reporter',
-    rank: 'Silver Agent',
-    points: 780,
+    designation: '',
+    rank: 'Bronze Agent',
+    points: 0,
     totalPoints: 1000,
-    walletBalance: '₹ 4,500',
+    walletBalance: '₹ 0',
     photo: '',
     email: '',
     mobile: '',
@@ -64,6 +65,7 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
 
       const assets = await getAssets();
       setWorkerAssets(assets.filter((a: any) => a.receiverId === 'all' || a.receiverId === finalWorkerId || a.senderId === finalWorkerId));
+      setIsLoading(false);
     };
     loadData();
   }, [finalWorkerId]);
@@ -117,6 +119,17 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
       default: return <DashboardHome workerInfo={workerInfo} workerTasks={workerTasks} onUpdateProfile={handleUpdateProfile} />;
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4 text-slate-500">
+          <div className="animate-spin text-blue-600"><Loader2 size={32} /></div>
+          <p className="font-medium">Loading workspace...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex text-slate-900 font-sans">
