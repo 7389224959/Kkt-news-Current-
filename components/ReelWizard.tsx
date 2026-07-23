@@ -29,6 +29,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
   const [videoBase64, setVideoBase64] = useState('');
   
   const [customCoords, setCustomCoords] = useState({ headline: '', ticker: '', subtitle: '', video: '' });
+  const [publishPlatforms, setPublishPlatforms] = useState({ facebook: true, instagram: false, youtube: false });
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -125,7 +126,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
          setStatus('Uploading video to storage (bypassing limits)...');
          const fileToUpload = new File([blob], `reel-${Date.now()}.mp4`, { type: 'video/mp4' });
          finalVideoUrl = await uploadImage(fileToUpload);
-         setStatus('Publishing to Facebook...');
+         setStatus('Video uploaded, ready to publish...');
       } catch (uploadErr: any) {
          console.warn('Storage upload failed, falling back to direct base64 transfer...', uploadErr);
          const rawBase64 = await new Promise<string>((res, rej) => { 
@@ -135,27 +136,78 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
             reader.readAsDataURL(blob); 
          });
          payloadVideo = rawBase64;
-         setStatus('Publishing to Facebook...');
       }
 
-      const res = await fetch('/api/facebook/post-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-           message, 
-           videoUrl: finalVideoUrl || undefined,
-           videoBase64: finalVideoUrl ? undefined : payloadVideo
-        }),
-      });
-      if (!res.ok) {
-         let errMsg = await res.text();
-         try { errMsg = JSON.parse(errMsg).error; } catch(e){}
-         throw new Error(errMsg || 'Failed to post reel to Facebook');
+      let successCount = 0;
+      let errorMsgs = [];
+
+      if (publishPlatforms.facebook) {
+        try {
+          setStatus('Publishing to Facebook...');
+          const res = await fetch('/api/facebook/post-video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+               message, 
+               videoUrl: finalVideoUrl || undefined,
+               videoBase64: finalVideoUrl ? undefined : payloadVideo
+            }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          successCount++;
+        } catch(e: any) {
+          errorMsgs.push('Facebook: ' + e.message);
+        }
       }
-      const data = await res.json();
-      alert('Successfully published reel to Facebook!\nURL: ' + data.url);
+
+      if (publishPlatforms.instagram) {
+        try {
+          setStatus('Publishing to Instagram...');
+          const res = await fetch('/api/instagram/post-video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+               message, 
+               videoUrl: finalVideoUrl || undefined,
+               videoBase64: finalVideoUrl ? undefined : payloadVideo
+            }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          successCount++;
+        } catch(e: any) {
+          errorMsgs.push('Instagram: ' + e.message);
+        }
+      }
+
+      if (publishPlatforms.youtube) {
+        try {
+          setStatus('Publishing to YouTube Shorts...');
+          const res = await fetch('/api/youtube/post-video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+               title: scriptData?.headline || selectedArticle?.title || 'New Short',
+               description: message, 
+               videoUrl: finalVideoUrl || undefined,
+               videoBase64: finalVideoUrl ? undefined : payloadVideo
+            }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          successCount++;
+        } catch(e: any) {
+          errorMsgs.push('YouTube: ' + e.message);
+        }
+      }
       
-      if (autoStart) {
+      if (errorMsgs.length > 0) {
+        alert('Some publishes failed:\n' + errorMsgs.join('\n'));
+      } else if (successCount > 0) {
+        alert('Successfully published to selected platforms!');
+      } else {
+        alert('No platforms selected for publishing. Please select at least one.');
+      }
+      
+      if (autoStart && successCount > 0 && errorMsgs.length === 0) {
         onClose(); // Automatically close wizard on success if autoStart is true
       }
     } catch (e: any) {
@@ -982,6 +1034,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
             setStep={setStep} handleRender={handleRender}
             videoBase64={videoBase64} isGenerating={isGenerating} setStatus={setStatus}
             audioUrl={audioUrl}
+            publishPlatforms={publishPlatforms} setPublishPlatforms={setPublishPlatforms}
         />
       )}
 
@@ -1000,7 +1053,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
 function ReelEditorView({
   isPublishing, doPublishReel, onClose, templateId, activeTemplates, scriptData, setScriptData,
   visualMode, customMediaUrl, overlayMode, overlayMediaUrl, selectedArticle, showHeadline, showTicker, showSubtitles,
-  customCoords, setCustomCoords, setStep, handleRender, videoBase64, isGenerating, setStatus, audioUrl
+  customCoords, setCustomCoords, setStep, handleRender, videoBase64, isGenerating, setStatus, audioUrl,
+  publishPlatforms, setPublishPlatforms
 }: any) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [activeBox, setActiveBox] = useState<string | null>(null);
@@ -1292,11 +1346,27 @@ function ReelEditorView({
                  {isGenerating ? <RefreshCw className="animate-spin" size={18}/> : <Video size={18}/>} Render Final FFMPEG Video
                </button>
             ) : (
-               <div className="flex flex-col gap-2">
+                 <div className="flex flex-col gap-2">
                  {audioUrl && <a href={audioUrl} download="voiceover.wav" className="px-3 py-2 bg-white rounded border text-sm text-center font-medium shadow-sm hover:bg-gray-50 flex items-center justify-center gap-2">⬇️ Download Voiceover Audio</a>}
                  <a href={videoBase64.startsWith('blob:') ? videoBase64 : `data:video/mp4;base64,${videoBase64}`} download="reel.mp4" className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded border text-sm text-center font-medium shadow-sm flex items-center justify-center gap-2">⬇️ Download Final Reel.mp4</a>
-                 <button onClick={handlePublishReel} disabled={isPublishing} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded border text-sm text-center font-medium shadow-sm flex items-center justify-center gap-2">
-                    {isPublishing ? <RefreshCw className="animate-spin" size={16}/> : '🌐'} {isPublishing ? 'Publishing...' : 'Publish Reel to Facebook Page'}
+                 
+                 <div className="bg-white p-3 rounded border my-2">
+                   <h5 className="text-sm font-bold mb-2">Publish To:</h5>
+                   <div className="flex gap-4">
+                     <label className="flex items-center gap-1 cursor-pointer">
+                       <input type="checkbox" checked={publishPlatforms.facebook} onChange={(e) => setPublishPlatforms({...publishPlatforms, facebook: e.target.checked})} /> Facebook
+                     </label>
+                     <label className="flex items-center gap-1 cursor-pointer">
+                       <input type="checkbox" checked={publishPlatforms.instagram} onChange={(e) => setPublishPlatforms({...publishPlatforms, instagram: e.target.checked})} /> Instagram
+                     </label>
+                     <label className="flex items-center gap-1 cursor-pointer">
+                       <input type="checkbox" checked={publishPlatforms.youtube} onChange={(e) => setPublishPlatforms({...publishPlatforms, youtube: e.target.checked})} /> YouTube
+                     </label>
+                   </div>
+                 </div>
+
+                 <button onClick={handlePublishReel} disabled={isPublishing || (!publishPlatforms.facebook && !publishPlatforms.instagram && !publishPlatforms.youtube)} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded border text-sm text-center font-medium shadow-sm flex items-center justify-center gap-2 disabled:opacity-50">
+                    {isPublishing ? <RefreshCw className="animate-spin" size={16}/> : '🌐'} {isPublishing ? 'Publishing...' : 'Publish Selected Platforms'}
                  </button>
                </div>
             )}
