@@ -37,10 +37,36 @@ export default async function handler(req, res) {
 
     const creationId = createData.id;
 
-    // Optional: wait a moment for Instagram to process the video before publishing (in a real prod app, you might use Webhooks or polling)
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    // Step 2: Poll for processing completion
+    const checkStatusUrl = `https://graph.facebook.com/v19.0/${creationId}?fields=status_code&access_token=${accessToken}`;
+    let isReady = false;
+    let attempts = 0;
+    const maxAttempts = 12; // Wait up to 60 seconds (12 * 5s)
 
-    // Step 2: Publish the media container
+    while (!isReady && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      attempts++;
+      
+      try {
+        const statusRes = await fetch(checkStatusUrl);
+        const statusData = await statusRes.json();
+        
+        if (statusData.status_code === 'FINISHED') {
+          isReady = true;
+        } else if (statusData.status_code === 'ERROR') {
+          return res.status(400).json({ error: 'Instagram failed to process the video' });
+        }
+        // If IN_PROGRESS or PUBLISHED, continue waiting/proceeding
+      } catch (err) {
+        console.warn('Error checking Instagram media status:', err);
+      }
+    }
+
+    if (!isReady) {
+       return res.status(400).json({ error: 'Instagram video processing timed out. Please try publishing manually later.' });
+    }
+
+    // Step 3: Publish the media container
     const publishUrl = `https://graph.facebook.com/v19.0/${igAccountId}/media_publish`;
     const publishForm = new URLSearchParams();
     publishForm.append('access_token', accessToken);
