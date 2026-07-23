@@ -29,7 +29,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
   const [videoBase64, setVideoBase64] = useState('');
   
   const [customCoords, setCustomCoords] = useState({ headline: '', ticker: '', subtitle: '', video: '' });
-  const [publishPlatforms, setPublishPlatforms] = useState({ facebook: true, instagram: false, youtube: false });
+  const [publishPlatforms, setPublishPlatforms] = useState({ facebook: true, instagram: autoStart ? true : false, youtube: false });
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -293,7 +293,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       setVideoBase64(objectUrl);
       
       if (autoStart) {
-         setStatus('Step 4/4: Publishing to Facebook...');
+         setStatus('Step 4/4: Publishing to Social Media...');
          let hashtagsStr = '';
          if (article && article.tags && article.tags.length > 0) {
             const selectedTags = article.tags.slice(0, 2);
