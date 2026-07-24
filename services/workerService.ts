@@ -123,3 +123,33 @@ export const deleteAsset = async (id: string): Promise<boolean> => {
   }
   return true;
 };
+
+export const getClients = async (): Promise<any[]> => {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
+  if (error) {
+    console.error('Error fetching clients:', error);
+    return [];
+  }
+  return data || [];
+};
+
+export const saveClient = async (client: any): Promise<boolean> => {
+  if (!supabase) return false;
+  const { error } = await supabase.from('clients').upsert(client);
+  if (error) {
+    console.error('Error saving client:', error);
+    return false;
+  }
+  return true;
+};
+
+export const deleteClient = async (id: string): Promise<boolean> => {
+  if (!supabase) return false;
+  const { error } = await supabase.from('clients').delete().eq('id', id);
+  if (error) {
+    console.error('Error deleting client:', error);
+    return false;
+  }
+  return true;
+};

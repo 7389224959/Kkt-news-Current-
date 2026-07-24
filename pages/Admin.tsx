@@ -36,6 +36,7 @@ import AIImproveTemplate from '../components/AIImproveTemplate';
 import ReelWizard from '../components/ReelWizard';
 import { WorkerDashboard } from '../components/WorkerDashboard';
 import ManageWorkers from '../components/ManageWorkers';
+import ManageClients from '../components/ManageClients';
 
 const Admin: React.FC = () => {
   const navigate = useNavigate();
@@ -45,7 +46,7 @@ const Admin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [workerId, setWorkerId] = useState('');
   const [workerPassword, setWorkerPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates' | 'job_applications' | 'tip_complaints' | 'workers'>('articles');
+  const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates' | 'job_applications' | 'tip_complaints' | 'workers' | 'clients'>('articles');
   const [viralTemplateTab, setViralTemplateTab] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -1715,6 +1716,12 @@ const Admin: React.FC = () => {
           >
             <Users size={18} /> Workers
           </button>
+          <button 
+            onClick={() => setActiveTab('clients')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md font-bold transition-colors ${activeTab === 'clients' ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
+            <Briefcase size={18} /> Clients
+          </button>
         </div>
 
         {/* Global Error Alert */}
@@ -2695,6 +2702,10 @@ const Admin: React.FC = () => {
         {/* --- TAB: TIPS & COMPLAINTS --- */}
         {activeTab === 'workers' && (
           <ManageWorkers />
+        )}
+        
+        {activeTab === 'clients' && (
+          <ManageClients />
         )}
 
         {activeTab === 'tip_complaints' && (

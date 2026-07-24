@@ -6,12 +6,14 @@ import {
   Contact, Bell, User, Search, MessageSquare, LogOut, ChevronRight, Loader2, Download, Share2, 
   CheckCircle, XCircle, Edit, MapPin, Calendar, Camera, ArrowLeft, Folder, Upload, Trash2 
 } from 'lucide-react';
-import { getWorkers, saveWorker, getTasks, saveTask, getAssets, saveAsset, deleteAsset } from '../services/workerService';
+import { getWorkers, saveWorker, getTasks, saveTask, getAssets, saveAsset, deleteAsset, saveClient } from '../services/workerService';
+import { uploadImage } from '../services/supabase';
 
 
 
 const navItems = [
   { id: 'profile', label: 'My Profile', icon: Contact },
+  { id: 'client', label: 'Add a Client', icon: Users },
   { id: 'assets', label: 'Assets', icon: Folder },
   { id: 'tasks', label: 'Task Management', icon: CheckSquare },
 ];
@@ -115,6 +117,7 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
   const renderContent = () => {
     switch (activeTab) {
       case 'profile': return <DashboardHome workerInfo={workerInfo} workerTasks={workerTasks} onUpdateProfile={handleUpdateProfile} />;
+      case 'client': return <ClientOnboardingForm workerId={finalWorkerId} />;
       case 'assets': return <WorkerAssets workerInfo={workerInfo} workerAssets={workerAssets} setWorkerAssets={setWorkerAssets} />;
       case 'tasks': return <TaskManagement workerId={finalWorkerId} workerTasks={workerTasks} allTasks={allTasks} onJoinTask={handleJoinTask} onUpdateTaskStatus={handleUpdateTaskStatus} />;
       default: return <DashboardHome workerInfo={workerInfo} workerTasks={workerTasks} onUpdateProfile={handleUpdateProfile} />;
@@ -959,6 +962,195 @@ function WorkerAssets({ workerInfo, workerAssets, setWorkerAssets }: { workerInf
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function ClientOnboardingForm({ workerId }: { workerId: string }) {
+  const [formData, setFormData] = React.useState({
+    businessName: '',
+    ownerName: '',
+    phone: '',
+    whatsapp: '',
+    address: '',
+    category: '',
+    services: '',
+    facebookLink: '',
+    instagramLink: '',
+    googleLink: '',
+    offer: ''
+  });
+
+  const [photos, setPhotos] = React.useState<File[]>([]);
+  const [logo, setLogo] = React.useState<File | null>(null);
+  const [paymentScreenshot, setPaymentScreenshot] = React.useState<File | null>(null);
+
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      let logoUrl = '';
+      if (logo) logoUrl = await uploadImage(logo);
+      
+      let paymentScreenshotUrl = '';
+      if (paymentScreenshot) paymentScreenshotUrl = await uploadImage(paymentScreenshot);
+      
+      let photosUrls: string[] = [];
+      if (photos.length > 0) {
+        photosUrls = await Promise.all(photos.map(p => uploadImage(p)));
+      }
+
+      const clientData = {
+        worker_id: workerId,
+        business_name: formData.businessName,
+        owner_name: formData.ownerName,
+        phone: formData.phone,
+        whatsapp: formData.whatsapp,
+        address: formData.address,
+        category: formData.category,
+        services: formData.services,
+        offer: formData.offer,
+        facebook_link: formData.facebookLink,
+        instagram_link: formData.instagramLink,
+        google_link: formData.googleLink,
+        logo_url: logoUrl,
+        payment_screenshot_url: paymentScreenshotUrl,
+        photos_urls: photosUrls
+      };
+
+      await saveClient(clientData);
+
+      alert('Client onboarded successfully!');
+      setFormData({
+        businessName: '', ownerName: '', phone: '', whatsapp: '', address: '',
+        category: '', services: '', facebookLink: '', instagramLink: '', googleLink: '', offer: ''
+      });
+      setPhotos([]);
+      setLogo(null);
+      setPaymentScreenshot(null);
+    } catch (err: any) {
+      alert('Error onboarding client: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Client Onboarding</h2>
+          <p className="text-slate-500">Register a new client and upload their details.</p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 p-6 md:p-8 shadow-sm space-y-6">
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="col-span-1 md:col-span-2">
+            <h3 className="font-bold text-lg text-slate-900 border-b border-slate-100 pb-2 mb-2">Basic Information</h3>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Business Name <span className="text-red-500">*</span></label>
+            <input required type="text" name="businessName" value={formData.businessName} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Enter business name" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Owner Name <span className="text-red-500">*</span></label>
+            <input required type="text" name="ownerName" value={formData.ownerName} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Enter owner name" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Phone Number <span className="text-red-500">*</span></label>
+            <input required type="tel" name="phone" value={formData.phone} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Primary phone number" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">WhatsApp Number <span className="text-red-500">*</span></label>
+            <input required type="tel" name="whatsapp" value={formData.whatsapp} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="WhatsApp number" />
+          </div>
+
+          <div className="col-span-1 md:col-span-2">
+            <label className="block text-sm font-bold text-slate-700 mb-1">Business Address <span className="text-red-500">*</span></label>
+            <textarea required name="address" value={formData.address} onChange={handleInputChange} rows={3} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Complete address"></textarea>
+          </div>
+
+          <div className="col-span-1 md:col-span-2">
+            <h3 className="font-bold text-lg text-slate-900 border-b border-slate-100 pb-2 mb-2 mt-4">Business Details</h3>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Category <span className="text-red-500">*</span></label>
+            <input required type="text" name="category" value={formData.category} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g., Restaurant, Retail, Service" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Services Offered <span className="text-red-500">*</span></label>
+            <input required type="text" name="services" value={formData.services} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Comma separated services" />
+          </div>
+
+          <div className="col-span-1 md:col-span-2">
+            <label className="block text-sm font-bold text-slate-700 mb-1">Special Offer / Discount</label>
+            <input type="text" name="offer" value={formData.offer} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g., 20% off on first visit" />
+          </div>
+
+          <div className="col-span-1 md:col-span-2">
+            <h3 className="font-bold text-lg text-slate-900 border-b border-slate-100 pb-2 mb-2 mt-4">Social Links</h3>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Facebook Link</label>
+            <input type="url" name="facebookLink" value={formData.facebookLink} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="https://facebook.com/..." />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Instagram Link</label>
+            <input type="url" name="instagramLink" value={formData.instagramLink} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="https://instagram.com/..." />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Google Business Link</label>
+            <input type="url" name="googleLink" value={formData.googleLink} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Google Maps link" />
+          </div>
+          
+          <div className="col-span-1 md:col-span-2">
+            <h3 className="font-bold text-lg text-slate-900 border-b border-slate-100 pb-2 mb-2 mt-4">Uploads & Proof</h3>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Business Logo</label>
+            <input type="file" accept="image/*" onChange={(e) => setLogo(e.target.files?.[0] || null)} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Payment Screenshot <span className="text-red-500">*</span></label>
+            <input required type="file" accept="image/*" onChange={(e) => setPaymentScreenshot(e.target.files?.[0] || null)} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+          </div>
+
+          <div className="col-span-1 md:col-span-2">
+            <label className="block text-sm font-bold text-slate-700 mb-1">Business Photos</label>
+            <input type="file" accept="image/*" multiple onChange={(e) => setPhotos(e.target.files ? Array.from(e.target.files) : [])} className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer" />
+            <p className="text-xs text-slate-500 mt-2">You can select multiple photos at once.</p>
+          </div>
+        </div>
+
+        <div className="pt-6 border-t border-slate-100 mt-8 flex justify-end">
+          <button disabled={isSubmitting} type="submit" className={`bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-0.5'}`}>
+            {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle size={20} />}
+            {isSubmitting ? 'Submitting...' : 'Submit Client Details'}
+          </button>
+        </div>
+
+      </form>
     </div>
   );
 }
