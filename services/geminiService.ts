@@ -1988,7 +1988,7 @@ RULES:
 - Script language: Hybrid Hindi + simple Hinglish mix
 - DO NOT end lines with "है" (hai)
 - Max 6-8 words per line
-- Total duration MUST BE a minimum of 30 seconds (around 75 to 90 words, approximately 12-16 lines)
+- Total duration MUST BE STRICTLY BELOW 30 seconds (around 40 to 50 words, maximum 8-10 lines)
 - NEVER start a reel with "बड़ी खबर", "ब्रेकिंग न्यूज", "ताजा अपडेट", or "[Location] से बड़ी खबर". Instead, start with: The most shocking fact, The biggest consequence, The strongest emotion, or The main conflict.
 - Add pauses using "..." to control pacing
 - Keep it conversational, engaging, and not overly formal
@@ -2686,13 +2686,13 @@ Use ONLY facts from the article. NEVER hallucinate names, numbers, quotes, cause
 ARTICLE TEXT:
 ${articleContent}
 
-Format rules for high engagement (TARGET DURATION MINIMUM 30 SECONDS, AT LEAST 75-90 WORDS):
-0–10 sec: HOOK (NEVER start a reel with "बड़ी खबर", "ब्रेकिंग न्यूज", "ताजा अपडेट", or "[Location] से बड़ी खबर". Instead, start with: The most shocking fact, The biggest consequence, The strongest emotion, or The main conflict. Make it dynamic and context-aware).
-10–25 sec: What happened (The core fact delivered with clear professional urgency, including specific details and context)
-25–35 sec: Why important (Impact and crucial details without filler)
-35–45+ sec: Professional Sign-off (Dynamic and professional sign-off that psychologically compels viewers to engage. MUST include a question asking for viewers' opinions or suggestions on the matter to drive comments, followed by a powerful call to action to 'like' and 'follow' for more updates. DO NOT use 'subscribe', strictly use 'follow'. E.g., "आपकी इस पर क्या राय है? कमेंट में बताएं और ऐसी ही खबरों के लिए हमें फॉलो करें").
+Format rules for high engagement (TARGET DURATION STRICTLY BELOW 30 SECONDS, MAXIMUM 40-50 WORDS):
+0–5 sec: HOOK (NEVER start a reel with "बड़ी खबर", "ब्रेकिंग न्यूज", "ताजा अपडेट", or "[Location] से बड़ी खबर". Instead, start with: The most shocking fact, The biggest consequence, The strongest emotion, or The main conflict. Make it dynamic and context-aware).
+5–15 sec: What happened (The core fact delivered with clear professional urgency, including specific details and context)
+15–20 sec: Why important (Impact and crucial details without filler)
+20–25 sec: Professional Sign-off (Dynamic and professional sign-off that psychologically compels viewers to engage. MUST include a question asking for viewers' opinions or suggestions on the matter to drive comments, followed by a powerful call to action to 'like' and 'follow' for more updates. DO NOT use 'subscribe', strictly use 'follow'. E.g., "आपकी इस पर क्या राय है? कमेंट में बताएं और ऐसी ही खबरों के लिए हमें फॉलो करें").
 
-- STRICT WORD LIMIT: The entire voiceoverScript MUST be at least 75 to 90 words to ensure a MINIMUM 30-second duration.
+- STRICT WORD LIMIT: The entire voiceoverScript MUST be maximum 40 to 50 words to ensure it stays STRICTLY BELOW 30 seconds.
 - Sentences MUST be short, clear, and punchy. No long storytelling.
 - Tone MUST be like a fast-paced professional TV news anchor (authoritative, clear, highly energetic and urgent, yet highly compelling and engaging).
 ${hasSubtitles ? `
@@ -2704,7 +2704,7 @@ Subtitles Requirements (CRITICAL):
 Categorization & Style:
 - "reelType": Breaking News, Explainer, Debate, or Useful Update.
 - "stylePreset": breaking_news (Fast zoom, red urgency), explainer (Clean style, slower pacing), debate, useful_update.
-- "facebookCaption": Write an engaging caption for Facebook Reels. IMPORTANT: Limit hashtags to 1-3 strictly. Ensure the hashtags are highly relevant to the news topic involving location, person, or any topic related trending tag.
+- "facebookCaption": Write an engaging caption for Facebook Reels and Instagram Reels. IMPORTANT: The caption MUST BE STRICTLY 200-400 characters long. Limit hashtags to 1-3 strictly. Ensure the hashtags are highly relevant to the news topic involving location, person, or any topic related trending tag.
 
 Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly escape inner quotes):
 {
@@ -2715,7 +2715,7 @@ Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly 
   "reelType": "string",
   "stylePreset": "string",
   "visualKeywords": "3-5 keywords for searching stock footage",
-  "facebookCaption": "String containing the facebook reel caption with 1-3 highly relevant hashtags"
+  "facebookCaption": "String containing the facebook and instagram reel caption (STRICTLY 200-400 characters long) with 1-3 highly relevant hashtags"
 }`;
 
   try {
