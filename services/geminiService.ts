@@ -2704,7 +2704,7 @@ Subtitles Requirements (CRITICAL):
 Categorization & Style:
 - "reelType": Breaking News, Explainer, Debate, or Useful Update.
 - "stylePreset": breaking_news (Fast zoom, red urgency), explainer (Clean style, slower pacing), debate, useful_update.
-- "facebookCaption": Write an engaging caption for Facebook Reels and Instagram Reels. IMPORTANT: The caption MUST BE STRICTLY 200-400 characters long. Limit hashtags to 1-3 strictly. Ensure the hashtags are highly relevant to the news topic involving location, person, or any topic related trending tag.
+- "facebookCaption": Write an engaging caption for Facebook Reels and Instagram Reels. IMPORTANT: The caption MUST start with "🚨 [Category or Location] Breaking News | [Headline]". For example: "🚨 Chhattisgarh Breaking News | रायपुर के अंबेडकर अस्पताल में AC ब्लास्ट से भीषण आग". The caption MUST BE STRICTLY 200-400 characters long. Limit hashtags to 1-3 strictly. Ensure the hashtags are highly relevant to the news topic involving location, person, or any topic related trending tag.
 
 Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly escape inner quotes):
 {
