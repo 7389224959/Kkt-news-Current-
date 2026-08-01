@@ -148,14 +148,25 @@ async function runAutoRobot() {
     const context = await browser.newContext({ acceptDownloads: true });
     const page = await context.newPage();
 
+    let pendingDownload = null;
+
     page.on('download', async (download) => {
+      let resolveDownload;
+      pendingDownload = new Promise(r => resolveDownload = r);
       const filepath = path.join(artifactsDir, download.suggestedFilename());
       try {
         await download.saveAs(filepath);
         console.log('Downloaded video saved to:', filepath);
+        console.log('\n========================================================================');
+        console.log('✅ VIDEO DOWNLOADED ON GITHUB RUNNER');
+        console.log('To view this video, go to the GitHub repository -> Actions tab ->');
+        console.log('click on this workflow run -> scroll to the bottom and download');
+        console.log('the "auto-robot-artifacts" zip file.');
+        console.log('========================================================================\n');
       } catch(e) {
         console.error('Failed to save download:', e);
       }
+      resolveDownload();
     });
 
       // Intercept /api/render-reel for anchor building
@@ -259,6 +270,10 @@ async function runAutoRobot() {
 
       // If we reach here, everything succeeded
       console.log("\nAuto Robot finished successfully!");
+      if (pendingDownload) {
+        console.log("Waiting for pending download to finish...");
+        await pendingDownload;
+      }
       await browser.close();
       process.exit(0);
 

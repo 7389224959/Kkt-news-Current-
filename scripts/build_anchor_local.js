@@ -64,11 +64,19 @@ export async function buildLocalAndUpload(imageUrl, audioUrl) {
     }
     
     console.log("[anchor local] Running python inference...");
-    await exec("python3", [
-      "inference.py", "--checkpoint_path", ckpt,
-      "--face", imgPath, "--audio", audPath, "--outfile", outPath,
-      "--nosmooth", "--resize_factor", "1"
-    ], { cwd: wav2lipDir, timeout: 600000 });
+    try {
+      const { stdout, stderr } = await exec("python3", [
+        "inference.py", "--checkpoint_path", ckpt,
+        "--face", imgPath, "--audio", audPath, "--outfile", outPath,
+        "--nosmooth", "--resize_factor", "1"
+      ], { cwd: wav2lipDir, timeout: 1800000 });
+      console.log("[anchor local] Python stdout:", stdout);
+      if (stderr) console.error("[anchor local] Python stderr:", stderr);
+    } catch (execErr) {
+      console.error("[anchor local] Python exec error:", execErr.message);
+      if (execErr.stdout) console.log("[anchor local] Python stdout:", execErr.stdout);
+      if (execErr.stderr) console.error("[anchor local] Python stderr:", execErr.stderr);
+    }
     
     if (!fs.existsSync(outPath)) {
       console.error("[anchor local] Failed to generate out.mp4");
