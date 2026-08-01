@@ -139,7 +139,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       }
 
       let successCount = 0;
-      let errorMsgs = [];
+      let errorMsgs: string[] = [];
+      let successUrls: string[] = [];
 
       if (publishPlatforms.facebook) {
         try {
@@ -154,6 +155,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
             }),
           });
           if (!res.ok) throw new Error(await res.text());
+          const fbData = await res.json();
+          if (fbData.url) successUrls.push('Facebook URL: ' + fbData.url);
           successCount++;
         } catch(e: any) {
           errorMsgs.push('Facebook: ' + e.message);
@@ -173,6 +176,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
             }),
           });
           if (!res.ok) throw new Error(await res.text());
+          const igData = await res.json();
+          if (igData.url) successUrls.push('Instagram URL: ' + igData.url);
           successCount++;
         } catch(e: any) {
           errorMsgs.push('Instagram: ' + e.message);
@@ -193,6 +198,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
             }),
           });
           if (!res.ok) throw new Error(await res.text());
+          const ytData = await res.json();
+          if (ytData.url) successUrls.push('YouTube URL: ' + ytData.url);
           successCount++;
         } catch(e: any) {
           errorMsgs.push('YouTube: ' + e.message);
@@ -202,7 +209,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       if (errorMsgs.length > 0) {
         alert('Some publishes failed:\n' + errorMsgs.join('\n'));
       } else if (successCount > 0) {
-        alert('Successfully published to selected platforms!');
+        alert('Successfully published to selected platforms!\n' + successUrls.join('\n'));
       } else {
         alert('No platforms selected for publishing. Please select at least one.');
       }

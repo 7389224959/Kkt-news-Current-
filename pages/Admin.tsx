@@ -599,7 +599,7 @@ const Admin: React.FC = () => {
       setShowViralModal(false);
       
       if (fbResult.success && fbResult.id) {
-        alert(`Auto Viral Success: Viral post published directly to Facebook!`);
+        alert(`Auto Viral Success: Viral post published directly to Facebook!\nURL: ` + fbResult.url);
       } else {
         alert(`Auto Viral Error: Facebook viral post couldn't be confirmed.`);
       }
@@ -779,7 +779,7 @@ const Admin: React.FC = () => {
         setShowViralModal(false);
         
         if (fbResult.success && fbResult.id) {
-          alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically published viral post to Facebook!`);
+          alert(`Successfully auto-fetched ${newArticles.length} new articles & automatically published viral post to Facebook!\nURL: ` + fbResult.url);
         } else {
           alert(`Successfully auto-fetched ${newArticles.length} new articles, but Facebook viral post couldn't be confirmed.`);
         }

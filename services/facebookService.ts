@@ -1,4 +1,4 @@
-export const postToFacebook = async (message: string, imageUrl?: string, scheduledPublishTime?: number, published: boolean = true): Promise<{ success: boolean, id?: string, pageId?: string }> => {
+export const postToFacebook = async (message: string, imageUrl?: string, scheduledPublishTime?: number, published: boolean = true): Promise<{ success: boolean, id?: string, pageId?: string, url?: string }> => {
   try {
     const response = await fetch('/api/facebook/post', {
       method: 'POST',
@@ -26,7 +26,7 @@ export const postToFacebook = async (message: string, imageUrl?: string, schedul
       throw new Error(data.error || `Failed to post to Facebook (Status: ${response.status})`);
     }
 
-    return { success: true, id: data.id, pageId: data.pageId };
+    return { success: true, id: data.id, pageId: data.pageId, url: data.url };
   } catch (error) {
     console.error('Error posting to Facebook:', error);
     throw error;
