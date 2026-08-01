@@ -54,7 +54,7 @@ export default async function handler(req, res) {
     let body = {
       message,
       access_token: resolvedAccessToken,
-      published: false // Testing: Dark post
+      published: published !== undefined ? published : true
     };
     
     if (scheduledPublishTime && published === false) {
@@ -69,7 +69,7 @@ export default async function handler(req, res) {
     console.log("FB Publish Payload:", {
       message: body.message,
       url: body.url,
-      published: false, // Testing: Dark post
+      published: body.published,
       scheduled_publish_time: body.scheduled_publish_time,
       endpoint: fbApiUrl
     });

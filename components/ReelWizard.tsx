@@ -139,8 +139,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       }
 
       let successCount = 0;
-      let errorMsgs: string[] = [];
-      let successUrls: string[] = [];
+      let errorMsgs = [];
 
       if (publishPlatforms.facebook) {
         try {
@@ -155,8 +154,6 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
             }),
           });
           if (!res.ok) throw new Error(await res.text());
-          const fbData = await res.json();
-          if (fbData.url) successUrls.push('Facebook URL: ' + fbData.url);
           successCount++;
         } catch(e: any) {
           errorMsgs.push('Facebook: ' + e.message);
@@ -176,8 +173,6 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
             }),
           });
           if (!res.ok) throw new Error(await res.text());
-          const igData = await res.json();
-          if (igData.url) successUrls.push('Instagram URL: ' + igData.url);
           successCount++;
         } catch(e: any) {
           errorMsgs.push('Instagram: ' + e.message);
@@ -198,8 +193,6 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
             }),
           });
           if (!res.ok) throw new Error(await res.text());
-          const ytData = await res.json();
-          if (ytData.url) successUrls.push('YouTube URL: ' + ytData.url);
           successCount++;
         } catch(e: any) {
           errorMsgs.push('YouTube: ' + e.message);
@@ -209,7 +202,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       if (errorMsgs.length > 0) {
         alert('Some publishes failed:\n' + errorMsgs.join('\n'));
       } else if (successCount > 0) {
-        alert('Successfully published to selected platforms!\n' + successUrls.join('\n'));
+        alert('Successfully published to selected platforms!');
       } else {
         alert('No platforms selected for publishing. Please select at least one.');
       }
@@ -300,16 +293,19 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       setVideoBase64(objectUrl);
       
       if (autoStart) {
-         setStatus('Step 4/4: Publishing to Social Media...');
-         let hashtagsStr = '';
-         if (article && article.tags && article.tags.length > 0) {
-            const selectedTags = article.tags.slice(0, 2);
-            hashtagsStr = '\n\n' + selectedTags.map((t: string) => '#' + t.replace(/\\s+/g, '')).join(' ') + ' #kktnews';
-         } else {
-            hashtagsStr = '\n\n#kktnews';
-         }
-         const fbMessage = updatedScriptData.facebookCaption || ((updatedScriptData.headline || article.title || 'Check out our latest reel!') + hashtagsStr);
-         await doPublishReel(blob, fbMessage);
+         setStatus('Step 4/4: Downloading video locally...');
+         
+         const a = document.createElement('a');
+         a.href = objectUrl;
+         a.download = `auto-reel-${Date.now()}.mp4`;
+         document.body.appendChild(a);
+         a.click();
+         document.body.removeChild(a);
+         
+         setTimeout(() => {
+            alert('Completed auto reel generation (downloaded locally).');
+            onClose();
+         }, 2000);
       } else {
          setStep(4);
       }

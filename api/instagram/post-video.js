@@ -67,8 +67,6 @@ export default async function handler(req, res) {
     }
 
     // Step 3: Publish the media container
-    // Testing: skip Step 3 (Dark post equivalent for IG)
-    /*
     const publishUrl = `https://graph.facebook.com/v19.0/${igAccountId}/media_publish`;
     const publishForm = new URLSearchParams();
     publishForm.append('access_token', accessToken);
@@ -90,8 +88,6 @@ export default async function handler(req, res) {
       id: publishData.id,
       url: `https://instagram.com/p/${publishData.id}` 
     });
-    */
-    return res.status(200).json({ success: true, id: creationId, url: 'https://instagram.com/testing-dark-post' });
   } catch (error) {
     console.error('Error posting video to Instagram:', error);
     res.status(500).json({ error: 'Internal server error while posting to Instagram' });

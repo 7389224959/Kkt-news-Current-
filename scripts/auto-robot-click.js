@@ -144,8 +144,19 @@ async function runAutoRobot() {
       console.log(`\n--- Starting Auto Robot Click ---`);
     }
     
-    const browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage();
+    const browser = await chromium.launch({ headless: true, downloadsPath: artifactsDir });
+    const context = await browser.newContext({ acceptDownloads: true });
+    const page = await context.newPage();
+
+    page.on('download', async (download) => {
+      const filepath = path.join(artifactsDir, download.suggestedFilename());
+      try {
+        await download.saveAs(filepath);
+        console.log('Downloaded video saved to:', filepath);
+      } catch(e) {
+        console.error('Failed to save download:', e);
+      }
+    });
 
       // Intercept /api/render-reel for anchor building
       await page.route("**/api/render-reel", async (route) => {
