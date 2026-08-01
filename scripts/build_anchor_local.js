@@ -12,7 +12,7 @@ const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/
 
 function supa() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
   if (!url || !key) return null;
   return createClient(url, key);
 }
@@ -20,6 +20,13 @@ function supa() {
 const sha = (b) => crypto.createHash("sha1").update(b).digest("hex");
 
 async function fetchBytes(url) {
+  if (url.startsWith('data:')) {
+    const parts = url.split(',');
+    if (parts.length > 1) {
+      const isBase64 = parts[0].includes('base64');
+      return Buffer.from(parts[1], isBase64 ? 'base64' : 'utf8');
+    }
+  }
   const r = await fetch(url, { headers: { "User-Agent": UA } });
   if (!r.ok) throw new Error("fetch " + r.status + " " + url);
   return Buffer.from(await r.arrayBuffer());
@@ -85,7 +92,11 @@ export async function buildLocalAndUpload(imageUrl, audioUrl) {
     
     // Upload to Supabase
     const mp4Buf = fs.readFileSync(outPath);
-    await s.storage.from(BUCKET).upload(`${key}.mp4`, mp4Buf, { contentType: "video/mp4", upsert: true });
+    const { error: uploadErr } = await s.storage.from(BUCKET).upload(`${key}.mp4`, mp4Buf, { contentType: "video/mp4", upsert: true });
+    if (uploadErr) {
+      console.error("[anchor local] Upload to Supabase failed:", uploadErr);
+      return null;
+    }
     
     fs.rmSync(tmpdir, { recursive: true, force: true });
     

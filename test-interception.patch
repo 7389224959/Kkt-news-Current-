@@ -1,0 +1,20 @@
+--- scripts/auto-robot-click.js
++++ scripts/auto-robot-click.js
+@@ -165,8 +165,10 @@
+         if (req.method() === "POST") {
+           const bodyStr = req.postData();
+           if (bodyStr) {
++            console.log("[auto-robot] Intercepted render-reel POST!");
+             try {
+               const body = JSON.parse(bodyStr);
+               // Fetch anchor settings directly
+               const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+-              const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
++              const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+               
++              console.log(`[auto-robot] Supabase Configured: URL=${!!url}, KEY=${!!key}`);
+               if (url && key) {
+                 const s = createClient(url, key);
+                 const { data } = await s.from('site_settings').select('anchorSettings').limit(1).maybeSingle();
++                console.log("[auto-robot] Anchor settings from DB:", JSON.stringify(data));
+                 if (data && data.anchorSettings && data.anchorSettings.enabled && data.anchorSettings.imageUrl && body.audioUrl) {

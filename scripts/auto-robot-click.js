@@ -175,23 +175,31 @@ async function runAutoRobot() {
         if (req.method() === "POST") {
           const bodyStr = req.postData();
           if (bodyStr) {
+            console.log("[auto-robot] Intercepted render-reel POST request!");
             try {
               const body = JSON.parse(bodyStr);
               // Fetch anchor settings directly
               const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-              const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+              const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+              console.log(`[auto-robot] Supabase check: URL=${!!url} KEY=${!!key}`);
               if (url && key) {
                 const s = createClient(url, key);
-                const { data } = await s.from('site_settings').select('anchorSettings').limit(1).maybeSingle();
+                const { data, error } = await s.from('site_settings').select('anchorSettings').limit(1).maybeSingle();
+                if (error) console.error("[auto-robot] DB fetch error:", error.message);
+                console.log("[auto-robot] DB anchorSettings:", JSON.stringify(data?.anchorSettings || {}));
                 if (data && data.anchorSettings && data.anchorSettings.enabled && data.anchorSettings.imageUrl && body.audioUrl) {
-                  console.log("[auto-robot] Intercepted render-reel POST! Building local anchor...");
+                  console.log("[auto-robot] Building local anchor with audio string length:", body.audioUrl.length);
                   const anchorUrl = await buildLocalAndUpload(data.anchorSettings.imageUrl, body.audioUrl);
                   if (anchorUrl) {
                     body.anchorVideoUrl = anchorUrl;
                     console.log("[auto-robot] Injected anchorVideoUrl into request:", anchorUrl);
                     await route.continue({ postData: JSON.stringify(body) });
                     return;
+                  } else {
+                    console.error("[auto-robot] buildLocalAndUpload returned null");
                   }
+                } else {
+                  console.log(`[auto-robot] Skipping anchor build. enabled=${data?.anchorSettings?.enabled} hasImage=${!!data?.anchorSettings?.imageUrl} hasAudio=${!!body.audioUrl}`);
                 }
               }
             } catch (e) {
