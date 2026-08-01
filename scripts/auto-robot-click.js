@@ -1,3 +1,5 @@
+import { buildLocalAndUpload } from "./build_anchor_local.js";
+import { createClient } from "@supabase/supabase-js";
 import { chromium } from "playwright";
 import fs from "fs";
 import path from "path";
@@ -144,6 +146,40 @@ async function runAutoRobot() {
     
     const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
+
+      // Intercept /api/render-reel for anchor building
+      await page.route("**/api/render-reel", async (route) => {
+        const req = route.request();
+        if (req.method() === "POST") {
+          const bodyStr = req.postData();
+          if (bodyStr) {
+            try {
+              const body = JSON.parse(bodyStr);
+              // Fetch anchor settings directly
+              const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+              const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+              if (url && key) {
+                const s = createClient(url, key);
+                const { data } = await s.from('site_settings').select('anchorSettings').limit(1).maybeSingle();
+                if (data && data.anchorSettings && data.anchorSettings.enabled && data.anchorSettings.imageUrl && body.audioUrl) {
+                  console.log("[auto-robot] Intercepted render-reel POST! Building local anchor...");
+                  const anchorUrl = await buildLocalAndUpload(data.anchorSettings.imageUrl, body.audioUrl);
+                  if (anchorUrl) {
+                    body.anchorVideoUrl = anchorUrl;
+                    console.log("[auto-robot] Injected anchorVideoUrl into request:", anchorUrl);
+                    await route.continue({ postData: JSON.stringify(body) });
+                    return;
+                  }
+                }
+              }
+            } catch (e) {
+              console.error("[auto-robot] Error intercepting render-reel:", e);
+            }
+          }
+        }
+        await route.continue();
+      });
+
     
     try {
       console.log(`Opening admin panel: ${APP_URL}`);

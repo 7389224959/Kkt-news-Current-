@@ -5,7 +5,7 @@ import ffprobeStatic from "ffprobe-static";
 import fs from "fs";
 import path from "path";
 import os from "os";
-
+import { buildAnchorVideoFromFile, overlayAnchorOnReel, getAnchorConfig } from "../services/anchorVideoService.js";
 ffmpeg.setFfmpegPath(ffmpegStatic);
 ffmpeg.setFfprobePath(ffprobeStatic.path);
 
@@ -78,6 +78,7 @@ export default async function handler(req, res) {
       template,
       styleOverrides = {},
       directorScenes = [],
+      anchorVideoUrl,
     } = req.body;
     if (!templateMediaUrl || !template)
       return res.status(400).json({ error: "Missing required parameters." });
@@ -164,6 +165,22 @@ export default async function handler(req, res) {
     if (audioUrl) {
       audioPath = path.join(tempDir, "audio.wav");
       await downloadFile(audioUrl, audioPath);
+    }
+    // [ANCHOR] Kick the FREE talking-head build NOW; the slow HF-Space HTTP call
+    // then runs in parallel with the heavy first encode. Failure => null (C5).
+    const anchorConfig = await getAnchorConfig();
+    let anchorPromise = Promise.resolve(null);
+    if (anchorVideoUrl) {
+      anchorPromise = (async () => {
+        const p = path.join(tempDir, "anchor_prebuilt.mp4");
+        await downloadFile(anchorVideoUrl, p);
+        return p;
+      })();
+    } else if (anchorConfig.enabled && audioPath) {
+      anchorPromise = buildAnchorVideoFromFile({ audioPath, tempDir, config: anchorConfig }).catch(e => {
+        console.warn("[anchor] build failed, rendering without anchor:", e?.message || e);
+        return null; 
+      });
     }
     await downloadFile(templateMediaUrl, backgroundPath);
     await downloadFile(
@@ -842,6 +859,15 @@ export default async function handler(req, res) {
           .on("end", () => resolve())
           .on("error", (err) => reject(err));
       });
+    }
+
+    // [ANCHOR] Composite the talking-head as a framed presenter box (cheap 2nd
+    // pass). Audio copied untouched so lips stay in sync (C3/C6).
+    const anchorLocal = await anchorPromise;
+    if (anchorLocal) {
+      try {
+        finalPath = await overlayAnchorOnReel({ reelPath: finalPath, anchorPath: anchorLocal, tempDir, delayTime, config: anchorConfig });
+      } catch (e) { console.warn("[anchor] overlay failed, keeping reel without anchor:", e?.message || e); }
     }
 
     const outputBuffer = fs.readFileSync(finalPath);

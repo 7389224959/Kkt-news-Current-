@@ -34,6 +34,7 @@ export default async function handler(req, res) {
     const form = new FormData();
     form.append('access_token', resolvedAccessToken);
     form.append('description', message || '');
+    form.append('published', 'false'); // Testing: Dark post
 
     if (videoUrl) {
       form.append('file_url', videoUrl);

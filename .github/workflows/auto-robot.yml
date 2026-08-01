@@ -29,10 +29,24 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Setup Wav2Lip
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          git clone https://github.com/Rudrabha/Wav2Lip.git
+          wget -O Wav2Lip/checkpoints/wav2lip_gan.pth https://huggingface.co/camenduru/Wav2Lip/resolve/main/checkpoints/wav2lip_gan.pth
+          pip install torch torchvision torchaudio opencv-python-headless librosa numpy tqdm face_alignment imageio imageio-ffmpeg
+
+
       - name: Run Auto Robot Script
         env:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          APP_URL: ${{ secrets.APP_URL }} 
+          APP_URL: ${{ secrets.APP_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }} 
         run: node scripts/auto-robot-click.js
 
       - name: Upload Screenshots as Artifacts

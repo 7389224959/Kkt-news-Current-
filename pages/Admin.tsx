@@ -25,7 +25,7 @@ import { compressImage, overlayTextOnImage } from '../src/utils/imageUtils';
 import { 
   Plus, Edit, Trash2, Save, X, LogOut, LayoutDashboard, 
   Image as ImageIcon, Type, Settings, Globe, FileText, Sparkles, RefreshCw, TrendingUp,
-  ChevronRight, MapPin, ArrowUp, ArrowDown, Heart, Lock, AlertTriangle, Upload, Zap, Shield, Wand2, ExternalLink, CheckCircle, Briefcase, Users
+  ChevronRight, MapPin, ArrowUp, ArrowDown, Heart, Lock, AlertTriangle, Upload, Zap, Shield, Wand2, ExternalLink, CheckCircle, Briefcase, Users, Video
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import NewsImage from '../components/NewsImage';
@@ -2461,6 +2461,84 @@ const Admin: React.FC = () => {
                   <div>
                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">YouTube URL</label>
                     <input type="text" className="w-full px-3 py-2 border rounded" value={settings.socials?.youtube || ''} onChange={e => setSiteSettings({...settings, socials: {...(settings.socials || DEFAULT_SETTINGS.socials), youtube: e.target.value}})} />
+                  </div>
+                </div>
+                
+                {/* AI Anchor Settings */}
+                <div className="pt-6 border-t">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                      <Video size={20} className="text-bhaskar-orange" /> AI Anchor Settings (Talking Head)
+                    </h3>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="checkbox" 
+                        id="anchor-enabled" 
+                        checked={settings.anchorSettings?.enabled || false}
+                        onChange={e => setSiteSettings({
+                          ...settings, 
+                          anchorSettings: { ...(settings.anchorSettings || { imageUrl: '', talkingHeadUrl: '', box: '' }), enabled: e.target.checked }
+                        })}
+                      />
+                      <label htmlFor="anchor-enabled" className="font-bold text-sm text-gray-700">Enable AI Anchor in Reels</label>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-gray-50 p-4 rounded border">
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Anchor Image</label>
+                        {settings.anchorSettings?.imageUrl && (
+                          <img src={settings.anchorSettings.imageUrl} alt="Anchor" className="h-32 object-contain mb-3 bg-white border rounded" />
+                        )}
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          onChange={async (e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              try {
+                                const url = await uploadImage(e.target.files[0]);
+                                setSiteSettings({
+                                  ...settings,
+                                  anchorSettings: { ...(settings.anchorSettings || { enabled: false, talkingHeadUrl: '', box: '' }), imageUrl: url }
+                                });
+                              } catch (err) {
+                                alert('Failed to upload image.');
+                              }
+                            }
+                          }}
+                          className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        />
+                      </div>
+                      <div className="space-y-4 bg-gray-50 p-4 rounded border">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Talking Head HF URL</label>
+                          <input 
+                            type="text" 
+                            className="w-full px-3 py-2 border rounded" 
+                            placeholder="https://your-space.hf.space"
+                            value={settings.anchorSettings?.talkingHeadUrl || ''} 
+                            onChange={e => setSiteSettings({
+                              ...settings, 
+                              anchorSettings: { ...(settings.anchorSettings || { enabled: false, imageUrl: '', box: '' }), talkingHeadUrl: e.target.value }
+                            })} 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Box Coordinates (x,y,w)</label>
+                          <input 
+                            type="text" 
+                            className="w-full px-3 py-2 border rounded" 
+                            placeholder="Leave empty for auto bottom-right"
+                            value={settings.anchorSettings?.box || ''} 
+                            onChange={e => setSiteSettings({
+                              ...settings, 
+                              anchorSettings: { ...(settings.anchorSettings || { enabled: false, imageUrl: '', talkingHeadUrl: '' }), box: e.target.value }
+                            })} 
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
