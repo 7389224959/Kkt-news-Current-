@@ -1,0 +1,22 @@
+--- scripts/auto-robot-click.js
++++ scripts/auto-robot-click.js
+@@ -176,14 +176,11 @@
+           const bodyStr = req.postData();
+           if (bodyStr) {
+             console.log("[auto-robot] Intercepted render-reel POST request!");
+             try {
+               const body = JSON.parse(bodyStr);
+-              // Fetch anchor settings directly
+-              const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+-              const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+-              console.log(`[auto-robot] Supabase check: URL=${!!url} KEY=${!!key}`);
+-              if (url && key) {
+-                const s = createClient(url, key);
+-                const { data, error } = await s.from('site_settings').select('anchorSettings').limit(1).maybeSingle();
+-                if (error) console.error("[auto-robot] DB fetch error:", error.message);
+-                console.log("[auto-robot] DB anchorSettings:", JSON.stringify(data?.anchorSettings || {}));
+-                if (data && data.anchorSettings && data.anchorSettings.enabled && data.anchorSettings.imageUrl && body.audioUrl) {
++              
++              const anchorSettings = await page.evaluate(() => {
++                return window.localStorage.getItem('supabase.auth.token') ? null : null; // We'll just fetch it using the app's Supabase instance
++              });

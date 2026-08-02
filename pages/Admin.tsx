@@ -65,6 +65,13 @@ const Admin: React.FC = () => {
     setTrendingKeywords(contextKeywords);
   }, [contextArticles, contextBreakingNews, contextSettings, contextKeywords]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+       (window as any).__SITE_SETTINGS__ = settings;
+    }
+  }, [settings]);
+
+
   const handleFetchTrendingKeywords = async () => {
     setIsFetchingTrending(true);
     try {

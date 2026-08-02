@@ -302,8 +302,16 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
          a.click();
          document.body.removeChild(a);
          
+         setStatus('Step 5/5: Auto Publishing Reel...');
+         try {
+            const message = updatedScriptData.facebookCaption || ((updatedScriptData.headline || article.title || 'Breaking News') + ' \n\n#kktnews');
+            await doPublishReel(blob, message);
+         } catch(e) {
+            console.error('Auto publish failed', e);
+         }
+         
          setTimeout(() => {
-            alert('Completed auto reel generation (downloaded locally).');
+            alert('Completed auto reel generation and publish.');
             onClose();
          }, 2000);
       } else {

@@ -33,24 +33,12 @@ async function fetchBytes(url) {
 }
 
 export async function buildLocalAndUpload(imageUrl, audioUrl) {
-  const s = supa();
-  if (!s) {
-    console.log("[anchor local] Supabase client not configured.");
-    return null;
-  }
+
   
   try {
     const imgBuf = await fetchBytes(imageUrl);
     const audioBuf = await fetchBytes(audioUrl);
     const key = crypto.createHash("md5").update(sha(imgBuf) + "|" + sha(audioBuf)).digest("hex");
-    
-    // Check if already in cache
-    const { data: cacheData, error: cacheErr } = await s.storage.from(BUCKET).download(`${key}.mp4`);
-    if (!cacheErr && cacheData) {
-      console.log("[anchor local] Cache HIT for key:", key);
-      const { data: publicData } = s.storage.from(BUCKET).getPublicUrl(`${key}.mp4`);
-      return publicData.publicUrl;
-    }
     
     console.log("[anchor local] Building locally for key:", key);
     const tmpdir = fs.mkdtempSync(path.join("/tmp", "wav2lip-"));
@@ -90,19 +78,15 @@ export async function buildLocalAndUpload(imageUrl, audioUrl) {
       return null;
     }
     
-    // Upload to Supabase
     const mp4Buf = fs.readFileSync(outPath);
-    const { error: uploadErr } = await s.storage.from(BUCKET).upload(`${key}.mp4`, mp4Buf, { contentType: "video/mp4", upsert: true });
-    if (uploadErr) {
-      console.error("[anchor local] Upload to Supabase failed:", uploadErr);
-      return null;
-    }
+    const dataUri = 'data:video/mp4;base64,' + mp4Buf.toString('base64');
     
-    fs.rmSync(tmpdir, { recursive: true, force: true });
+    try {
+      fs.rmSync(tmpdir, { recursive: true, force: true });
+    } catch(e) {}
     
-    const { data: publicData } = s.storage.from(BUCKET).getPublicUrl(`${key}.mp4`);
-    console.log("[anchor local] Build complete. URL:", publicData.publicUrl);
-    return publicData.publicUrl;
+    console.log("[anchor local] Build complete. Returning base64 length:", dataUri.length);
+    return dataUri;
     
   } catch (err) {
     console.error("[anchor local] Error:", err);
