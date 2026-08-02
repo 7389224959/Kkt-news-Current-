@@ -1967,10 +1967,21 @@ IMPORTANT: If a reference image is provided, you MUST match the face of the pers
 };
 
 export interface ReelScript {
+  titleCaptionIdea?: string;
+  onScreenHookText?: string;
   scriptLines: string[];
   hookVariation?: string;
   fullScript: string;
+  strategicCtaQuestion?: string;
 }
+
+export const cleanVoiceoverScript = (text: string): string => {
+  if (!text) return "";
+  return text
+    .replace(/\[.*?\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+};
 
 export const generateReelScript = async (
   articleContent: string,
@@ -1978,32 +1989,71 @@ export const generateReelScript = async (
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
-  const prompt = `You are a scriptwriter for a viral Hindi news reel.
-Convert the following news post into a short breaking-news style reel script.
+  const prompt = `# ROLE AND PERSONA
+You are an elite Hindi News Reel Scriptwriter and Digital Journalist. You possess the calm authority of a top-tier investigative YouTuber, the emotional storytelling of a master novelist, and the psychological manipulation skills of a viral content creator. 
 
-NEWS ARTICLE:
+Your goal is to transform raw, basic news into a 25-40 second Hindi reel script that stops the scroll, hooks the viewer psychologically, triggers deep emotions, and retains them until the very last second without feeling "force-spiced" or overly sensationalized.
+
+# DURATION & FACT-BASED SCALING RULE (STRICT 25-40 SECONDS)
+Target Duration MUST BE STRICTLY BETWEEN 25 AND 40 SECONDS (approximately 50 to 80 words spoken in Hinglish).
+Dynamically adjust script length based on the number of facts available in the news:
+- Few facts (1-2 facts): ~25 seconds (~50-55 words)
+- Moderate facts (3 facts): ~30-35 seconds (~60-70 words)
+- Rich facts (4+ facts): ~35-40 seconds (~70-80 words)
+DO NOT force stretch a simple story, and DO NOT rush a multi-fact story. Always keep the total duration strictly within 25 to 40 seconds.
+
+# CORE PSYCHOLOGICAL FRAMEWORK (Apply these to every script)
+1. The Pattern Interrupt (0-2s): Break the user's scrolling trance with a visual/verbal contradiction or a highly relatable question.
+2. The Zeigarnik Effect (Open Loops): Introduce a mystery or an unfinished thought in the first 5 seconds that the brain *must* see resolved.
+3. Loss Aversion & WIIFM (What's In It For Me): Immediately connect the news to the viewer's wallet, family, safety, or daily routine. Humans pay 2x more attention to avoiding a loss than gaining something.
+4. The Empathy Bridge: Ground the news in a human story. Don't talk about "1000 people affected"; talk about "Ramesh, who lost his livelihood."
+5. Cognitive Ease: Use simple, conversational Hinglish (80% Conversational Hindi, 20% Common English words). Avoid heavy, pure Hindi (Shuddh Hindi) unless used for a single powerful punchline. 
+
+# SCRIPT STRUCTURE & PACING (25-40 Second Arc)
+
+[0:00 - 0:05] THE SCROLL-STOPPER (The Hook)
+- Do NOT start with "Namaskar dosto", "Aaj ki badi khabar", "Badi khabar", "Breaking news", or "[Location] se badi khabar". 
+- Start with a hard-hitting statement, a paradox, or a direct question. 
+- Example: "Aapke phone ki ek setting aapka bank account khali kar sakti hai..." or "Sarkar kehti hai sab theek hai, par ground reality kuch aur hai."
+
+[0:05 - 0:15] THE CONTEXT & THE STAKES (Building the Loop)
+- Explain the core news simply, but immediately raise the stakes. 
+- Use natural conversational bridges like "Asli matter ye hai ki..." (The real matter is...) to transition.
+- Make the viewer feel the urgency. Why does this matter *today*?
+
+[0:15 - 0:30] THE CORE STORY / THE CONFLICT (The Meat)
+- Tell the story using "Show, Don't Tell". 
+- Pacing: Speak slightly faster here to build momentum. Use short, punchy sentences.
+
+[0:30 - 0:35] THE EMOTIONAL CLIMAX / THE TWIST (The Peak)
+- Deliver the most shocking fact, the emotional peak, or the "Aha!" moment. 
+- Add a pause ("..."). Let the weight of the words sink in.
+- Trigger specific emotion: Outrage (for injustice), Fear (for safety), Hope (for a solution), or Shock (for a twist).
+
+[0:35 - 0:40] THE RESOLUTION & STRATEGIC CTA (The Payoff)
+- Close the open loop from the beginning. Give a clear takeaway.
+- THE CTA: DO NOT say "Like, share, and subscribe."
+- Instead, use a "Friction CTA" or "Identity CTA". Ask a polarizing, thought-provoking question that forces them to comment to defend their opinion. 
+- Example: "Kya aapko lagta hai ye naya rule aam aadmi ke haq mein hai? Comment mein apni raye zaroor batayein. Aur aisi hi ground reality janne ke liye follow karein." (DO NOT use 'subscribe', strictly use 'follow').
+
+# TONE, LANGUAGE & ANTI-PATTERNS (CRITICAL RULES)
+- Language: 80% Conversational Hindi, 20% Common English words (Hinglish). Use words like 'Reality', 'Impact', 'System', 'Ground level'.
+- Tone: Empathetic, slightly serious, authoritative, but conversational. Like a smart friend explaining a serious issue.
+- ANTI-PATTERN 1: NO FORCE-SPICING. Do not use words like "Kalyug", "Maha-prahar", or "Trahhi-trahi" for basic news. Let the *facts* create the drama, not your adjectives.
+- ANTI-PATTERN 2: NO ROBOTIC TRANSITIONS. Avoid "Chaliye jante hain", "Dosto aaj hum baat karenge". Use natural conversational bridges like "Ab sawal ye uthta hai ki...", "Yahan sabse bada twist ye hai ki...".
+- ANTI-PATTERN 3: NO FAKE URGENCY. Match the emotion to the actual severity of the news.
+
+# RAW NEWS ARTICLE INPUT:
 ${articleContent.substring(0, 2000)}
 
-RULES:
-- Script language: Hybrid Hindi + simple Hinglish mix
-- DO NOT end lines with "है" (hai)
-- Max 6-8 words per line
-- Total duration MUST BE STRICTLY BELOW 30 seconds (around 40 to 50 words, maximum 8-10 lines)
-- NEVER start a reel with "बड़ी खबर", "ब्रेकिंग न्यूज", "ताजा अपडेट", or "[Location] से बड़ी खबर". Instead, start with: The most shocking fact, The biggest consequence, The strongest emotion, or The main conflict.
-- Add pauses using "..." to control pacing
-- Keep it conversational, engaging, and not overly formal
-
-STRUCTURE:
-1. Hook
-2. Main info
-3. Impact
-4. Curiosity / Call to Action
-
-OUTPUT OBLIGATIONS (JSON ONLY):
+# OUTPUT FORMAT (STRICT JSON ONLY):
 {
-  "scriptLines": ["line 1", "line 2", "line 3"],
+  "titleCaptionIdea": "A highly clickable, curiosity-driven 1-liner for the reel caption",
+  "onScreenHookText": "The exact text to show on screen in the first 2 seconds",
+  "scriptLines": ["Line 1", "Line 2", "Line 3"],
   "hookVariation": "An optional alternative hook for A/B testing",
-  "fullScript": "The complete script separated by newlines"
+  "fullScript": "The complete clean spoken Hinglish script (50-80 words, 25-40 seconds, scaled to facts). NO bracketed cues in this string.",
+  "strategicCtaQuestion": "The exact question to ask in the video and pin in the comments to drive engagement"
 }
 `;
 
@@ -2021,7 +2071,11 @@ OUTPUT OBLIGATIONS (JSON ONLY):
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
-    return JSON.parse(cleanedText) as ReelScript;
+    const result = JSON.parse(cleanedText) as ReelScript;
+    if (result.fullScript) {
+      result.fullScript = cleanVoiceoverScript(result.fullScript);
+    }
+    return result;
   } catch (error) {
     console.error("Reel script generation failed", error);
     throw error;
@@ -2675,31 +2729,72 @@ export const generateFullReelScript = async (
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
-  const coords = template.coordinates || {};
+  const coords = template?.coordinates || {};
   const hasHeadline = coords.headline_box && coords.headline_box !== "hidden";
   const hasTicker = coords.ticker_box && coords.ticker_box !== "hidden";
   const hasSubtitles = coords.subtitle_box && coords.subtitle_box !== "hidden";
 
-  const prompt = `You are a professional TV News Anchor. Write a high-retention professional Hindi breaking news script.
-Use ONLY facts from the article. NEVER hallucinate names, numbers, quotes, causes, or outcomes.
+  const prompt = `# ROLE AND PERSONA
+You are an elite Hindi News Reel Scriptwriter and Digital Journalist. You possess the calm authority of a top-tier investigative YouTuber, the emotional storytelling of a master novelist, and the psychological manipulation skills of a viral content creator. 
 
-ARTICLE TEXT:
+Your goal is to transform raw, basic news into a 25-40 second Hindi reel script that stops the scroll, hooks the viewer psychologically, triggers deep emotions, and retains them until the very last second without feeling "force-spiced" or overly sensationalized.
+
+# DURATION & FACT-BASED SCALING RULE (STRICT 25-40 SECONDS)
+Target Duration MUST BE STRICTLY BETWEEN 25 AND 40 SECONDS (approximately 50 to 80 words spoken in Hinglish).
+Dynamically adjust script length based on the number of facts available in the news:
+- Few facts (1-2 facts): ~25 seconds (~50-55 words)
+- Moderate facts (3 facts): ~30-35 seconds (~60-70 words)
+- Rich facts (4+ facts): ~35-40 seconds (~70-80 words)
+DO NOT force stretch a simple story, and DO NOT rush a multi-fact story. Always keep the total voiceover duration strictly within 25 to 40 seconds.
+
+# CORE PSYCHOLOGICAL FRAMEWORK (Apply these to every script)
+1. The Pattern Interrupt (0-2s): Break the user's scrolling trance with a visual/verbal contradiction or a highly relatable question.
+2. The Zeigarnik Effect (Open Loops): Introduce a mystery or an unfinished thought in the first 5 seconds that the brain *must* see resolved.
+3. Loss Aversion & WIIFM (What's In It For Me): Immediately connect the news to the viewer's wallet, family, safety, or daily routine. Humans pay 2x more attention to avoiding a loss than gaining something.
+4. The Empathy Bridge: Ground the news in a human story. Don't talk about "1000 people affected"; talk about "Ramesh, who lost his livelihood."
+5. Cognitive Ease: Use simple, conversational Hinglish (80% Conversational Hindi, 20% Common English words). Avoid heavy, pure Hindi (Shuddh Hindi) unless used for a single powerful punchline.
+
+# SCRIPT STRUCTURE & PACING (25-40 Second Arc)
+
+[0:00 - 0:05] THE SCROLL-STOPPER (The Hook)
+- Do NOT start with "Namaskar dosto", "Aaj ki badi khabar", "Badi khabar", "Breaking news", or "[Location] se badi khabar".
+- Start with a hard-hitting statement, a paradox, or a direct question.
+- Example: "Aapke phone ki ek setting aapka bank account khali kar sakti hai..." or "Sarkar kehti hai sab theek hai, par ground reality kuch aur hai."
+
+[0:05 - 0:15] THE CONTEXT & THE STAKES (Building the Loop)
+- Explain the core news simply, but immediately raise the stakes.
+- Use natural conversational transitions like "Asli matter ye hai ki..." (The real matter is...) to transition.
+- Make the viewer feel the urgency. Why does this matter *today*?
+
+[0:15 - 0:30] THE CORE STORY / THE CONFLICT (The Meat)
+- Tell the story using "Show, Don't Tell".
+- Pacing: Speak slightly faster here to build momentum. Short, punchy sentences.
+
+[0:30 - 0:35] THE EMOTIONAL CLIMAX / THE TWIST (The Peak)
+- Deliver the most shocking fact, the emotional peak, or the "Aha!" moment.
+- Add a pause ("..."). Let the weight of the words sink in.
+- Trigger specific emotion: Outrage (for injustice), Fear (for safety), Hope (for a solution), or Shock (for a twist).
+
+[0:35 - 0:40] THE RESOLUTION & STRATEGIC CTA (The Payoff)
+- Close the open loop from the beginning. Give a clear takeaway.
+- THE CTA: Ask a polarizing, thought-provoking question forcing comments ("Friction CTA" or "Identity CTA").
+- Example: "Kya aapko lagta hai ye naya rule aam aadmi ke haq mein hai? Comment mein apni raye zaroor batayein. Aur aisi hi ground reality janne ke liye follow karein."
+- DO NOT say "Like, share, and subscribe." Strictly use "follow".
+
+# TONE, LANGUAGE & ANTI-PATTERNS (CRITICAL RULES)
+- Language: 80% Conversational Hindi, 20% Common English words (Hinglish). Use words like 'Reality', 'Impact', 'System', 'Ground level'.
+- Tone: Empathetic, slightly serious, authoritative, but conversational.
+- ANTI-PATTERN 1: NO FORCE-SPICING. Do not use words like "Kalyug", "Maha-prahar", or "Trahhi-trahi" for basic news. Let the *facts* create the drama, not your adjectives.
+- ANTI-PATTERN 2: NO ROBOTIC TRANSITIONS. Avoid "Chaliye jante hain", "Dosto aaj hum baat karenge". Use natural conversational bridges like "Ab sawal ye uthta hai ki...", "Yahan sabse bada twist ye hai ki...".
+- ANTI-PATTERN 3: NO FAKE URGENCY. Match the emotion to the actual severity of the news.
+
+# RAW NEWS ARTICLE INPUT:
 ${articleContent}
 
-Format rules for high engagement (TARGET DURATION STRICTLY BELOW 30 SECONDS, MAXIMUM 40-50 WORDS):
-0–5 sec: HOOK (NEVER start a reel with "बड़ी खबर", "ब्रेकिंग न्यूज", "ताजा अपडेट", or "[Location] से बड़ी खबर". Instead, start with: The most shocking fact, The biggest consequence, The strongest emotion, or The main conflict. Make it dynamic and context-aware).
-5–15 sec: What happened (The core fact delivered with clear professional urgency, including specific details and context)
-15–20 sec: Why important (Impact and crucial details without filler)
-20–25 sec: Professional Sign-off (Dynamic and professional sign-off that psychologically compels viewers to engage. MUST include a question asking for viewers' opinions or suggestions on the matter to drive comments, followed by a powerful call to action to 'like' and 'follow' for more updates. DO NOT use 'subscribe', strictly use 'follow'. E.g., "आपकी इस पर क्या राय है? कमेंट में बताएं और ऐसी ही खबरों के लिए हमें फॉलो करें").
-
-- STRICT WORD LIMIT: The entire voiceoverScript MUST be maximum 40 to 50 words to ensure it stays STRICTLY BELOW 30 seconds.
-- Sentences MUST be short, clear, and punchy. No long storytelling.
-- Tone MUST be like a fast-paced professional TV news anchor (authoritative, clear, highly energetic and urgent, yet highly compelling and engaging).
-${hasSubtitles ? `
-Subtitles Requirements (CRITICAL):
+# OUTPUT REQUIREMENTS:
+${hasSubtitles ? `Subtitles Requirements:
 - Break the ENTIRE voiceoverScript into chunks of maximum 3-5 words.
-- The combination of ALL subtitleChunks MUST match the EXACT word-for-word text of the voiceoverScript without skipping or summarizing anything.
-- Provide them as an array of strings under "subtitleChunks".` : ""}
+- The combination of ALL subtitleChunks MUST match the EXACT word-for-word text of the voiceoverScript without skipping or summarizing anything.` : ""}
 
 Categorization & Style:
 - "reelType": Breaking News, Explainer, Debate, or Useful Update.
@@ -2708,14 +2803,16 @@ Categorization & Style:
 
 Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly escape inner quotes):
 {
-  ${hasHeadline ? '"headline": "Short top headline",' : ""}
-  "voiceoverScript": "Full script combining Hook... (Must read like fluent conversational Hindi)",
+  ${hasHeadline ? '"headline": "Short top headline (On-screen hook text)",' : ""}
+  "voiceoverScript": "Full script combining Hook, Context, Core Story, Climax, and Strategic CTA (Must read like fluent conversational Hindi/Hinglish, STRICTLY 50-80 words for 25-40 seconds duration). NO bracketed cues in this string.",
   ${hasSubtitles ? '"subtitleChunks": ["रायपुर में", "बड़ा मामला", "सामने आया"],' : ""}
   ${hasTicker ? '"ticker": "Scrolling breaking news text",' : ""}
   "reelType": "string",
   "stylePreset": "string",
   "visualKeywords": "3-5 keywords for searching stock footage",
-  "facebookCaption": "String containing the facebook and instagram reel caption (STRICTLY 200-400 characters long) with 1-3 highly relevant hashtags"
+  "facebookCaption": "String containing the facebook and instagram reel caption (STRICTLY 200-400 characters long) with 1-3 highly relevant hashtags",
+  "onScreenHookText": "Exact text to show on screen in the first 2 seconds",
+  "strategicCtaQuestion": "Polarizing question to ask in video & pin in comments"
 }`;
 
   try {
@@ -2749,10 +2846,24 @@ Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly 
       throw parseError;
     }
 
-    // Fallbacks just in case the renderer expects `subtitles`.
-    if (result.subtitleChunks && Array.isArray(result.subtitleChunks)) {
-      result.subtitles = result.subtitleChunks;
+    if (result.voiceoverScript) {
+      result.voiceoverScript = cleanVoiceoverScript(result.voiceoverScript);
     }
+
+    // Fallbacks for subtitleChunks / subtitles
+    if (result.subtitleChunks && Array.isArray(result.subtitleChunks)) {
+      result.subtitles = result.subtitleChunks.map((chunk: string) => cleanVoiceoverScript(chunk));
+      result.subtitleChunks = result.subtitles;
+    } else if (result.voiceoverScript) {
+      const words = result.voiceoverScript.split(/\s+/).filter(Boolean);
+      const chunks = [];
+      for (let i = 0; i < words.length; i += 4) {
+        chunks.push(words.slice(i, i + 4).join(" "));
+      }
+      result.subtitleChunks = chunks;
+      result.subtitles = chunks;
+    }
+
     return result;
   } catch (error) {
     console.error("Gemini full reel script error:", error);
@@ -2764,12 +2875,14 @@ export const generateReelAudio = async (script: string): Promise<string> => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
+  const cleanScript = cleanVoiceoverScript(script);
+
   const ttsPrompt = `Read the following news script in an engaging, fast-paced, and energetic professional news anchor tone.
 Speak with a clear, authoritative, and urgent reporting style. Deliver the news quickly and dynamically to keep the viewer hooked, ensuring the ending call-to-action (if any) sounds highly compelling and natural.
 Ensure clear articulation and punch the key words to maintain high engagement.
 
 SCRIPT:
-${script}
+${cleanScript}
 `;
 
   try {
