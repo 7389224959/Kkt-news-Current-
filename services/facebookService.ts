@@ -1,11 +1,11 @@
-export const postToFacebook = async (message: string, imageUrl?: string, scheduledPublishTime?: number, published: boolean = true): Promise<{ success: boolean, id?: string, pageId?: string }> => {
+export const postToFacebook = async (message: string, imageUrl?: string, scheduledPublishTime?: number, published: boolean = true, comment?: string): Promise<{ success: boolean, id?: string, pageId?: string, commentDropped?: boolean }> => {
   try {
     const response = await fetch('/api/facebook/post', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ message, imageUrl, scheduledPublishTime, published }),
+      body: JSON.stringify({ message, imageUrl, scheduledPublishTime, published, comment }),
     });
 
     const textData = await response.text();

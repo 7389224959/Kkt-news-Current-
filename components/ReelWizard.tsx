@@ -30,6 +30,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
   
   const [customCoords, setCustomCoords] = useState({ headline: '', ticker: '', subtitle: '', video: '' });
   const [publishPlatforms, setPublishPlatforms] = useState({ facebook: true, instagram: autoStart ? true : false, youtube: false });
+  const [customComment, setCustomComment] = useState<string>('');
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -115,9 +116,10 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
     }
   };
 
-  const doPublishReel = async (blob: Blob, message: string) => {
+  const doPublishReel = async (blob: Blob, message: string, commentOverride?: string) => {
     setIsPublishing(true);
     setStatus('Preparing video upload...');
+    const ctaComment = commentOverride !== undefined ? commentOverride : (customComment || scriptData?.strategicCtaQuestion || '');
     try {
       let finalVideoUrl = '';
       let payloadVideo = '';
@@ -143,14 +145,15 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
 
       if (publishPlatforms.facebook) {
         try {
-          setStatus('Publishing to Facebook...');
+          setStatus('Publishing to Facebook with comment drop...');
           const res = await fetch('/api/facebook/post-video', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                message, 
                videoUrl: finalVideoUrl || undefined,
-               videoBase64: finalVideoUrl ? undefined : payloadVideo
+               videoBase64: finalVideoUrl ? undefined : payloadVideo,
+               comment: ctaComment || undefined
             }),
           });
           if (!res.ok) throw new Error(await res.text());
@@ -162,14 +165,15 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
 
       if (publishPlatforms.instagram) {
         try {
-          setStatus('Publishing to Instagram...');
+          setStatus('Publishing to Instagram with comment drop...');
           const res = await fetch('/api/instagram/post-video', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                message, 
                videoUrl: finalVideoUrl || undefined,
-               videoBase64: finalVideoUrl ? undefined : payloadVideo
+               videoBase64: finalVideoUrl ? undefined : payloadVideo,
+               comment: ctaComment || undefined
             }),
           });
           if (!res.ok) throw new Error(await res.text());
@@ -1075,6 +1079,7 @@ function ReelEditorView({
 
   const [editPrompt, setEditPrompt] = useState('');
   const [styleOverrides, setStyleOverrides] = useState<any>({});
+  const [customComment, setCustomComment] = useState<string>('');
 
   const template = activeTemplates.find((t: any) => t.id === templateId) || activeTemplates[0];
 
@@ -1206,7 +1211,8 @@ function ReelEditorView({
        hashtagsStr = '\n\n#kktnews';
     }
     const fbMessage = scriptData.facebookCaption || ((scriptData.headline || selectedArticle?.title || 'Check out our latest reel!') + hashtagsStr);
-    await doPublishReel(blob, fbMessage);
+    const commentToUse = customComment !== '' ? customComment : (scriptData?.strategicCtaQuestion || '');
+    await doPublishReel(blob, fbMessage, commentToUse);
   };
 
   return (
@@ -1361,20 +1367,37 @@ function ReelEditorView({
                  {audioUrl && <a href={audioUrl} download="voiceover.wav" className="px-3 py-2 bg-white rounded border text-sm text-center font-medium shadow-sm hover:bg-gray-50 flex items-center justify-center gap-2">⬇️ Download Voiceover Audio</a>}
                  <a href={videoBase64.startsWith('blob:') ? videoBase64 : `data:video/mp4;base64,${videoBase64}`} download="reel.mp4" className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded border text-sm text-center font-medium shadow-sm flex items-center justify-center gap-2">⬇️ Download Final Reel.mp4</a>
                  
-                 <div className="bg-white p-3 rounded border my-2">
-                   <h5 className="text-sm font-bold mb-2">Publish To:</h5>
-                   <div className="flex gap-4">
-                     <label className="flex items-center gap-1 cursor-pointer">
-                       <input type="checkbox" checked={publishPlatforms.facebook} onChange={(e) => setPublishPlatforms({...publishPlatforms, facebook: e.target.checked})} /> Facebook
-                     </label>
-                     <label className="flex items-center gap-1 cursor-pointer">
-                       <input type="checkbox" checked={publishPlatforms.instagram} onChange={(e) => setPublishPlatforms({...publishPlatforms, instagram: e.target.checked})} /> Instagram
-                     </label>
-                     <label className="flex items-center gap-1 cursor-pointer">
-                       <input type="checkbox" checked={publishPlatforms.youtube} onChange={(e) => setPublishPlatforms({...publishPlatforms, youtube: e.target.checked})} /> YouTube
-                     </label>
-                   </div>
-                 </div>
+                 <div className="bg-white p-3 rounded border my-2 space-y-3">
+                    <div>
+                      <h5 className="text-sm font-bold mb-1 text-slate-800 flex items-center gap-1">
+                        📌 Pinned Comment (CTA Question Drop)
+                      </h5>
+                      <p className="text-xs text-slate-500 mb-1.5">
+                        This comment will be automatically posted on Facebook & Instagram right after publishing to drive engagement.
+                      </p>
+                      <input
+                        type="text"
+                        value={customComment !== '' ? customComment : (scriptData?.strategicCtaQuestion || '')}
+                        onChange={(e) => setCustomComment(e.target.value)}
+                        placeholder="e.g. आपकी इस खबर पर क्या राय है? कमेंट में बताएं!"
+                        className="w-full px-3 py-1.5 border rounded text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-bold mb-2">Publish To:</h5>
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input type="checkbox" checked={publishPlatforms.facebook} onChange={(e) => setPublishPlatforms({...publishPlatforms, facebook: e.target.checked})} /> Facebook
+                        </label>
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input type="checkbox" checked={publishPlatforms.instagram} onChange={(e) => setPublishPlatforms({...publishPlatforms, instagram: e.target.checked})} /> Instagram
+                        </label>
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input type="checkbox" checked={publishPlatforms.youtube} onChange={(e) => setPublishPlatforms({...publishPlatforms, youtube: e.target.checked})} /> YouTube
+                        </label>
+                      </div>
+                    </div>
+                  </div>
 
                  <button onClick={handlePublishReel} disabled={isPublishing || (!publishPlatforms.facebook && !publishPlatforms.instagram && !publishPlatforms.youtube)} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded border text-sm text-center font-medium shadow-sm flex items-center justify-center gap-2 disabled:opacity-50">
                     {isPublishing ? <RefreshCw className="animate-spin" size={16}/> : '🌐'} {isPublishing ? 'Publishing...' : 'Publish Selected Platforms'}

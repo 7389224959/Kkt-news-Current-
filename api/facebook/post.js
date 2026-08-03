@@ -4,7 +4,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { message, imageUrl, scheduledPublishTime, published = true } = req.body;
+    const { message, imageUrl, scheduledPublishTime, published = true, comment } = req.body;
     
     if (!message) {
       return res.status(400).json({ error: 'Message is required to post to Facebook.' });
@@ -121,11 +121,31 @@ export default async function handler(req, res) {
     
     console.log("Public Post URL:", postUrl);
 
+    let commentResult = null;
+    if (comment && postId) {
+      try {
+        console.log("Dropping comment on Facebook post:", postId);
+        const commentRes = await fetch(`https://graph.facebook.com/v19.0/${postId}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: comment,
+            access_token: resolvedAccessToken
+          })
+        });
+        commentResult = await commentRes.json();
+        console.log("FB Post Comment Drop Response:", commentResult);
+      } catch (commentErr) {
+        console.error("Failed to drop comment on FB post:", commentErr);
+      }
+    }
+
     res.status(200).json({ 
       success: true, 
       id: postId,
       pageId: pageId,
-      url: postUrl
+      url: postUrl,
+      commentDropped: !!commentResult?.id
     });
   } catch (error) {
     console.error('Error posting to Facebook:', error);

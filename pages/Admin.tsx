@@ -600,7 +600,8 @@ const Admin: React.FC = () => {
       });
       
       const overlaidImageUrl = await uploadImage(newImageBase64);
-      const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true);
+      const ctaComment = post.cta_question || post.subheadline || post.headline_line_1 || '';
+      const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true, ctaComment);
       
       setShowDailyNewsModal(false);
       setShowViralModal(false);
@@ -780,7 +781,8 @@ const Admin: React.FC = () => {
         });
         
         const overlaidImageUrl = await uploadImage(newImageBase64);
-        const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true);
+        const ctaComment = post.cta_question || post.subheadline || post.headline_line_1 || '';
+        const fbResult = await postToFacebook(post.caption, overlaidImageUrl, undefined, true, ctaComment);
         
         setShowDailyNewsModal(false);
         setShowViralModal(false);
@@ -1227,7 +1229,8 @@ const Admin: React.FC = () => {
       // 1. Upload the already-rendered frontend image directly to Supabase
       const overlaidImageUrl = await uploadImage(viralGeneratedImage);
 
-      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, undefined, true);
+      const ctaComment = viralPost.cta_question || viralPost.subheadline || viralPost.headline_line_1 || '';
+      const result = await postToFacebook(viralPost.caption, overlaidImageUrl, undefined, true, ctaComment);
       
       if (result.success && result.id) {
         alert("Successfully published post to Facebook!");

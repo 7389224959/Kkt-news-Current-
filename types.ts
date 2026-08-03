@@ -188,6 +188,8 @@ export interface ViralPost {
   hashtags: string[];
   image_prompt: string;
   theme?: string;
+  cta_question?: string;
+  strategicCtaQuestion?: string;
 }
 
 export interface User {
