@@ -1983,6 +1983,15 @@ export const cleanVoiceoverScript = (text: string): string => {
     .trim();
 };
 
+export const formatReelCaption = (caption: string): string => {
+  if (!caption) return "";
+  let text = caption.trim();
+  if (text.length > 400) {
+    text = text.slice(0, 397).replace(/\s+[^\s]*$/, "") + "...";
+  }
+  return text;
+};
+
 export const generateReelScript = async (
   articleContent: string,
 ): Promise<ReelScript> => {
@@ -2848,6 +2857,10 @@ Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly 
 
     if (result.voiceoverScript) {
       result.voiceoverScript = cleanVoiceoverScript(result.voiceoverScript);
+    }
+
+    if (result.facebookCaption) {
+      result.facebookCaption = formatReelCaption(result.facebookCaption);
     }
 
     // Fallbacks for subtitleChunks / subtitles
