@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, Zap, X, Image as ImageIcon, Video, Upload, Settings, ChevronRight, ChevronLeft } from 'lucide-react';
+import { RefreshCw, Zap, X, Image as ImageIcon, Video, Upload, Settings, ChevronRight, ChevronLeft, Volume2, Mic } from 'lucide-react';
 import { Article } from '../types';
-import { generateFullReelScript, generateReelAudio, generateAiImage, findVisualsForScript, planScenesForScript, findShotsForScene } from '../services/geminiService';
+import { generateFullReelScript, generateReelAudio, generateAiImage, findVisualsForScript, planScenesForScript, findShotsForScene, ANCHOR_VOICES } from '../services/geminiService';
 import { pcmBase64ToWavUrl, pcmBase64ToWavDataUri } from '../src/utils/audioUtils';
 import { uploadImage } from '../services/supabase';
 import { saveSiteSettings } from '../services/articleService';
@@ -13,6 +13,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
   
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [scriptData, setScriptData] = useState<any>({ fullScript: '', headline: '', ticker: '', voiceoverScript: '', subtitles: [] });
+  const [selectedVoice, setSelectedVoice] = useState<string>('Puck');
+  const [enableAudioTags, setEnableAudioTags] = useState<boolean>(true);
   
   const [showHeadline, setShowHeadline] = useState(true);
   const [showTicker, setShowTicker] = useState(true);
@@ -97,7 +99,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       if (!showSubtitles) modifiedTemplate.coordinates.subtitle_box = 'hidden';
       
       // Call the helper to fetch
-      const result = await generateFullReelScript(articleContent, modifiedTemplate);
+      const result = await generateFullReelScript(articleContent, modifiedTemplate, enableAudioTags);
       
       setScriptData({
         ...result,
@@ -234,7 +236,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       if (!showTicker) modifiedTemplate.coordinates.ticker_box = 'hidden';
       if (!showSubtitles) modifiedTemplate.coordinates.subtitle_box = 'hidden';
 
-      const result = await generateFullReelScript(articleContent, modifiedTemplate);
+      const result = await generateFullReelScript(articleContent, modifiedTemplate, enableAudioTags);
       const updatedScriptData = {
         ...result,
         headline: showHeadline ? result.headline : '',
@@ -244,8 +246,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       };
       setScriptData(updatedScriptData);
 
-      setStatus('Step 2/3: Generating voiceover...');
-      const base64Audio = await generateReelAudio(updatedScriptData.fullScript || updatedScriptData.voiceoverScript);
+      setStatus(`Step 2/3: Generating voiceover (${selectedVoice})...`);
+      const base64Audio = await generateReelAudio(updatedScriptData.fullScript || updatedScriptData.voiceoverScript, selectedVoice, enableAudioTags);
       const newAudioUrl = pcmBase64ToWavUrl(base64Audio);
       const newAudioDataUri = pcmBase64ToWavDataUri(base64Audio);
       setAudioUrl(newAudioUrl);
@@ -362,14 +364,16 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
     }
   }, [autoStart, articles, activeTemplates, selectedArticle, settings]);
 
-  const handleGenerateVoice = async () => {
+  const handleGenerateVoice = async (voiceToUse?: string) => {
+    const voice = voiceToUse || selectedVoice;
     setIsGenerating(true);
-    setStatus('Generating professional female voiceover...');
+    setStatus(`Generating news anchor voiceover (${voice} model)...`);
     try {
-      const base64Audio = await generateReelAudio(scriptData.fullScript || scriptData.voiceoverScript);
+      const base64Audio = await generateReelAudio(scriptData.fullScript || scriptData.voiceoverScript, voice, enableAudioTags);
       setAudioUrl(pcmBase64ToWavUrl(base64Audio));
       setAudioDataUri(pcmBase64ToWavDataUri(base64Audio));
-      setStep(3);
+      if (voiceToUse) setSelectedVoice(voiceToUse);
+      if (step === 2) setStep(3);
     } catch (e: any) {
       console.error(e);
       alert('Voice error: ' + e.message);
@@ -641,14 +645,36 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
              </div>
           </div>
 
-          <div className="bg-gray-50 p-4 rounded border">
-            <h4 className="font-medium mb-2">Element Visibility</h4>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={showHeadline} onChange={(e)=>setShowHeadline(e.target.checked)} /> Headline</label>
-              <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={showTicker} onChange={(e)=>setShowTicker(e.target.checked)} /> Ticker</label>
-              <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={showSubtitles} onChange={(e)=>setShowSubtitles(e.target.checked)} /> Subtitles</label>
+          <div className="bg-gray-50 p-4 rounded border space-y-3">
+            <div>
+              <h4 className="font-medium mb-1 text-sm text-gray-800">Element Visibility</h4>
+              <div className="flex gap-4 text-sm">
+                <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={showHeadline} onChange={(e)=>setShowHeadline(e.target.checked)} /> Headline</label>
+                <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={showTicker} onChange={(e)=>setShowTicker(e.target.checked)} /> Ticker</label>
+                <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={showSubtitles} onChange={(e)=>setShowSubtitles(e.target.checked)} /> Subtitles</label>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">AI will only generate text for visible elements.</p>
             </div>
-            <p className="text-xs text-gray-500 mt-2">AI will only generate text for visible elements.</p>
+
+            <div className="pt-3 border-t border-gray-200 flex items-center justify-between">
+              <div>
+                <h4 className="font-medium flex items-center gap-1.5 text-sm text-pink-900">
+                  <Volume2 size={16} className="text-pink-600"/> Audio Tags & Expression Directives
+                </h4>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Insert bracketed emotion & pacing tags (e.g. <code>[serious]</code>, <code>[fast]</code>, <code>[slow]</code>, <code>[dramatic]</code>) to dynamically modulate voiceover inflection mid-sentence.
+                </p>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer bg-pink-50 px-3 py-1.5 rounded-lg border border-pink-200 text-xs font-bold text-pink-900 shrink-0 ml-3 hover:bg-pink-100 transition-all">
+                <input 
+                  type="checkbox" 
+                  checked={enableAudioTags} 
+                  onChange={(e) => setEnableAudioTags(e.target.checked)} 
+                  className="rounded text-pink-600 focus:ring-pink-500"
+                />
+                <span>Audio Tags: {enableAudioTags ? 'ENABLED' : 'DISABLED'}</span>
+              </label>
+            </div>
           </div>
 
           <button onClick={handleGenerateScript} disabled={isGenerating} className="btn-primary w-full py-3 flex gap-2 items-center justify-center bg-gray-900 text-white rounded">
@@ -660,13 +686,29 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
       {step === 2 && (
         <div className="space-y-4">
           <div>
-            <label className="font-medium text-sm">Voiceover Script (Hindi/Hinglish)</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="font-medium text-sm text-gray-900">Voiceover Script (Hindi/Hinglish)</label>
+              <label className="flex items-center gap-1.5 text-xs text-pink-900 font-bold cursor-pointer bg-pink-50 px-2.5 py-1 rounded border border-pink-200 hover:bg-pink-100 transition-all">
+                <input 
+                  type="checkbox" 
+                  checked={enableAudioTags} 
+                  onChange={(e) => setEnableAudioTags(e.target.checked)} 
+                  className="rounded text-pink-600 focus:ring-pink-500"
+                />
+                <span>Audio Tags ([serious], [fast]): <strong>{enableAudioTags ? 'ON' : 'OFF'}</strong></span>
+              </label>
+            </div>
             <textarea 
               rows={6}
               value={scriptData.fullScript || ''}
               onChange={(e) => setScriptData({...scriptData, fullScript: e.target.value})}
-              className="w-full border rounded p-2"
+              className="w-full border rounded p-2 text-sm font-sans"
             />
+            {enableAudioTags && (
+              <p className="text-[11px] text-pink-700 mt-1 font-medium">
+                💡 Insert bracketed tags directly into the text (e.g. <code>[serious]</code>, <code>[fast]</code>, <code>[slow]</code>, <code>[pause]</code>, <code>[dramatic]</code>) to dynamically alter pacing and emotion mid-sentence.
+              </p>
+            )}
           </div>
           
           {showHeadline && (
@@ -693,11 +735,38 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
             </div>
           )}
 
+          {/* Anchor Voice Model Picker */}
+          <div className="bg-gradient-to-r from-pink-50 to-purple-50 p-4 rounded-lg border border-pink-200">
+            <label className="font-bold text-sm text-pink-900 mb-2 flex items-center gap-2">
+              <Mic size={16} className="text-pink-600"/> Select Anchor Voice Model
+            </label>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              {ANCHOR_VOICES.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setSelectedVoice(v.id)}
+                  className={`p-2.5 rounded-lg border text-left flex flex-col justify-between transition-all ${
+                    selectedVoice === v.id
+                      ? 'border-pink-600 bg-white ring-2 ring-pink-400 shadow-sm'
+                      : 'border-gray-200 bg-white/80 hover:bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-bold text-xs text-gray-900">{v.name}</span>
+                    <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${v.gender === 'Female' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'}`}>{v.gender}</span>
+                  </div>
+                  <span className="text-[10px] text-gray-500 mt-1 line-clamp-1">{v.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex gap-4 pt-4">
              <button onClick={() => setStep(1)} className="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Back</button>
              <button onClick={() => { setAudioUrl(''); setAudioDataUri(''); setStep(3); }} className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 font-bold">Skip Voiceover</button>
-             <button onClick={handleGenerateVoice} disabled={isGenerating} className="flex-1 bg-gray-900 text-white rounded py-2 flex items-center justify-center gap-2">
-               {isGenerating ? <RefreshCw className="animate-spin" size={18}/> : null} Generate Voiceover
+             <button onClick={() => handleGenerateVoice(selectedVoice)} disabled={isGenerating} className="flex-1 bg-gray-900 hover:bg-black text-white rounded py-2 flex items-center justify-center gap-2 font-bold">
+               {isGenerating ? <RefreshCw className="animate-spin" size={18}/> : <Volume2 size={18} />} Generate Voiceover ({selectedVoice})
              </button>
           </div>
         </div>
@@ -705,12 +774,58 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
 
       {step === 3 && (
         <div className="space-y-6">
-           {audioUrl && (
-             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <h4 className="font-medium flex items-center gap-2 mb-2 text-green-800"><Zap size={16}/> Voiceover Ready!</h4>
+           <div className="p-4 bg-gradient-to-r from-pink-50 to-purple-50 border border-pink-200 rounded-lg space-y-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold flex items-center gap-2 text-pink-900">
+                  <Volume2 size={18} className="text-pink-600"/> Anchor Voiceover Audio
+                </h4>
+                <span className="text-xs bg-pink-100 text-pink-800 px-2.5 py-1 rounded-full font-bold border border-pink-300">
+                  Voice Model: {selectedVoice}
+                </span>
+              </div>
+
+              {audioUrl ? (
                 <audio src={audioUrl} controls className="w-full h-8" />
-             </div>
-           )}
+              ) : (
+                <p className="text-xs text-gray-500 italic">No audio generated yet.</p>
+              )}
+
+              <div className="pt-2 border-t border-pink-200/60 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-gray-700">Voice Model:</label>
+                    <select
+                      value={selectedVoice}
+                      onChange={(e) => setSelectedVoice(e.target.value)}
+                      className="px-2.5 py-1.5 border border-gray-300 rounded text-xs bg-white font-medium text-gray-800 shadow-sm focus:ring-2 focus:ring-pink-400"
+                    >
+                      {ANCHOR_VOICES.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name} ({v.gender} - {v.description})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs text-gray-800 font-bold cursor-pointer bg-white px-2.5 py-1.5 rounded border border-pink-200 shadow-sm hover:bg-pink-50 transition-all">
+                    <input 
+                      type="checkbox" 
+                      checked={enableAudioTags} 
+                      onChange={(e) => setEnableAudioTags(e.target.checked)} 
+                      className="rounded text-pink-600 focus:ring-pink-500"
+                    />
+                    <span>Audio Tags: <strong className={enableAudioTags ? "text-pink-600" : "text-gray-500"}>{enableAudioTags ? 'ON' : 'OFF'}</strong></span>
+                  </label>
+                </div>
+                <button
+                  onClick={() => handleGenerateVoice(selectedVoice)}
+                  disabled={isGenerating}
+                  className="px-3.5 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+                >
+                  {isGenerating ? <RefreshCw className="animate-spin" size={14}/> : <RefreshCw size={14}/>}
+                  Regenerate Audio
+                </button>
+              </div>
+           </div>
 
            <div>
               <h4 className="font-medium mb-2">Select Visual Source</h4>
@@ -1049,6 +1164,9 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
             setStep={setStep} handleRender={handleRender}
             videoBase64={videoBase64} isGenerating={isGenerating} setStatus={setStatus}
             audioUrl={audioUrl}
+            selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice}
+            enableAudioTags={enableAudioTags} setEnableAudioTags={setEnableAudioTags}
+            handleGenerateVoice={handleGenerateVoice}
             publishPlatforms={publishPlatforms} setPublishPlatforms={setPublishPlatforms}
         />
       )}
@@ -1069,6 +1187,7 @@ function ReelEditorView({
   isPublishing, doPublishReel, onClose, templateId, activeTemplates, scriptData, setScriptData,
   visualMode, customMediaUrl, overlayMode, overlayMediaUrl, selectedArticle, showHeadline, showTicker, showSubtitles,
   customCoords, setCustomCoords, setStep, handleRender, videoBase64, isGenerating, setStatus, audioUrl,
+  selectedVoice, setSelectedVoice, enableAudioTags, setEnableAudioTags, handleGenerateVoice,
   publishPlatforms, setPublishPlatforms
 }: any) {
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -1354,7 +1473,57 @@ function ReelEditorView({
                {isGenerating ? <RefreshCw className="animate-spin" size={16}/> : <Zap size={16}/>} AI Edit
             </button>
          </div>
-         
+
+         {/* Voice Model Selector in Editor Step 4 */}
+         <div className="bg-gradient-to-r from-pink-50 to-purple-50 border border-pink-200 rounded-lg p-4 space-y-3 shadow-sm my-4">
+            <div className="flex items-center justify-between">
+               <h4 className="font-bold text-pink-900 flex items-center gap-2 text-sm">
+                 <Mic size={16} className="text-pink-600"/> Voice & Audio Settings
+               </h4>
+               <div className="flex items-center gap-2">
+                 <label className="flex items-center gap-1.5 text-xs text-pink-900 font-bold cursor-pointer bg-white px-2 py-0.5 rounded border border-pink-200 hover:bg-pink-100 transition-all">
+                   <input 
+                     type="checkbox" 
+                     checked={enableAudioTags} 
+                     onChange={(e) => setEnableAudioTags(e.target.checked)} 
+                     className="rounded text-pink-600 focus:ring-pink-500"
+                   />
+                   <span>Audio Tags: <strong>{enableAudioTags ? 'ON' : 'OFF'}</strong></span>
+                 </label>
+                 <span className="text-xs bg-pink-100 text-pink-800 px-2.5 py-0.5 rounded-full font-bold border border-pink-300">
+                   Active: {selectedVoice}
+                 </span>
+               </div>
+            </div>
+            <p className="text-xs text-gray-600">Change anchor voice model (Puck, Charon, Kore, Fenrir, Aoede) or toggle emotion audio tags before regenerating voiceover audio.</p>
+            <div className="flex flex-wrap items-center gap-2">
+               <select
+                 value={selectedVoice}
+                 onChange={(e) => setSelectedVoice(e.target.value)}
+                 className="flex-1 min-w-[140px] px-3 py-1.5 border border-gray-300 rounded text-xs bg-white font-medium text-gray-800 focus:ring-2 focus:ring-pink-400"
+               >
+                 {ANCHOR_VOICES.map((v) => (
+                   <option key={v.id} value={v.id}>
+                     {v.name} ({v.gender} - {v.description})
+                   </option>
+                 ))}
+               </select>
+               <button
+                 onClick={() => handleGenerateVoice(selectedVoice)}
+                 disabled={isGenerating}
+                 className="px-3.5 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+               >
+                 {isGenerating ? <RefreshCw className="animate-spin" size={14}/> : <Volume2 size={14}/>}
+                 Regenerate Audio
+               </button>
+            </div>
+            {audioUrl && (
+              <div className="pt-2 border-t border-pink-200/60">
+                <audio src={audioUrl} controls className="w-full h-8" />
+              </div>
+            )}
+         </div>
+
          <div className="bg-gray-50 border rounded-lg p-4 space-y-4">
             <h4 className="font-bold flex items-center gap-2">Export Final Video</h4>
             <p className="text-sm text-gray-600 mb-4">When the layout looks good, render the final video. Generating might take a minute.</p>

@@ -1975,8 +1975,11 @@ export interface ReelScript {
   strategicCtaQuestion?: string;
 }
 
-export const cleanVoiceoverScript = (text: string): string => {
+export const cleanVoiceoverScript = (text: string, preserveAudioTags: boolean = false): string => {
   if (!text) return "";
+  if (preserveAudioTags) {
+    return text.replace(/\s+/g, " ").trim();
+  }
   return text
     .replace(/\[.*?\]/g, "")
     .replace(/\s+/g, " ")
@@ -1994,6 +1997,7 @@ export const formatReelCaption = (caption: string): string => {
 
 export const generateReelScript = async (
   articleContent: string,
+  enableAudioTags: boolean = true,
 ): Promise<ReelScript> => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
@@ -2061,7 +2065,7 @@ ${articleContent.substring(0, 2000)}
   "onScreenHookText": "The exact text to show on screen in the first 2 seconds",
   "scriptLines": ["Line 1", "Line 2", "Line 3"],
   "hookVariation": "An optional alternative hook for A/B testing",
-  "fullScript": "The complete clean spoken Hinglish script (50-80 words, 25-40 seconds, scaled to facts). NO bracketed cues in this string.",
+  "fullScript": ${enableAudioTags ? '"The complete spoken Hinglish script with bracketed audio emotion/pacing tags (e.g., [serious], [fast], [slow], [pause], [dramatic], [excited], [urgent]) to dynamically alter voice inflection."' : '"The complete clean spoken Hinglish script (50-80 words, 25-40 seconds, scaled to facts). NO bracketed cues in this string."'},
   "strategicCtaQuestion": "The exact question to ask in the video and pin in the comments to drive engagement"
 }
 `;
@@ -2082,7 +2086,7 @@ ${articleContent.substring(0, 2000)}
       .trim();
     const result = JSON.parse(cleanedText) as ReelScript;
     if (result.fullScript) {
-      result.fullScript = cleanVoiceoverScript(result.fullScript);
+      result.fullScript = cleanVoiceoverScript(result.fullScript, enableAudioTags);
     }
     return result;
   } catch (error) {
@@ -2734,6 +2738,7 @@ Return ONLY a JSON array:
 export const generateFullReelScript = async (
   articleContent: string,
   template: any,
+  enableAudioTags: boolean = true,
 ) => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
@@ -2813,7 +2818,7 @@ Categorization & Style:
 Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly escape inner quotes):
 {
   ${hasHeadline ? '"headline": "Short top headline (On-screen hook text)",' : ""}
-  "voiceoverScript": "Full script combining Hook, Context, Core Story, Climax, and Strategic CTA (Must read like fluent conversational Hindi/Hinglish, STRICTLY 50-80 words for 25-40 seconds duration). NO bracketed cues in this string.",
+  "voiceoverScript": ${enableAudioTags ? '"Full script combining Hook, Context, Core Story, Climax, and Strategic CTA (Must read like fluent conversational Hindi/Hinglish, STRICTLY 50-80 words). IMPORTANT: Insert bracketed audio emotion and pacing tags directly into the text (e.g., [serious], [fast], [slow], [pause], [dramatic], [excited], [urgent]) to dynamically change tone mid-sentence."' : '"Full script combining Hook, Context, Core Story, Climax, and Strategic CTA (Must read like fluent conversational Hindi/Hinglish, STRICTLY 50-80 words for 25-40 seconds duration). NO bracketed cues in this string."'},
   ${hasSubtitles ? '"subtitleChunks": ["रायपुर में", "बड़ा मामला", "सामने आया"],' : ""}
   ${hasTicker ? '"ticker": "Scrolling breaking news text",' : ""}
   "reelType": "string",
@@ -2856,7 +2861,7 @@ Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly 
     }
 
     if (result.voiceoverScript) {
-      result.voiceoverScript = cleanVoiceoverScript(result.voiceoverScript);
+      result.voiceoverScript = cleanVoiceoverScript(result.voiceoverScript, enableAudioTags);
     }
 
     if (result.facebookCaption) {
@@ -2884,13 +2889,31 @@ Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly 
   }
 };
 
-export const generateReelAudio = async (script: string): Promise<string> => {
+export const ANCHOR_VOICES = [
+  { id: 'Puck', name: 'Puck', gender: 'Male', description: 'Energetic News Anchor' },
+  { id: 'Charon', name: 'Charon', gender: 'Male', description: 'Deep & Authoritative Anchor' },
+  { id: 'Kore', name: 'Kore', gender: 'Female', description: 'Clear & Engaging Anchor' },
+  { id: 'Fenrir', name: 'Fenrir', gender: 'Male', description: 'Fast & Intense Anchor' },
+  { id: 'Aoede', name: 'Aoede', gender: 'Female', description: 'Warm & Expressive Anchor' },
+];
+
+export const generateReelAudio = async (
+  script: string, 
+  voiceName: string = "Puck", 
+  enableAudioTags: boolean = true
+): Promise<string> => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
-  const cleanScript = cleanVoiceoverScript(script);
+  const cleanScript = cleanVoiceoverScript(script, enableAudioTags);
 
-  const ttsPrompt = `Read the following news script in an engaging, fast-paced, and energetic professional news anchor tone.
+  const ttsPrompt = enableAudioTags
+    ? `Read the following news script in an engaging professional news anchor tone.
+AUDIO TAGS INSTRUCTION: The script contains bracketed emotion, pacing, and tone direction tags (such as [serious], [fast], [slow], [pause], [dramatic], [excited], [urgent]). You MUST interpret and execute these bracketed tags to dynamically adjust your speech rate, emotion, inflection, and pauses mid-sentence. Do NOT read out the bracketed tag words themselves; use them strictly as vocal performance directions.
+
+SCRIPT:
+${cleanScript}`
+    : `Read the following news script in an engaging, fast-paced, and energetic professional news anchor tone.
 Speak with a clear, authoritative, and urgent reporting style. Deliver the news quickly and dynamically to keep the viewer hooked, ensuring the ending call-to-action (if any) sounds highly compelling and natural.
 Ensure clear articulation and punch the key words to maintain high engagement.
 
@@ -2907,7 +2930,7 @@ ${cleanScript}
         responseModalities: ["AUDIO"],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: "Puck" }, // Professional news anchor voice
+            prebuiltVoiceConfig: { voiceName: voiceName || "Puck" }, // Configured news anchor voice model
           },
         },
       },
