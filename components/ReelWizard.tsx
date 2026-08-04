@@ -144,6 +144,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
 
       let successCount = 0;
       let errorMsgs = [];
+      let commentMsgs = [];
 
       if (publishPlatforms.facebook) {
         try {
@@ -158,8 +159,20 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
                comment: ctaComment || undefined
             }),
           });
-          if (!res.ok) throw new Error(await res.text());
+          const textRes = await res.text();
+          let fbData: any = {};
+          try { fbData = JSON.parse(textRes); } catch(e) {}
+
+          if (!res.ok) throw new Error(fbData.error || textRes || 'Failed to publish to Facebook');
           successCount++;
+
+          if (ctaComment) {
+            if (fbData.commentDropped) {
+              commentMsgs.push('Facebook: Comment dropped successfully! ✅');
+            } else {
+              commentMsgs.push('Facebook: Video published, but comment drop failed ⚠️ (' + (fbData.commentError || 'Unknown error') + ')');
+            }
+          }
         } catch(e: any) {
           errorMsgs.push('Facebook: ' + e.message);
         }
@@ -178,8 +191,20 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
                comment: ctaComment || undefined
             }),
           });
-          if (!res.ok) throw new Error(await res.text());
+          const textRes = await res.text();
+          let igData: any = {};
+          try { igData = JSON.parse(textRes); } catch(e) {}
+
+          if (!res.ok) throw new Error(igData.error || textRes || 'Failed to publish to Instagram');
           successCount++;
+
+          if (ctaComment) {
+            if (igData.commentDropped) {
+              commentMsgs.push('Instagram: Comment dropped successfully! ✅');
+            } else {
+              commentMsgs.push('Instagram: Reel published, but comment drop failed ⚠️ (' + (igData.commentError || 'Unknown error') + ')');
+            }
+          }
         } catch(e: any) {
           errorMsgs.push('Instagram: ' + e.message);
         }
@@ -205,10 +230,18 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
         }
       }
       
+      let finalNotice = '';
+      if (successCount > 0) {
+        finalNotice += 'Successfully published to selected platforms!';
+        if (commentMsgs.length > 0) {
+          finalNotice += '\n\nComment Drop Status:\n' + commentMsgs.join('\n');
+        }
+      }
+      
       if (errorMsgs.length > 0) {
-        alert('Some publishes failed:\n' + errorMsgs.join('\n'));
+        alert('Some publishes failed:\n' + errorMsgs.join('\n') + (finalNotice ? '\n\n' + finalNotice : ''));
       } else if (successCount > 0) {
-        alert('Successfully published to selected platforms!');
+        alert(finalNotice);
       } else {
         alert('No platforms selected for publishing. Please select at least one.');
       }
@@ -311,7 +344,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
          setStatus('Step 5/5: Auto Publishing Reel...');
          try {
             const message = updatedScriptData.facebookCaption || ((updatedScriptData.headline || article.title || 'Breaking News') + ' \n\n#kktnews');
-            await doPublishReel(blob, message);
+            const autoComment = updatedScriptData?.strategicCtaQuestion || updatedScriptData?.subheadline || updatedScriptData?.headline || article.title || '';
+            await doPublishReel(blob, message, autoComment);
          } catch(e) {
             console.error('Auto publish failed', e);
          }

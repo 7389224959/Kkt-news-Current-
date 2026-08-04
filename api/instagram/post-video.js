@@ -87,22 +87,54 @@ export default async function handler(req, res) {
     const postUrl = `https://instagram.com/p/${mediaId}`;
 
     let commentResult = null;
-    if (comment && mediaId) {
-      try {
-        console.log("Dropping comment on Instagram reel:", mediaId);
-        const commentUrl = `https://graph.facebook.com/v19.0/${mediaId}/comments`;
-        const commentForm = new URLSearchParams();
-        commentForm.append('access_token', accessToken);
-        commentForm.append('message', comment);
+    let commentDropped = false;
+    let commentError = null;
 
-        const commentRes = await fetch(commentUrl, {
-          method: 'POST',
-          body: commentForm,
-        });
-        commentResult = await commentRes.json();
-        console.log("IG Reel Comment Drop Response:", commentResult);
-      } catch (commentErr) {
-        console.error("Failed to drop comment on Instagram reel:", commentErr);
+    if (comment && mediaId) {
+      console.log("Dropping comment on Instagram reel:", mediaId, "Comment:", comment);
+      
+      // Instagram reels require a short delay (4 seconds) after publish before comments can be added
+      await new Promise(resolve => setTimeout(resolve, 4000));
+      
+      let attempts = 0;
+      const maxCommentAttempts = 3;
+
+      while (!commentDropped && attempts < maxCommentAttempts) {
+        attempts++;
+        try {
+          const commentUrl = `https://graph.facebook.com/v19.0/${mediaId}/comments`;
+          const commentForm = new URLSearchParams();
+          commentForm.append('access_token', accessToken);
+          commentForm.append('message', comment);
+
+          const commentRes = await fetch(commentUrl, {
+            method: 'POST',
+            body: commentForm,
+          });
+
+          const textRes = await commentRes.text();
+          let jsonRes = {};
+          try { jsonRes = JSON.parse(textRes); } catch(e) {}
+
+          console.log(`IG Reel Comment Drop Attempt ${attempts} Response:`, jsonRes);
+
+          if (commentRes.ok && jsonRes.id) {
+            commentResult = jsonRes;
+            commentDropped = true;
+          } else {
+            commentError = jsonRes.error?.message || textRes || `HTTP ${commentRes.status}`;
+            console.warn(`IG Reel comment attempt ${attempts} failed:`, commentError);
+            if (attempts < maxCommentAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+          }
+        } catch (commentErr) {
+          commentError = commentErr.message;
+          console.error(`Failed to drop comment on Instagram reel (attempt ${attempts}):`, commentErr);
+          if (attempts < maxCommentAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+        }
       }
     }
 
@@ -110,7 +142,8 @@ export default async function handler(req, res) {
       success: true, 
       id: mediaId,
       url: postUrl,
-      commentDropped: !!commentResult?.id
+      commentDropped,
+      commentError: commentDropped ? null : commentError
     });
   } catch (error) {
     console.error('Error posting video to Instagram:', error);
