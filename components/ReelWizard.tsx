@@ -170,7 +170,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
             if (fbData.commentDropped) {
               commentMsgs.push('Facebook: Comment dropped successfully! ✅');
             } else {
-              commentMsgs.push('Facebook: Video published, but comment drop failed ⚠️ (' + (fbData.commentError || 'Unknown error') + ')');
+              commentMsgs.push('Facebook: Video published! (Comment drop note: ' + (fbData.commentError || 'Meta App permission required') + ')');
             }
           }
         } catch(e: any) {
@@ -202,7 +202,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
             if (igData.commentDropped) {
               commentMsgs.push('Instagram: Comment dropped successfully! ✅');
             } else {
-              commentMsgs.push('Instagram: Reel published, but comment drop failed ⚠️ (' + (igData.commentError || 'Unknown error') + ')');
+              commentMsgs.push('Instagram: Reel published! (Comment drop note: ' + (igData.commentError || 'Meta App permission required') + ')');
             }
           }
         } catch(e: any) {

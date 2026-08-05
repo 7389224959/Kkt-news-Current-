@@ -85,43 +85,50 @@ export default async function handler(req, res) {
       // Wait 3 seconds for Facebook video object to finish initial processing
       await new Promise(resolve => setTimeout(resolve, 3000));
       
-      let attempts = 0;
-      const maxCommentAttempts = 3;
-      
-      while (!commentDropped && attempts < maxCommentAttempts) {
-        attempts++;
-        try {
-          // Pass access_token in URL query string as well as body for max Graph API compatibility
-          const commentUrl = `https://graph.facebook.com/v19.0/${postId}/comments?access_token=${encodeURIComponent(resolvedAccessToken)}`;
-          const commentRes = await fetch(commentUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message: comment
-            })
-          });
-          
-          const textRes = await commentRes.text();
-          let jsonRes = {};
-          try { jsonRes = JSON.parse(textRes); } catch(e) {}
+      const targetIds = [postId];
+      if (pageId && !postId.includes('_')) {
+        targetIds.push(`${pageId}_${postId}`);
+      }
 
-          console.log(`FB Video Comment Drop Attempt ${attempts} Response:`, jsonRes);
-          
-          if (commentRes.ok && jsonRes.id) {
-            commentResult = jsonRes;
-            commentDropped = true;
-          } else {
-            commentError = jsonRes.error?.message || textRes || `HTTP ${commentRes.status}`;
-            console.warn(`FB Comment attempt ${attempts} failed:`, commentError);
-            if (attempts < maxCommentAttempts) {
-              await new Promise(resolve => setTimeout(resolve, 3000));
+      for (const targetId of targetIds) {
+        if (commentDropped) break;
+        let attempts = 0;
+        const maxCommentAttempts = 2;
+        
+        while (!commentDropped && attempts < maxCommentAttempts) {
+          attempts++;
+          try {
+            const commentUrl = `https://graph.facebook.com/v19.0/${targetId}/comments?access_token=${encodeURIComponent(resolvedAccessToken)}`;
+            const commentRes = await fetch(commentUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                message: comment
+              })
+            });
+            
+            const textRes = await commentRes.text();
+            let jsonRes = {};
+            try { jsonRes = JSON.parse(textRes); } catch(e) {}
+
+            console.log(`FB Video Comment Drop Target ${targetId} Attempt ${attempts} Response:`, jsonRes);
+            
+            if (commentRes.ok && jsonRes.id) {
+              commentResult = jsonRes;
+              commentDropped = true;
+            } else {
+              commentError = jsonRes.error?.message || textRes || `HTTP ${commentRes.status}`;
+              console.warn(`FB Comment attempt ${attempts} on ${targetId} notice:`, commentError);
+              if (attempts < maxCommentAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+              }
             }
-          }
-        } catch (commentErr) {
-          commentError = commentErr.message;
-          console.error(`Failed to drop comment on FB video (attempt ${attempts}):`, commentErr);
-          if (attempts < maxCommentAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 3000));
+          } catch (commentErr) {
+            commentError = commentErr.message;
+            console.error(`Failed to drop comment on FB video ${targetId} (attempt ${attempts}):`, commentErr);
+            if (attempts < maxCommentAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 2000));
+            }
           }
         }
       }

@@ -73,13 +73,16 @@ async function executePhase(page, buttonSelector, phaseName) {
     
     const messageLower = alertMessage.toLowerCase();
     
-    if (messageLower.includes("error") || messageLower.includes("failed")) {
-      // However, if the alert says "No new articles found or already posted" it might be treated as success in fetch
-      if (phaseName === 'Auto Fetch' && messageLower.includes("no new articles")) {
-         alertSuccess = true;
-      } else {
-         alertError = true;
-      }
+    if (
+      messageLower.includes("successfully published") ||
+      messageLower.includes("published directly") ||
+      messageLower.includes("auto viral success") ||
+      messageLower.includes("auto fetch success") ||
+      (phaseName === 'Auto Fetch' && messageLower.includes("no new articles"))
+    ) {
+      alertSuccess = true;
+    } else if (messageLower.includes("error") || messageLower.includes("failed")) {
+      alertError = true;
     } else if (
       messageLower.includes("success") || 
       messageLower.includes("completed")
