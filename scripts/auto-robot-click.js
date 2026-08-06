@@ -23,6 +23,13 @@ if (!ADMIN_PASSWORD) {
   process.exit(1);
 }
 
+function supa() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key || url.includes('YOUR_SUPABASE_URL')) return null;
+  return createClient(url, key);
+}
+
 const MAX_RETRIES = 4;
 const WAIT_TIMEOUT_MS = 8 * 60 * 1000;
 
@@ -186,6 +193,35 @@ async function runAutoRobot() {
                             const settings = await page.evaluate(() => window.__SITE_SETTINGS__);
               console.log("[auto-robot] Page anchorSettings:", JSON.stringify(settings?.anchorSettings || {}));
               
+              // If audioUrl is a base64 data URI, upload to Supabase to prevent FUNCTION_PAYLOAD_TOO_LARGE
+              if (body.audioUrl && body.audioUrl.startsWith('data:')) {
+                console.log("[auto-robot] audioUrl is base64 data URI (len " + body.audioUrl.length + "), uploading to Supabase...");
+                const s = supa();
+                if (s) {
+                  try {
+                    const audioParts = body.audioUrl.split(',');
+                    if (audioParts.length > 1) {
+                      const audioBuf = Buffer.from(audioParts[1], 'base64');
+                      const audioFileName = `audio-${Date.now()}.wav`;
+                      const { data: uData, error: uErr } = await s.storage
+                        .from('news-images')
+                        .upload(audioFileName, audioBuf, { contentType: 'audio/wav', upsert: true });
+                      if (!uErr && uData) {
+                        const { data: pData } = s.storage.from('news-images').getPublicUrl(uData.path || audioFileName);
+                        if (pData && pData.publicUrl) {
+                          body.audioUrl = pData.publicUrl;
+                          console.log("[auto-robot] Uploaded audioUrl to Supabase URL:", body.audioUrl);
+                        }
+                      } else if (uErr) {
+                        console.warn("[auto-robot] audioUrl upload to Supabase failed:", uErr.message);
+                      }
+                    }
+                  } catch(ae) {
+                    console.warn("[auto-robot] Error uploading audioUrl to Supabase:", ae.message);
+                  }
+                }
+              }
+
               if (settings && settings.anchorSettings && settings.anchorSettings.enabled && settings.anchorSettings.imageUrl && body.audioUrl) {
                 console.log("[auto-robot] Building local anchor with audio string length:", body.audioUrl.length);
                 const anchorUrl = await buildLocalAndUpload(settings.anchorSettings.imageUrl, body.audioUrl);
@@ -198,6 +234,11 @@ async function runAutoRobot() {
                   console.error("[auto-robot] buildLocalAndUpload returned null");
                 }
               } else {
+                // If we uploaded audioUrl, continue with updated body
+                if (body.audioUrl && !body.audioUrl.startsWith('data:')) {
+                  await route.continue({ postData: JSON.stringify(body) });
+                  return;
+                }
                 console.log(`[auto-robot] Skipping anchor build. enabled=${settings?.anchorSettings?.enabled} hasImage=${!!settings?.anchorSettings?.imageUrl} hasAudio=${!!body.audioUrl}`);
               }
             } catch (e) {

@@ -33,14 +33,30 @@ async function fetchBytes(url) {
 }
 
 export async function buildLocalAndUpload(imageUrl, audioUrl) {
-
-  
   try {
     const imgBuf = await fetchBytes(imageUrl);
     const audioBuf = await fetchBytes(audioUrl);
     const key = crypto.createHash("md5").update(sha(imgBuf) + "|" + sha(audioBuf)).digest("hex");
     
     console.log("[anchor local] Building locally for key:", key);
+
+    const s = supa();
+    if (s) {
+      const cachedFileName = `anchor-${key}.mp4`;
+      try {
+        const { data: listData } = await s.storage.from('news-images').list('', { search: cachedFileName });
+        if (listData && listData.some(f => f.name === cachedFileName)) {
+          const { data: publicUrlData } = s.storage.from('news-images').getPublicUrl(cachedFileName);
+          if (publicUrlData && publicUrlData.publicUrl) {
+            console.log("[anchor local] Cache HIT in Supabase storage:", publicUrlData.publicUrl);
+            return publicUrlData.publicUrl;
+          }
+        }
+      } catch(e) {
+        console.warn("[anchor local] Cache check error:", e.message);
+      }
+    }
+
     const tmpdir = fs.mkdtempSync(path.join("/tmp", "wav2lip-"));
     const imgPath = path.join(tmpdir, "img.jpg");
     const audPath = path.join(tmpdir, "aud.wav");
@@ -79,6 +95,49 @@ export async function buildLocalAndUpload(imageUrl, audioUrl) {
     }
     
     const mp4Buf = fs.readFileSync(outPath);
+    
+    if (s) {
+      const fileName = `anchor-${key}.mp4`;
+      console.log("[anchor local] Uploading generated MP4 to Supabase storage...");
+      
+      let uploadBucket = 'news-images';
+      let { data: uploadData, error: uploadErr } = await s.storage
+        .from('news-images')
+        .upload(fileName, mp4Buf, {
+          contentType: 'video/mp4',
+          upsert: true
+        });
+
+      if (uploadErr) {
+        console.warn("[anchor local] Upload to 'news-images' failed:", uploadErr.message);
+        uploadBucket = 'anchor-videos';
+        const res2 = await s.storage
+          .from('anchor-videos')
+          .upload(fileName, mp4Buf, {
+            contentType: 'video/mp4',
+            upsert: true
+          });
+        uploadData = res2.data;
+        uploadErr = res2.error;
+      }
+
+      if (!uploadErr && uploadData) {
+        const { data: publicUrlData } = s.storage
+          .from(uploadBucket)
+          .getPublicUrl(uploadData.path || fileName);
+
+        if (publicUrlData && publicUrlData.publicUrl) {
+          console.log("[anchor local] Upload complete. Public URL:", publicUrlData.publicUrl);
+          try {
+            fs.rmSync(tmpdir, { recursive: true, force: true });
+          } catch(e) {}
+          return publicUrlData.publicUrl;
+        }
+      } else {
+        console.error("[anchor local] Supabase upload failed:", uploadErr ? uploadErr.message : "Unknown error");
+      }
+    }
+
     const dataUri = 'data:video/mp4;base64,' + mp4Buf.toString('base64');
     
     try {
