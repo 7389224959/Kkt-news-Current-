@@ -31,7 +31,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
   const [videoBase64, setVideoBase64] = useState('');
   
   const [customCoords, setCustomCoords] = useState({ headline: '', ticker: '', subtitle: '', video: '' });
-  const [publishPlatforms, setPublishPlatforms] = useState({ facebook: true, instagram: autoStart ? true : false, youtube: false });
+  const [publishPlatforms, setPublishPlatforms] = useState({ facebook: true, instagram: true, youtube: false });
   const [customComment, setCustomComment] = useState<string>('');
 
   const [isGenerating, setIsGenerating] = useState(false);
