@@ -45,6 +45,12 @@ async function startServer() {
       if (!fs.existsSync(filePath)) {
         filePath = path.join(process.cwd(), 'api', apiPath, 'index.js');
       }
+      if (!fs.existsSync(filePath)) {
+        filePath = path.join(process.cwd(), 'api-handlers', `${apiPath}.js`);
+      }
+      if (!fs.existsSync(filePath)) {
+        filePath = path.join(process.cwd(), 'api-handlers', `${apiPath}.ts`);
+      }
       
       if (fs.existsSync(filePath)) {
         // Dynamically import the handler
@@ -52,6 +58,19 @@ async function startServer() {
         const handler = module.default;
         
         if (typeof handler === 'function') {
+          await handler(req, res);
+          return;
+        }
+      }
+
+      // Fallback to catch-all [...path] handler if available
+      const catchAllPath = path.join(process.cwd(), 'api', '[...path].js');
+      if (fs.existsSync(catchAllPath)) {
+        const module = await import(`file://${catchAllPath}?t=${Date.now()}`);
+        const handler = module.default;
+        if (typeof handler === 'function') {
+          req.query = req.query || {};
+          req.query.path = apiPath.split('/');
           await handler(req, res);
           return;
         }

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-export default async function handler(req: any, res: any) {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -26,8 +26,8 @@ export default async function handler(req: any, res: any) {
     'job_applications'
   ];
 
-  const exportedData: Record<string, any[]> = {};
-  const statusLog: string[] = [];
+  const exportedData = {};
+  const statusLog = [];
 
   try {
     // Create Supabase client with 10s fetch timeout
@@ -51,7 +51,7 @@ export default async function handler(req: any, res: any) {
           statusLog.push(`Table '${table}': fetched ${data?.length || 0} rows.`);
           exportedData[table] = data || [];
         }
-      } catch (err: any) {
+      } catch (err) {
         if (err.name === 'AbortError') {
           statusLog.push(`Table '${table}' timed out (Connection to old Supabase restricted/blocked).`);
         } else {
@@ -69,7 +69,7 @@ export default async function handler(req: any, res: any) {
       log: statusLog,
       totalRows: totalRowsFetched
     });
-  } catch (err: any) {
+  } catch (err) {
     return res.status(500).json({
       error: 'Failed to communicate with Old Supabase: ' + err.message
     });

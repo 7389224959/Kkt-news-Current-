@@ -1,4 +1,4 @@
-export default async function handler(req: any, res: any) {
+export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -20,7 +20,7 @@ export default async function handler(req: any, res: any) {
     });
     
     const html = await response.text();
-    let images: any[] = [];
+    let images = [];
     
     const regex = /m="({[^}]+})"/g;
     let match;
@@ -41,7 +41,7 @@ export default async function handler(req: any, res: any) {
                 original: data.murl,
                 thumbnail: data.turl || data.murl,
                 title: data.t || '',
-                width: 0, // Not always readily available without further parsing
+                width: 0,
                 height: 0,
                 source: 'Bing Images'
             });
@@ -52,7 +52,7 @@ export default async function handler(req: any, res: any) {
     }
     
     res.status(200).json({ images });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Image search error:', error);
     res.status(500).json({ error: 'Failed to search images', details: error.message });
   }
