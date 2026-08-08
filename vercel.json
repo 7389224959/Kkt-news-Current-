@@ -1,12 +1,7 @@
 {
   "functions": {
     "api/render-reel.js": {
-      "includeFiles": [
-        "node_modules/ffmpeg-static/**",
-        "node_modules/ffprobe-static/**",
-        "public/**",
-        "lib/embeddedFonts.js"
-      ],
+      "includeFiles": "node_modules/{ffmpeg-static,ffprobe-static}/**",
       "excludeFiles": "node_modules/onnxruntime-node/**",
       "maxDuration": 300
     },
