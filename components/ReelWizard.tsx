@@ -1416,9 +1416,12 @@ function ReelEditorView({
                   onMouseDown={(e) => handleDragStart(e, 'headline_box', 'move')}
                   onTouchStart={(e) => handleDragStart(e, 'headline_box', 'move')}
                 >
-                   <span className="text-center font-bold pointer-events-none" style={{
+                   <span className="text-center font-extrabold pointer-events-none" style={{
                       color: styleOverrides.headlineColor || 'white', 
-                      fontSize: `${(parseInt(styleOverrides.headlineSize || '50') * scale)}px`
+                      fontSize: `${(parseInt(styleOverrides.headlineSize || '50') * scale)}px`,
+                      fontFamily: '"Mukta", "Hind", "Noto Sans Devanagari", "Poppins", sans-serif',
+                      textShadow: '2px 2px 4px rgba(0,0,0,0.9)',
+                      WebkitTextStroke: '2px black'
                    }}>{scriptData.headline}</span>
                    <div 
                      className="absolute bottom-0 right-0 w-8 h-8 -mr-4 -mb-4 bg-transparent cursor-nwse-resize flex items-center justify-center pointer-events-auto"
@@ -1444,7 +1447,8 @@ function ReelEditorView({
                    <div className="w-full h-full overflow-hidden flex items-center pointer-events-none">
                      <span className="font-bold" style={{
                         color: styleOverrides.tickerColor || 'white', 
-                        fontSize: `${(parseInt(styleOverrides.tickerSize || '40') * scale)}px`
+                        fontSize: `${(parseInt(styleOverrides.tickerSize || '40') * scale)}px`,
+                        fontFamily: '"Mukta", "Hind", "Noto Sans Devanagari", "Poppins", sans-serif'
                      }}>{scriptData.ticker}</span>
                    </div>
                    <div 
@@ -1467,9 +1471,10 @@ function ReelEditorView({
                   onMouseDown={(e) => handleDragStart(e, 'subtitle_box', 'move')}
                   onTouchStart={(e) => handleDragStart(e, 'subtitle_box', 'move')}
                 >
-                   <span className="text-center font-bold pointer-events-none" style={{
+                   <span className="text-center font-extrabold pointer-events-none" style={{
                       color: styleOverrides.subtitleColor || 'white', 
                       fontSize: `${(parseInt(styleOverrides.subtitleSize || '45') * scale)}px`,
+                      fontFamily: '"Mukta", "Hind", "Noto Sans Devanagari", "Poppins", sans-serif',
                       textShadow: '2px 2px 4px rgba(0,0,0,0.9)',
                       WebkitTextStroke: '2px black'
                    }}>{scriptData.subtitleChunks?.[0] || scriptData.subtitles?.[0] || 'Subtitle prev...'}</span>
