@@ -16,11 +16,14 @@ const getFfmpegPath = () => {
   if (fs.existsSync("/usr/local/bin/ffmpeg")) {
     return "/usr/local/bin/ffmpeg";
   }
-  return ffmpegStatic;
+  return typeof ffmpegStatic === "string" ? ffmpegStatic : (ffmpegStatic?.default || ffmpegStatic);
 };
 
 ffmpeg.setFfmpegPath(getFfmpegPath());
-ffmpeg.setFfprobePath(ffprobeStatic.path);
+const ffprobePath = ffprobeStatic?.path || ffprobeStatic?.default?.path || ffprobeStatic;
+if (ffprobePath) {
+  ffmpeg.setFfprobePath(ffprobePath);
+}
 
 const downloadFile = async (url, dest) => {
   if (!url) throw new Error("URL is missing");
@@ -398,11 +401,11 @@ export default async function handler(req, res) {
       const totalFrames = sceneDur * 25; // roughly the frames per scene
 
       const motions = [
-        `z='1+0.2*(on/${totalFrames})'`, // zoom_in continuously
-        `z='1.2-0.2*(on/${totalFrames})'`, // zoom_out continuously
-        `z=1.1:x='iw*0.05*(1-on/${totalFrames})':y='y'`, // pan_left
-        `z=1.1:x='iw*0.05*(on/${totalFrames})':y='y'`, // pan_right
-        `z='1.1+0.1*(on/${totalFrames})':x='iw*0.05*(on/${totalFrames})':y='ih*0.05*(on/${totalFrames})'`, // ken_burns
+        `z=1+0.2*(on/${totalFrames})`, // zoom_in continuously
+        `z=1.2-0.2*(on/${totalFrames})`, // zoom_out continuously
+        `z=1.1:x=iw*0.05*(1-on/${totalFrames}):y=y`, // pan_left
+        `z=1.1:x=iw*0.05*(on/${totalFrames}):y=y`, // pan_right
+        `z=1.1+0.1*(on/${totalFrames}):x=iw*0.05*(on/${totalFrames}):y=ih*0.05*(on/${totalFrames})`, // ken_burns
       ];
 
       const transitions = [
@@ -703,10 +706,14 @@ export default async function handler(req, res) {
       command = command.input(sfxPath);
 
       let outOpts = [
-        "-c:v libx264",
-        "-preset ultrafast",
-        "-crf 32", // Reduced quality for faster processing
-        "-pix_fmt yuv420p",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "32", // Reduced quality for faster processing
+        "-pix_fmt",
+        "yuv420p",
         "-r",
         "24", // Reduce frame rate to speed up rendering
         "-t",
@@ -885,12 +892,18 @@ export default async function handler(req, res) {
           .map('[outv]')
           .map('[outa]')
           .outputOptions([
-             "-c:v libx264",
-             "-preset ultrafast",
-             "-crf 32",
-             "-pix_fmt yuv420p",
-             "-r 24",
-             "-c:a aac"
+             "-c:v",
+             "libx264",
+             "-preset",
+             "ultrafast",
+             "-crf",
+             "32",
+             "-pix_fmt",
+             "yuv420p",
+             "-r",
+             "24",
+             "-c:a",
+             "aac"
           ])
           .save(finalPath)
           .on("end", () => resolve())

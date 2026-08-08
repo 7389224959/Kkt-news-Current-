@@ -277,10 +277,10 @@ export default async function handler(req, res) {
       let durationLimit = audioPath ? 60 : 15;
 
       let outOpts = [
-          '-c:v libx264',
-          '-preset ultrafast',
-          '-crf 32', // Reduced quality for faster processing
-          '-pix_fmt yuv420p',
+          '-c:v', 'libx264',
+          '-preset', 'ultrafast',
+          '-crf', '32', // Reduced quality for faster processing
+          '-pix_fmt', 'yuv420p',
           '-r', '24', // Reduce frame rate to speed up rendering
           '-t', durationLimit.toString(),
           '-threads', '2' // Prevent resource exhaustion in Vercel limits
