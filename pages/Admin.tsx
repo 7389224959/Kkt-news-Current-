@@ -25,7 +25,7 @@ import { compressImage, overlayTextOnImage } from '../src/utils/imageUtils';
 import { 
   Plus, Edit, Trash2, Save, X, LogOut, LayoutDashboard, 
   Image as ImageIcon, Type, Settings, Globe, FileText, Sparkles, RefreshCw, TrendingUp,
-  ChevronRight, MapPin, ArrowUp, ArrowDown, Heart, Lock, AlertTriangle, Upload, Zap, Shield, Wand2, ExternalLink, CheckCircle, Briefcase, Users, Video
+  ChevronRight, MapPin, ArrowUp, ArrowDown, Heart, Lock, AlertTriangle, Upload, Zap, Shield, Wand2, ExternalLink, CheckCircle, Briefcase, Users, Video, Database
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import NewsImage from '../components/NewsImage';
@@ -37,6 +37,7 @@ import ReelWizard from '../components/ReelWizard';
 import { WorkerDashboard } from '../components/WorkerDashboard';
 import ManageWorkers from '../components/ManageWorkers';
 import ManageClients from '../components/ManageClients';
+import DbMigrationTool from '../components/DbMigrationTool';
 
 const Admin: React.FC = () => {
   const navigate = useNavigate();
@@ -46,7 +47,7 @@ const Admin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [workerId, setWorkerId] = useState('');
   const [workerPassword, setWorkerPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates' | 'job_applications' | 'tip_complaints' | 'workers' | 'clients'>('articles');
+  const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates' | 'job_applications' | 'tip_complaints' | 'workers' | 'clients' | 'db_migration'>('articles');
   const [viralTemplateTab, setViralTemplateTab] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -1732,6 +1733,12 @@ const Admin: React.FC = () => {
           >
             <Briefcase size={18} /> Clients
           </button>
+          <button 
+            onClick={() => setActiveTab('db_migration')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md font-bold transition-colors ${activeTab === 'db_migration' ? 'bg-red-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
+            <Database size={18} /> DB Migration
+          </button>
         </div>
 
         {/* Global Error Alert */}
@@ -2870,6 +2877,9 @@ const Admin: React.FC = () => {
               </div>
             )}
           </div>
+        )}
+        {activeTab === 'db_migration' && (
+          <DbMigrationTool currentSettings={settings} onRefreshSettings={refreshData} />
         )}
       </>
     )}
