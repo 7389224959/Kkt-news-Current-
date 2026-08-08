@@ -55,45 +55,66 @@ function wrapTextIntoLines(text, width, fontSize) {
   return lines;
 }
 
+let fontBase64Cache = {};
 let fontsInstalled = false;
 
 async function ensureFontsLoaded() {
   if (fontsInstalled) return;
 
-  const userFontsDir = path.join(process.env.HOME || os.homedir() || '/root', '.fonts');
-  if (!fs.existsSync(userFontsDir)) {
-    fs.mkdirSync(userFontsDir, { recursive: true });
+  const tmpFontsDir = path.join(os.tmpdir(), ".fonts");
+  try {
+    if (!fs.existsSync(tmpFontsDir)) {
+      fs.mkdirSync(tmpFontsDir, { recursive: true });
+    }
+  } catch (e) {
+    console.warn("[font] Could not create tmp fonts directory:", e.message);
   }
 
   const fontsToDownload = [
-    { name: 'Mukta-ExtraBold.ttf', url: 'https://raw.githubusercontent.com/google/fonts/main/ofl/mukta/Mukta-ExtraBold.ttf' },
-    { name: 'Hind-Bold.ttf', url: 'https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Bold.ttf' },
-    { name: 'NotoSansDevanagari.ttf', url: 'https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf' },
-    { name: 'Poppins-ExtraBold.ttf', url: 'https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-ExtraBold.ttf' }
+    { key: "mukta", name: "Mukta-ExtraBold.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/mukta/Mukta-ExtraBold.ttf" },
+    { key: "hind", name: "Hind-Bold.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Bold.ttf" },
+    { key: "noto", name: "NotoSansDevanagari.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf" },
+    { key: "poppins", name: "Poppins-ExtraBold.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-ExtraBold.ttf" }
   ];
 
   for (const f of fontsToDownload) {
-    const filePath = path.join(userFontsDir, f.name);
-    if (!fs.existsSync(filePath) || fs.statSync(filePath).size < 1000) {
+    const filePath = path.join(tmpFontsDir, f.name);
+    let buf = null;
+    if (fs.existsSync(filePath)) {
+      try {
+        const stats = fs.statSync(filePath);
+        if (stats.size > 1000) {
+          buf = fs.readFileSync(filePath);
+        }
+      } catch (e) {}
+    }
+    if (!buf) {
       try {
         console.log(`[font] Downloading ${f.name}...`);
         const res = await fetch(f.url);
         if (res.ok) {
-          const buf = Buffer.from(await res.arrayBuffer());
-          fs.writeFileSync(filePath, buf);
+          buf = Buffer.from(await res.arrayBuffer());
+          try {
+            fs.writeFileSync(filePath, buf);
+          } catch (e) {
+            console.warn(`[font] Warning writing ${f.name} to disk:`, e.message);
+          }
         }
       } catch (e) {
         console.warn(`[font] Error downloading ${f.name}:`, e.message);
       }
     }
+    if (buf && buf.length > 1000) {
+      fontBase64Cache[f.key] = buf.toString("base64");
+    }
   }
 
   try {
     const { execSync } = await import("child_process");
-    execSync(`fc-cache -f "${userFontsDir}"`);
-    console.log('[font] fc-cache updated successfully.');
+    execSync(`fc-cache -f "${tmpFontsDir}"`);
+    console.log("[font] fc-cache updated successfully.");
   } catch (e) {
-    console.warn('[font] fc-cache failed:', e.message);
+    console.warn("[font] fc-cache skipped or failed:", e.message);
   }
 
   fontsInstalled = true;
@@ -112,6 +133,20 @@ async function renderTextToPng({
   outputPath,
 }) {
   await ensureFontsLoaded();
+
+  let fontFaceDefs = "";
+  if (fontBase64Cache.mukta) {
+    fontFaceDefs += `@font-face { font-family: 'CapcutMukta'; src: url('data:font/ttf;charset=utf-8;base64,${fontBase64Cache.mukta}') format('truetype'); }\n`;
+  }
+  if (fontBase64Cache.hind) {
+    fontFaceDefs += `@font-face { font-family: 'CapcutHind'; src: url('data:font/ttf;charset=utf-8;base64,${fontBase64Cache.hind}') format('truetype'); }\n`;
+  }
+  if (fontBase64Cache.noto) {
+    fontFaceDefs += `@font-face { font-family: 'CapcutNoto'; src: url('data:font/ttf;charset=utf-8;base64,${fontBase64Cache.noto}') format('truetype'); }\n`;
+  }
+  if (fontBase64Cache.poppins) {
+    fontFaceDefs += `@font-face { font-family: 'CapcutPoppins'; src: url('data:font/ttf;charset=utf-8;base64,${fontBase64Cache.poppins}') format('truetype'); }\n`;
+  }
 
   const lines = wrapTextIntoLines(text, width, fontSize);
   const lineHeight = fontSize * 1.25;
@@ -135,10 +170,11 @@ async function renderTextToPng({
     ? `<rect width="100%" height="100%" fill="${bgColor}" rx="8"/>`
     : "";
 
-  const fontStack = "'Mukta', 'Hind', 'Noto Sans Devanagari', 'Poppins', sans-serif";
+  const fontStack = "'CapcutMukta', 'CapcutHind', 'CapcutNoto', 'CapcutPoppins', 'Mukta', 'Hind', 'Noto Sans Devanagari', 'Poppins', sans-serif";
 
   const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
     <style>
+      ${fontFaceDefs}
       .txt {
         font-family: ${fontStack};
         font-weight: 800;
