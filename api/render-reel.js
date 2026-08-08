@@ -8,6 +8,28 @@ import path from "path";
 import os from "os";
 import { embeddedFonts, getFontFaceDefs, fontStack as defaultFontStack } from "../lib/embeddedFonts.js";
 
+const ensureExecutableBinary = (rawPath, name) => {
+  if (!rawPath) return rawPath;
+  const binPath = typeof rawPath === "string" ? rawPath : (rawPath?.path || rawPath?.default?.path || rawPath?.default);
+  if (!binPath || typeof binPath !== "string") return binPath;
+
+  try {
+    if (!fs.existsSync(binPath)) return binPath;
+    const tmpDir = os.tmpdir();
+    const destPath = path.join(tmpDir, name);
+    if (!fs.existsSync(destPath)) {
+      fs.copyFileSync(binPath, destPath);
+    }
+    try {
+      fs.chmodSync(destPath, 0o755);
+    } catch (e) {}
+    return destPath;
+  } catch (err) {
+    console.warn(`[ensureExecutableBinary] Warning for ${name}:`, err.message);
+    return binPath;
+  }
+};
+
 const getFfmpegPath = () => {
   if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
     return process.env.FFMPEG_PATH;
@@ -18,13 +40,32 @@ const getFfmpegPath = () => {
   if (fs.existsSync("/usr/local/bin/ffmpeg")) {
     return "/usr/local/bin/ffmpeg";
   }
-  return typeof ffmpegStatic === "string" ? ffmpegStatic : (ffmpegStatic?.default || ffmpegStatic);
+  const rawPath = typeof ffmpegStatic === "string" ? ffmpegStatic : (ffmpegStatic?.default || ffmpegStatic);
+  return ensureExecutableBinary(rawPath, "ffmpeg");
 };
 
-ffmpeg.setFfmpegPath(getFfmpegPath());
-const ffprobePath = ffprobeStatic?.path || ffprobeStatic?.default?.path || ffprobeStatic;
-if (ffprobePath) {
-  ffmpeg.setFfprobePath(ffprobePath);
+const getFfprobePath = () => {
+  if (process.env.FFPROBE_PATH && fs.existsSync(process.env.FFPROBE_PATH)) {
+    return process.env.FFPROBE_PATH;
+  }
+  if (fs.existsSync("/usr/bin/ffprobe")) {
+    return "/usr/bin/ffprobe";
+  }
+  if (fs.existsSync("/usr/local/bin/ffprobe")) {
+    return "/usr/local/bin/ffprobe";
+  }
+  const rawPath = ffprobeStatic?.path || ffprobeStatic?.default?.path || (typeof ffprobeStatic === "string" ? ffprobeStatic : null);
+  return ensureExecutableBinary(rawPath, "ffprobe");
+};
+
+const activeFfmpegPath = getFfmpegPath();
+if (activeFfmpegPath) {
+  ffmpeg.setFfmpegPath(activeFfmpegPath);
+}
+
+const activeFfprobePath = getFfprobePath();
+if (activeFfprobePath) {
+  ffmpeg.setFfprobePath(activeFfprobePath);
 }
 
 function escapeXml(str) {
@@ -192,7 +233,7 @@ async function renderTextToPng({
   await sharp(Buffer.from(svg)).png().toFile(outputPath);
 }
 
-const downloadFile = async (url, dest) => {
+const downloadFile = async (url, dest, req = null) => {
   if (!url) throw new Error("URL is missing");
 
   if (url.startsWith("data:")) {
@@ -211,7 +252,25 @@ const downloadFile = async (url, dest) => {
   }
 
   if (url.startsWith("/")) {
-    url = `http://localhost:${process.env.PORT || 3000}${url}`;
+    const relativeCleanPath = url.replace(/^\/+/, "");
+    const localPublicPath = path.join(process.cwd(), "public", relativeCleanPath);
+    if (fs.existsSync(localPublicPath)) {
+      try {
+        fs.copyFileSync(localPublicPath, dest);
+        return;
+      } catch (e) {
+        console.warn(`Could not copy local file ${localPublicPath}:`, e.message);
+      }
+    }
+
+    if (req && req.headers && req.headers.host) {
+      const protocol = req.headers["x-forwarded-proto"] || "https";
+      url = `${protocol}://${req.headers.host}${url}`;
+    } else if (process.env.VERCEL_URL) {
+      url = `https://${process.env.VERCEL_URL}${url}`;
+    } else {
+      url = `http://localhost:${process.env.PORT || 3000}${url}`;
+    }
   }
 
   // Unwrap duckduckgo proxy URLs if they exist in state
@@ -234,18 +293,20 @@ const downloadFile = async (url, dest) => {
       }
     });
     if (!response.ok) {
-      console.warn(`Failed to fetch ${url}: ${response.statusText}, using fallback image`);
-      const base64BlackPixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
-      fs.writeFileSync(dest, Buffer.from(base64BlackPixel, 'base64'));
-      return;
+      console.warn(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to fetch file from ${url}`);
     }
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     fs.writeFileSync(dest, buffer);
   } catch (error) {
-    console.warn(`Error fetching ${url}: ${error.message}, using fallback image`);
-    const base64BlackPixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
-    fs.writeFileSync(dest, Buffer.from(base64BlackPixel, 'base64'));
+    console.warn(`Error fetching ${url}: ${error.message}`);
+    if (dest.endsWith('.jpg') || dest.endsWith('.png') || dest.endsWith('.jpeg')) {
+      const base64BlackPixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+      fs.writeFileSync(dest, Buffer.from(base64BlackPixel, 'base64'));
+    } else {
+      throw error;
+    }
   }
 };
 
@@ -319,15 +380,15 @@ export default async function handler(req, res) {
 
     if (introMediaUrl) {
       introPath = path.join(tempDir, "intro.mp4");
-      await downloadFile(introMediaUrl, introPath);
+      await downloadFile(introMediaUrl, introPath, req);
     }
     if (outroMediaUrl) {
       outroPath = path.join(tempDir, "outro.mp4");
-      await downloadFile(outroMediaUrl, outroPath);
+      await downloadFile(outroMediaUrl, outroPath, req);
     }
     if (bgmUrl) {
       bgmPath = path.join(tempDir, "bgm.mp3");
-      await downloadFile(bgmUrl, bgmPath);
+      await downloadFile(bgmUrl, bgmPath, req);
     }
 
     const { overlayMediaUrl, visuals = [] } = req.body;
@@ -336,7 +397,7 @@ export default async function handler(req, res) {
       const extMatch = visuals[i].match(/\.(mp4|mov|webm|gif|webp)$/i);
       const ext = extMatch ? extMatch[0] : '';
       const rawP = path.join(tempDir, `visual_raw_${i}`);
-      await downloadFile(visuals[i], rawP);
+      await downloadFile(visuals[i], rawP, req);
 
       const isVideo = await new Promise((resolve) => {
         ffmpeg.ffprobe(rawP, (err, meta) => {
@@ -359,7 +420,7 @@ export default async function handler(req, res) {
     }
     if (downloadedVisuals.length === 0 && overlayMediaUrl) {
       const p = path.join(tempDir, "overlay.mp4");
-      await downloadFile(overlayMediaUrl, p);
+      await downloadFile(overlayMediaUrl, p, req);
       downloadedVisuals.push({ file: p, url: overlayMediaUrl, isVideo: true });
     }
 
@@ -383,9 +444,9 @@ export default async function handler(req, res) {
     let audioPath = null;
     if (audioUrl) {
       audioPath = path.join(tempDir, "audio.wav");
-      await downloadFile(audioUrl, audioPath);
+      await downloadFile(audioUrl, audioPath, req);
     }
-    await downloadFile(templateMediaUrl, backgroundPath);
+    await downloadFile(templateMediaUrl, backgroundPath, req);
     try {
       if (fs.existsSync(path.join(process.cwd(), "public", "fonts", "Hind-Bold.ttf"))) {
         fs.copyFileSync(path.join(process.cwd(), "public", "fonts", "Hind-Bold.ttf"), fontPath);
@@ -395,6 +456,7 @@ export default async function handler(req, res) {
         await downloadFile(
           "https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Bold.ttf",
           fontPath,
+          req
         );
       }
     } catch (e) {
