@@ -66,6 +66,48 @@ const downloadFile = async (url, dest) => {
   }
 };
 
+const createSyntheticWav = (filepath, durationSeconds = 5, synthFn = null) => {
+  const sampleRate = 44100;
+  const numChannels = 2;
+  const bytesPerSample = 2;
+  const numSamples = Math.floor(sampleRate * durationSeconds);
+  const dataSize = numSamples * numChannels * bytesPerSample;
+  const buffer = Buffer.alloc(44 + dataSize);
+
+  buffer.write("RIFF", 0);
+  buffer.writeUInt32LE(36 + dataSize, 4);
+  buffer.write("WAVE", 8);
+
+  buffer.write("fmt ", 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(numChannels, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * numChannels * bytesPerSample, 28);
+  buffer.writeUInt16LE(numChannels * bytesPerSample, 32);
+  buffer.writeUInt16LE(bytesPerSample * 8, 34);
+
+  buffer.write("data", 36);
+  buffer.writeUInt32LE(dataSize, 40);
+
+  let offset = 44;
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const val = synthFn ? synthFn(t) : 0;
+    const clamped = Math.max(-1, Math.min(1, val));
+    const int16 = Math.floor(clamped * 32767);
+    buffer.writeInt16LE(int16, offset);
+    buffer.writeInt16LE(int16, offset + 2);
+    offset += 4;
+  }
+
+  fs.writeFileSync(filepath, buffer);
+};
+
+const createSilentWav = (filepath, durationSeconds = 5) => {
+  createSyntheticWav(filepath, durationSeconds, null);
+};
+
 export default async function handler(req, res) {
   if (req.method !== "POST")
     return res.status(405).json({ error: "Method not allowed" });
@@ -639,22 +681,28 @@ export default async function handler(req, res) {
           : 5;
 
       // Custom BGM or Drone BGM
-      bgmIndex = nextInputIndex++;
+      let bgmInputRef = null;
       if (bgmPath) {
+        bgmIndex = nextInputIndex++;
         command = command.input(bgmPath).inputOptions(["-stream_loop", "-1"]);
+        bgmInputRef = `${bgmIndex}:a`;
       } else {
-        command = command
-          .input("aevalsrc=0.1*sin(2*PI*110*t)+0.05*sin(2*PI*165*t)")
-          .inputFormat("lavfi");
+        const synthBgmPath = path.join(tempDir, "synth_bgm.wav");
+        createSyntheticWav(synthBgmPath, 30, (t) => 0.1 * Math.sin(2 * Math.PI * 110 * t) + 0.05 * Math.sin(2 * Math.PI * 165 * t));
+        bgmIndex = nextInputIndex++;
+        command = command.input(synthBgmPath).inputOptions(["-stream_loop", "-1"]);
+        bgmInputRef = `${bgmIndex}:a`;
       }
 
       // Whoosh SFX at transitions
+      const synthSfxPath = path.join(tempDir, "synth_sfx.wav");
+      createSyntheticWav(synthSfxPath, 30, (t) => {
+        const modT = t % sceneDur;
+        return modT < 0.5 ? 0.3 * Math.sin(440 * 2 * Math.PI * t) * Math.exp(-modT * 5) : 0;
+      });
       sfxIndex = nextInputIndex++;
-      command = command
-        .input(
-          `aevalsrc='if(lt(mod(t,${sceneDur}),0.5), 0.3*sin(440*2*PI*t)*exp(-mod(t,${sceneDur})*5), 0)'`,
-        )
-        .inputFormat("lavfi");
+      command = command.input(synthSfxPath).inputOptions(["-stream_loop", "-1"]);
+      const sfxInputRef = `${sfxIndex}:a`;
 
       let durationLimit = (audioPath ? exactAudioDuration : 15) + delayTime;
 
@@ -729,13 +777,13 @@ export default async function handler(req, res) {
           {
             filter: "adelay",
             options: `${delayTime * 1000}|${delayTime * 1000}`,
-            inputs: `${sfxIndex}:a`,
+            inputs: sfxInputRef,
             outputs: "sfx_delayed",
           },
           {
             filter: "adelay",
             options: `${delayTime * 1000}|${delayTime * 1000}`,
-            inputs: `${bgmIndex}:a`,
+            inputs: bgmInputRef,
             outputs: "bgm_delayed",
           },
           {
@@ -807,13 +855,16 @@ export default async function handler(req, res) {
       const outroHasAudio = hasAudio[2];
 
       await new Promise((resolve, reject) => {
+        const silentAudioPath = path.join(tempDir, "silent.wav");
+        createSilentWav(silentAudioPath, 5);
+
         let concatCommand = ffmpeg();
         let filterParts = [];
         let concatInputs = [];
         
-        // Add anullsrc as input so we can use it to substitute missing audio
-        concatCommand = concatCommand.input("anullsrc=r=44100:cl=stereo").inputFormat("lavfi");
-        // Its input index will be the total number of files (+1 depending) - we will know later
+        // Add silent.wav as input so we can use it to substitute missing audio
+        concatCommand = concatCommand.input(silentAudioPath).inputOptions(["-stream_loop", "-1"]);
+        // Its input index is 0
         
         let fileIdx = 0;
         let actualFileIdx = 1; // since anullsrc is at index 0
