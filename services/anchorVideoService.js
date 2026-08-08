@@ -3,6 +3,7 @@ import path from "path";
 import crypto from "crypto";
 import { execFile, execSync } from "child_process";
 import { promisify } from "util";
+import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
 import { createClient } from "@supabase/supabase-js";
 const exec = promisify(execFile);
@@ -17,6 +18,12 @@ function getFfmpegExecutable() {
       }
     }
   } catch (e) {}
+
+  const installerPath = ffmpegInstaller?.path || ffmpegInstaller?.default?.path;
+  if (installerPath && fs.existsSync(installerPath)) {
+    return installerPath;
+  }
+
   return ffmpegStatic;
 }
 
