@@ -61,7 +61,9 @@ let fontsInstalled = false;
 async function ensureFontsLoaded() {
   if (fontsInstalled) return;
 
+  const localFontsDir = path.join(process.cwd(), "public", "fonts");
   const tmpFontsDir = path.join(os.tmpdir(), ".fonts");
+
   try {
     if (!fs.existsSync(tmpFontsDir)) {
       fs.mkdirSync(tmpFontsDir, { recursive: true });
@@ -78,16 +80,28 @@ async function ensureFontsLoaded() {
   ];
 
   for (const f of fontsToDownload) {
-    const filePath = path.join(tmpFontsDir, f.name);
     let buf = null;
-    if (fs.existsSync(filePath)) {
+    const localPath = path.join(localFontsDir, f.name);
+    const tmpPath = path.join(tmpFontsDir, f.name);
+
+    if (fs.existsSync(localPath)) {
       try {
-        const stats = fs.statSync(filePath);
+        const stats = fs.statSync(localPath);
         if (stats.size > 1000) {
-          buf = fs.readFileSync(filePath);
+          buf = fs.readFileSync(localPath);
         }
       } catch (e) {}
     }
+
+    if (!buf && fs.existsSync(tmpPath)) {
+      try {
+        const stats = fs.statSync(tmpPath);
+        if (stats.size > 1000) {
+          buf = fs.readFileSync(tmpPath);
+        }
+      } catch (e) {}
+    }
+
     if (!buf) {
       try {
         console.log(`[font] Downloading ${f.name}...`);
@@ -95,7 +109,7 @@ async function ensureFontsLoaded() {
         if (res.ok) {
           buf = Buffer.from(await res.arrayBuffer());
           try {
-            fs.writeFileSync(filePath, buf);
+            fs.writeFileSync(tmpPath, buf);
           } catch (e) {
             console.warn(`[font] Warning writing ${f.name} to disk:`, e.message);
           }
@@ -104,6 +118,7 @@ async function ensureFontsLoaded() {
         console.warn(`[font] Error downloading ${f.name}:`, e.message);
       }
     }
+
     if (buf && buf.length > 1000) {
       fontBase64Cache[f.key] = buf.toString("base64");
     }
@@ -112,10 +127,7 @@ async function ensureFontsLoaded() {
   try {
     const { execSync } = await import("child_process");
     execSync(`fc-cache -f "${tmpFontsDir}"`);
-    console.log("[font] fc-cache updated successfully.");
-  } catch (e) {
-    console.warn("[font] fc-cache skipped or failed:", e.message);
-  }
+  } catch (e) {}
 
   fontsInstalled = true;
 }
