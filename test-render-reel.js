@@ -6,20 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-const getFfmpegPath = () => {
-  if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
-    return process.env.FFMPEG_PATH;
-  }
-  if (fs.existsSync("/usr/bin/ffmpeg")) {
-    return "/usr/bin/ffmpeg";
-  }
-  if (fs.existsSync("/usr/local/bin/ffmpeg")) {
-    return "/usr/local/bin/ffmpeg";
-  }
-  return typeof ffmpegStatic === 'string' ? ffmpegStatic : (ffmpegStatic?.default || ffmpegStatic);
-};
-
-ffmpeg.setFfmpegPath(getFfmpegPath());
+ffmpeg.setFfmpegPath(ffmpegStatic);
 ffmpeg.setFfprobePath(ffprobeStatic.path);
 
 const downloadFile = async (url, dest) => {
@@ -119,13 +106,13 @@ export default async function handler(req, res) {
     const filterGraph = [
       {
         filter: 'scale',
-        options: `w=${targetW}:h=${targetH}:force_original_aspect_ratio=increase`,
+        options: `${targetW}:${targetH}:force_original_aspect_ratio=increase`,
         inputs: '0:v',
         outputs: 'bg_scaled'
       },
       {
         filter: 'crop',
-        options: `w=${targetW}:h=${targetH}`,
+        options: `${targetW}:${targetH}`,
         inputs: 'bg_scaled',
         outputs: 'bg_cropped'
       }
@@ -139,7 +126,7 @@ export default async function handler(req, res) {
       overlayIndex = nextInputIndex++;
       filterGraph.push({
         filter: 'scale',
-        options: `w=${vBox[2]}:h=${vBox[3]}:force_original_aspect_ratio=increase`,
+        options: `${vBox[2]}:${vBox[3]}:force_original_aspect_ratio=increase`,
         inputs: `${overlayIndex}:v`,
         outputs: 'ov_scaled'
       });
@@ -277,10 +264,10 @@ export default async function handler(req, res) {
       let durationLimit = audioPath ? 60 : 15;
 
       let outOpts = [
-          '-c:v', 'libx264',
-          '-preset', 'ultrafast',
-          '-crf', '32', // Reduced quality for faster processing
-          '-pix_fmt', 'yuv420p',
+          '-c:v libx264',
+          '-preset ultrafast',
+          '-crf 32', // Reduced quality for faster processing
+          '-pix_fmt yuv420p',
           '-r', '24', // Reduce frame rate to speed up rendering
           '-t', durationLimit.toString(),
           '-threads', '2' // Prevent resource exhaustion in Vercel limits

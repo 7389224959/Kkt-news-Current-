@@ -1,8 +1,8 @@
 import { ViralPostOverlayData } from './imageUtils';
 
 export const renderThemeOverlay = (ctx: CanvasRenderingContext2D, width: number, height: number, data: ViralPostOverlayData) => {
-  const fontStack = '"Mukta", "Hind", "Poppins", "Inter", system-ui, sans-serif';
-  const hindiFontStack = '"Mukta", "Hind", "Noto Sans Devanagari", "Mangal", sans-serif';
+  const fontStack = '"Inter", system-ui, -apple-system, sans-serif';
+  const hindiFontStack = '"Noto Sans Devanagari", "Mangal", "Arial Unicode MS", sans-serif';
   const maxTextWidth = width * 0.8;
   
   // Helper for text wrapping

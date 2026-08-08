@@ -1,3 +1,4 @@
+import { buildLocalAndUpload } from "./build_anchor_local.js";
 import { createClient } from "@supabase/supabase-js";
 import { chromium } from "playwright";
 import fs from "fs";
@@ -20,13 +21,6 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 if (!ADMIN_PASSWORD) {
   console.error("Error: ADMIN_PASSWORD environment variable is not set.");
   process.exit(1);
-}
-
-function supa() {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-  if (!url || !key || url.includes('YOUR_SUPABASE_URL')) return null;
-  return createClient(url, key);
 }
 
 const MAX_RETRIES = 4;
@@ -79,16 +73,13 @@ async function executePhase(page, buttonSelector, phaseName) {
     
     const messageLower = alertMessage.toLowerCase();
     
-    if (
-      messageLower.includes("successfully published") ||
-      messageLower.includes("published directly") ||
-      messageLower.includes("auto viral success") ||
-      messageLower.includes("auto fetch success") ||
-      (phaseName === 'Auto Fetch' && messageLower.includes("no new articles"))
-    ) {
-      alertSuccess = true;
-    } else if (messageLower.includes("error") || messageLower.includes("failed")) {
-      alertError = true;
+    if (messageLower.includes("error") || messageLower.includes("failed")) {
+      // However, if the alert says "No new articles found or already posted" it might be treated as success in fetch
+      if (phaseName === 'Auto Fetch' && messageLower.includes("no new articles")) {
+         alertSuccess = true;
+      } else {
+         alertError = true;
+      }
     } else if (
       messageLower.includes("success") || 
       messageLower.includes("completed")
@@ -180,7 +171,7 @@ async function runAutoRobot() {
       resolveDownload();
     });
 
-      // Intercept /api/render-reel to upload base64 audio if needed
+      // Intercept /api/render-reel for anchor building
       await page.route("**/api/render-reel", async (route) => {
         const req = route.request();
         if (req.method() === "POST") {
@@ -189,36 +180,22 @@ async function runAutoRobot() {
             console.log("[auto-robot] Intercepted render-reel POST request!");
             try {
               const body = JSON.parse(bodyStr);
+                            const settings = await page.evaluate(() => window.__SITE_SETTINGS__);
+              console.log("[auto-robot] Page anchorSettings:", JSON.stringify(settings?.anchorSettings || {}));
               
-              // If audioUrl is a base64 data URI, upload to Supabase to prevent FUNCTION_PAYLOAD_TOO_LARGE
-              if (body.audioUrl && body.audioUrl.startsWith('data:')) {
-                console.log("[auto-robot] audioUrl is base64 data URI (len " + body.audioUrl.length + "), uploading to Supabase...");
-                const s = supa();
-                if (s) {
-                  try {
-                    const audioParts = body.audioUrl.split(',');
-                    if (audioParts.length > 1) {
-                      const audioBuf = Buffer.from(audioParts[1], 'base64');
-                      const audioFileName = `audio-${Date.now()}.wav`;
-                      const { data: uData, error: uErr } = await s.storage
-                        .from('news-images')
-                        .upload(audioFileName, audioBuf, { contentType: 'audio/wav', upsert: true });
-                      if (!uErr && uData) {
-                        const { data: pData } = s.storage.from('news-images').getPublicUrl(uData.path || audioFileName);
-                        if (pData && pData.publicUrl) {
-                          body.audioUrl = pData.publicUrl;
-                          console.log("[auto-robot] Uploaded audioUrl to Supabase URL:", body.audioUrl);
-                          await route.continue({ postData: JSON.stringify(body) });
-                          return;
-                        }
-                      } else if (uErr) {
-                        console.warn("[auto-robot] audioUrl upload to Supabase failed:", uErr.message);
-                      }
-                    }
-                  } catch(ae) {
-                    console.warn("[auto-robot] Error uploading audioUrl to Supabase:", ae.message);
-                  }
+              if (settings && settings.anchorSettings && settings.anchorSettings.enabled && settings.anchorSettings.imageUrl && body.audioUrl) {
+                console.log("[auto-robot] Building local anchor with audio string length:", body.audioUrl.length);
+                const anchorUrl = await buildLocalAndUpload(settings.anchorSettings.imageUrl, body.audioUrl);
+                if (anchorUrl) {
+                  body.anchorVideoUrl = anchorUrl;
+                  console.log("[auto-robot] Injected anchorVideoUrl into request! Length:", anchorUrl.length);
+                  await route.continue({ postData: JSON.stringify(body) });
+                  return;
+                } else {
+                  console.error("[auto-robot] buildLocalAndUpload returned null");
                 }
+              } else {
+                console.log(`[auto-robot] Skipping anchor build. enabled=${settings?.anchorSettings?.enabled} hasImage=${!!settings?.anchorSettings?.imageUrl} hasAudio=${!!body.audioUrl}`);
               }
             } catch (e) {
               console.error("[auto-robot] Error intercepting render-reel:", e);

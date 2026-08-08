@@ -4,58 +4,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { postId, message, imageUrl, scheduledPublishTime, published = true, comment } = req.body;
-
-    // Handle Publish request if postId is provided
-    if (postId) {
-      const pageId = process.env.FB_PAGE_ID || process.env.VITE_FB_PAGE_ID;
-      const accessToken = process.env.FB_PAGE_ACCESS_TOKEN || process.env.VITE_FB_PAGE_ACCESS_TOKEN;
-
-      if (!accessToken) {
-        return res.status(400).json({ error: 'FB_PAGE_ACCESS_TOKEN is required.' });
-      }
-
-      let resolvedAccessToken = accessToken;
-      if (pageId) {
-        try {
-          const tokenCheckRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}?fields=access_token&access_token=${accessToken}`);
-          if (tokenCheckRes.ok) {
-            const tokenCheckData = await tokenCheckRes.json();
-            if (tokenCheckData.access_token) {
-              resolvedAccessToken = tokenCheckData.access_token;
-            }
-          }
-        } catch (e) {
-          // Ignore
-        }
-      }
-
-      const fbApiUrl = `https://graph.facebook.com/v19.0/${postId}`;
-      const fbResponse = await fetch(fbApiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          is_published: true,
-          access_token: resolvedAccessToken,
-        }),
-      });
-
-      const textData = await fbResponse.text();
-      let fbData = {};
-      if (textData) {
-        try { fbData = JSON.parse(textData); } catch (e) {}
-      }
-
-      if (!fbResponse.ok) {
-        let errorMessage = fbData.error?.message || 'Failed to publish post';
-        if (fbData.error?.code === 190 || errorMessage.includes('Session has expired') || errorMessage.includes('Error validating access token')) {
-          errorMessage = 'Your Facebook Page Access Token has expired. Please update FB_PAGE_ACCESS_TOKEN in Vercel.';
-        }
-        return res.status(400).json({ error: errorMessage });
-      }
-
-      return res.status(200).json({ success: true });
-    }
+    const { message, imageUrl, scheduledPublishTime, published = true, comment } = req.body;
     
     if (!message) {
       return res.status(400).json({ error: 'Message is required to post to Facebook.' });
@@ -173,50 +122,21 @@ export default async function handler(req, res) {
     console.log("Public Post URL:", postUrl);
 
     let commentResult = null;
-    let commentDropped = false;
-    let commentError = null;
-
     if (comment && postId) {
-      console.log("Dropping comment on Facebook post:", postId, "Comment:", comment);
-      
-      let attempts = 0;
-      const maxCommentAttempts = 3;
-      
-      while (!commentDropped && attempts < maxCommentAttempts) {
-        attempts++;
-        try {
-          const commentUrl = `https://graph.facebook.com/v19.0/${postId}/comments?access_token=${encodeURIComponent(resolvedAccessToken)}`;
-          const commentRes = await fetch(commentUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message: comment
-            })
-          });
-
-          const textRes = await commentRes.text();
-          let jsonRes = {};
-          try { jsonRes = JSON.parse(textRes); } catch(e) {}
-
-          console.log(`FB Post Comment Drop Attempt ${attempts} Response:`, jsonRes);
-
-          if (commentRes.ok && jsonRes.id) {
-            commentResult = jsonRes;
-            commentDropped = true;
-          } else {
-            commentError = jsonRes.error?.message || textRes || `HTTP ${commentRes.status}`;
-            console.warn(`FB Post comment attempt ${attempts} failed:`, commentError);
-            if (attempts < maxCommentAttempts) {
-              await new Promise(resolve => setTimeout(resolve, 2000));
-            }
-          }
-        } catch (commentErr) {
-          commentError = commentErr.message;
-          console.error(`Failed to drop comment on FB post (attempt ${attempts}):`, commentErr);
-          if (attempts < maxCommentAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        }
+      try {
+        console.log("Dropping comment on Facebook post:", postId);
+        const commentRes = await fetch(`https://graph.facebook.com/v19.0/${postId}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: comment,
+            access_token: resolvedAccessToken
+          })
+        });
+        commentResult = await commentRes.json();
+        console.log("FB Post Comment Drop Response:", commentResult);
+      } catch (commentErr) {
+        console.error("Failed to drop comment on FB post:", commentErr);
       }
     }
 
@@ -225,8 +145,7 @@ export default async function handler(req, res) {
       id: postId,
       pageId: pageId,
       url: postUrl,
-      commentDropped,
-      commentError: commentDropped ? null : commentError
+      commentDropped: !!commentResult?.id
     });
   } catch (error) {
     console.error('Error posting to Facebook:', error);

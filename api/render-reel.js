@@ -2,238 +2,14 @@ export const maxDuration = 300;
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
-import sharp from "sharp";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { embeddedFonts, getFontFaceDefs, fontStack as defaultFontStack } from "../lib/embeddedFonts.js";
+import { buildAnchorVideoFromFile, overlayAnchorOnReel, getAnchorConfig } from "../services/anchorVideoService.js";
+ffmpeg.setFfmpegPath(ffmpegStatic);
+ffmpeg.setFfprobePath(ffprobeStatic.path);
 
-const ensureExecutableBinary = (rawPath, name) => {
-  if (!rawPath) return rawPath;
-  const binPath = typeof rawPath === "string" ? rawPath : (rawPath?.path || rawPath?.default?.path || rawPath?.default);
-  if (!binPath || typeof binPath !== "string") return binPath;
-
-  try {
-    if (!fs.existsSync(binPath)) return binPath;
-    const tmpDir = os.tmpdir();
-    const destPath = path.join(tmpDir, name);
-    if (!fs.existsSync(destPath)) {
-      fs.copyFileSync(binPath, destPath);
-    }
-    try {
-      fs.chmodSync(destPath, 0o755);
-    } catch (e) {}
-    return destPath;
-  } catch (err) {
-    console.warn(`[ensureExecutableBinary] Warning for ${name}:`, err.message);
-    return binPath;
-  }
-};
-
-const getFfmpegPath = () => {
-  if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
-    return process.env.FFMPEG_PATH;
-  }
-  if (fs.existsSync("/usr/bin/ffmpeg")) {
-    return "/usr/bin/ffmpeg";
-  }
-  if (fs.existsSync("/usr/local/bin/ffmpeg")) {
-    return "/usr/local/bin/ffmpeg";
-  }
-  const rawPath = typeof ffmpegStatic === "string" ? ffmpegStatic : (ffmpegStatic?.default || ffmpegStatic);
-  return ensureExecutableBinary(rawPath, "ffmpeg");
-};
-
-const getFfprobePath = () => {
-  if (process.env.FFPROBE_PATH && fs.existsSync(process.env.FFPROBE_PATH)) {
-    return process.env.FFPROBE_PATH;
-  }
-  if (fs.existsSync("/usr/bin/ffprobe")) {
-    return "/usr/bin/ffprobe";
-  }
-  if (fs.existsSync("/usr/local/bin/ffprobe")) {
-    return "/usr/local/bin/ffprobe";
-  }
-  const rawPath = ffprobeStatic?.path || ffprobeStatic?.default?.path || (typeof ffprobeStatic === "string" ? ffprobeStatic : null);
-  return ensureExecutableBinary(rawPath, "ffprobe");
-};
-
-const activeFfmpegPath = getFfmpegPath();
-if (activeFfmpegPath) {
-  ffmpeg.setFfmpegPath(activeFfmpegPath);
-}
-
-const activeFfprobePath = getFfprobePath();
-if (activeFfprobePath) {
-  ffmpeg.setFfprobePath(activeFfprobePath);
-}
-
-function escapeXml(str) {
-  return String(str || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function wrapTextIntoLines(text, width, fontSize) {
-  const maxCharsPerLine = Math.max(1, Math.floor(width / (fontSize * 0.6)));
-  const words = String(text || "").trim().split(/\s+/);
-  const lines = [];
-  let currentLine = "";
-
-  for (const word of words) {
-    if (!currentLine) {
-      currentLine = word;
-    } else if ((currentLine + " " + word).length <= maxCharsPerLine) {
-      currentLine += " " + word;
-    } else {
-      lines.push(currentLine);
-      currentLine = word;
-    }
-  }
-  if (currentLine) lines.push(currentLine);
-  return lines;
-}
-
-let fontBase64Cache = {};
-let fontsInstalled = false;
-
-async function ensureFontsLoaded() {
-  if (fontsInstalled) return;
-
-  const localFontsDir = path.join(process.cwd(), "public", "fonts");
-  const tmpFontsDir = path.join(os.tmpdir(), ".fonts");
-
-  try {
-    if (!fs.existsSync(tmpFontsDir)) {
-      fs.mkdirSync(tmpFontsDir, { recursive: true });
-    }
-  } catch (e) {
-    console.warn("[font] Could not create tmp fonts directory:", e.message);
-  }
-
-  const fontsToDownload = [
-    { key: "mukta", name: "Mukta-ExtraBold.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/mukta/Mukta-ExtraBold.ttf" },
-    { key: "hind", name: "Hind-Bold.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Bold.ttf" },
-    { key: "noto", name: "NotoSansDevanagari.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf" },
-    { key: "poppins", name: "Poppins-ExtraBold.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-ExtraBold.ttf" }
-  ];
-
-  for (const f of fontsToDownload) {
-    let buf = null;
-    const localPath = path.join(localFontsDir, f.name);
-    const tmpPath = path.join(tmpFontsDir, f.name);
-
-    if (fs.existsSync(localPath)) {
-      try {
-        const stats = fs.statSync(localPath);
-        if (stats.size > 1000) {
-          buf = fs.readFileSync(localPath);
-        }
-      } catch (e) {}
-    }
-
-    if (!buf && fs.existsSync(tmpPath)) {
-      try {
-        const stats = fs.statSync(tmpPath);
-        if (stats.size > 1000) {
-          buf = fs.readFileSync(tmpPath);
-        }
-      } catch (e) {}
-    }
-
-    if (!buf) {
-      try {
-        console.log(`[font] Downloading ${f.name}...`);
-        const res = await fetch(f.url);
-        if (res.ok) {
-          buf = Buffer.from(await res.arrayBuffer());
-          try {
-            fs.writeFileSync(tmpPath, buf);
-          } catch (e) {
-            console.warn(`[font] Warning writing ${f.name} to disk:`, e.message);
-          }
-        }
-      } catch (e) {
-        console.warn(`[font] Error downloading ${f.name}:`, e.message);
-      }
-    }
-
-    if (buf && buf.length > 1000) {
-      fontBase64Cache[f.key] = buf.toString("base64");
-    }
-  }
-
-  try {
-    const { execSync } = await import("child_process");
-    execSync(`fc-cache -f "${tmpFontsDir}"`);
-  } catch (e) {}
-
-  fontsInstalled = true;
-}
-
-async function renderTextToPng({
-  text,
-  width,
-  height,
-  fontSize,
-  fontColor = "yellow",
-  strokeColor = "black",
-  strokeWidth = 6,
-  align = "center",
-  bgColor = null,
-  outputPath,
-}) {
-  const fontFaceDefs = getFontFaceDefs();
-  const fontStack = defaultFontStack;
-
-  const lines = wrapTextIntoLines(text, width, fontSize);
-  const lineHeight = fontSize * 1.25;
-  const totalTextHeight = lines.length * lineHeight;
-  const startY = Math.max(
-    fontSize,
-    (height - totalTextHeight) / 2 + fontSize * 0.85,
-  );
-
-  const xPos = align === "center" ? "50%" : "10";
-  const anchor = align === "center" ? "middle" : "start";
-
-  const tspans = lines
-    .map((line, idx) => {
-      const y = startY + idx * lineHeight;
-      return `<tspan x="${xPos}" y="${y}" text-anchor="${anchor}">${escapeXml(line)}</tspan>`;
-    })
-    .join("\n");
-
-  const bgRect = bgColor
-    ? `<rect width="100%" height="100%" fill="${bgColor}" rx="8"/>`
-    : "";
-
-  const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-    <style>
-      ${fontFaceDefs}
-      .txt {
-        font-family: ${fontStack};
-        font-weight: 800;
-        font-size: ${fontSize}px;
-        fill: ${fontColor};
-        stroke: ${strokeColor};
-        stroke-width: ${strokeWidth}px;
-        paint-order: stroke fill;
-        stroke-linejoin: round;
-        filter: drop-shadow(0px 3px 6px rgba(0,0,0,0.85));
-      }
-    </style>
-    ${bgRect}
-    <text class="txt">${tspans}</text>
-  </svg>`;
-
-  await sharp(Buffer.from(svg)).png().toFile(outputPath);
-}
-
-const downloadFile = async (url, dest, req = null) => {
+const downloadFile = async (url, dest) => {
   if (!url) throw new Error("URL is missing");
 
   if (url.startsWith("data:")) {
@@ -252,25 +28,7 @@ const downloadFile = async (url, dest, req = null) => {
   }
 
   if (url.startsWith("/")) {
-    const relativeCleanPath = url.replace(/^\/+/, "");
-    const localPublicPath = path.join(process.cwd(), "public", relativeCleanPath);
-    if (fs.existsSync(localPublicPath)) {
-      try {
-        fs.copyFileSync(localPublicPath, dest);
-        return;
-      } catch (e) {
-        console.warn(`Could not copy local file ${localPublicPath}:`, e.message);
-      }
-    }
-
-    if (req && req.headers && req.headers.host) {
-      const protocol = req.headers["x-forwarded-proto"] || "https";
-      url = `${protocol}://${req.headers.host}${url}`;
-    } else if (process.env.VERCEL_URL) {
-      url = `https://${process.env.VERCEL_URL}${url}`;
-    } else {
-      url = `http://localhost:${process.env.PORT || 3000}${url}`;
-    }
+    url = `http://localhost:${process.env.PORT || 3000}${url}`;
   }
 
   // Unwrap duckduckgo proxy URLs if they exist in state
@@ -293,58 +51,19 @@ const downloadFile = async (url, dest, req = null) => {
       }
     });
     if (!response.ok) {
-      console.warn(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
-      throw new Error(`Failed to fetch file from ${url}`);
+      console.warn(`Failed to fetch ${url}: ${response.statusText}, using fallback image`);
+      const base64BlackPixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+      fs.writeFileSync(dest, Buffer.from(base64BlackPixel, 'base64'));
+      return;
     }
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     fs.writeFileSync(dest, buffer);
   } catch (error) {
-    console.warn(`Error fetching ${url}: ${error.message}`);
-    if (dest.endsWith('.jpg') || dest.endsWith('.png') || dest.endsWith('.jpeg')) {
-      const base64BlackPixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
-      fs.writeFileSync(dest, Buffer.from(base64BlackPixel, 'base64'));
-    } else {
-      throw error;
-    }
+    console.warn(`Error fetching ${url}: ${error.message}, using fallback image`);
+    const base64BlackPixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+    fs.writeFileSync(dest, Buffer.from(base64BlackPixel, 'base64'));
   }
-};
-
-const generateWavFile = (destPath, durationSec, sampleFn = null, sampleRate = 44100) => {
-  const numChannels = 1;
-  const bitsPerSample = 16;
-  const bytesPerSample = bitsPerSample / 8;
-  const blockAlign = numChannels * bytesPerSample;
-  const byteRate = sampleRate * blockAlign;
-  const numSamples = Math.floor(durationSec * sampleRate);
-  const dataSize = numSamples * blockAlign;
-  const chunkSize = 36 + dataSize;
-
-  const header = Buffer.alloc(44);
-  header.write("RIFF", 0);
-  header.writeUInt32LE(chunkSize, 4);
-  header.write("WAVE", 8);
-  header.write("fmt ", 12);
-  header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20);
-  header.writeUInt16LE(numChannels, 22);
-  header.writeUInt32LE(sampleRate, 24);
-  header.writeUInt32LE(byteRate, 28);
-  header.writeUInt16LE(blockAlign, 32);
-  header.writeUInt16LE(bitsPerSample, 34);
-  header.write("data", 36);
-  header.writeUInt32LE(dataSize, 40);
-
-  const data = Buffer.alloc(dataSize);
-  if (sampleFn) {
-    for (let i = 0; i < numSamples; i++) {
-      const t = i / sampleRate;
-      const val = sampleFn(t, i);
-      const sample = Math.max(-1, Math.min(1, val)) * 32767;
-      data.writeInt16LE(Math.round(sample), i * 2);
-    }
-  }
-  fs.writeFileSync(destPath, Buffer.concat([header, data]));
 };
 
 export default async function handler(req, res) {
@@ -359,6 +78,7 @@ export default async function handler(req, res) {
       template,
       styleOverrides = {},
       directorScenes = [],
+      anchorVideoUrl,
     } = req.body;
     if (!templateMediaUrl || !template)
       return res.status(400).json({ error: "Missing required parameters." });
@@ -380,15 +100,15 @@ export default async function handler(req, res) {
 
     if (introMediaUrl) {
       introPath = path.join(tempDir, "intro.mp4");
-      await downloadFile(introMediaUrl, introPath, req);
+      await downloadFile(introMediaUrl, introPath);
     }
     if (outroMediaUrl) {
       outroPath = path.join(tempDir, "outro.mp4");
-      await downloadFile(outroMediaUrl, outroPath, req);
+      await downloadFile(outroMediaUrl, outroPath);
     }
     if (bgmUrl) {
       bgmPath = path.join(tempDir, "bgm.mp3");
-      await downloadFile(bgmUrl, bgmPath, req);
+      await downloadFile(bgmUrl, bgmPath);
     }
 
     const { overlayMediaUrl, visuals = [] } = req.body;
@@ -397,7 +117,7 @@ export default async function handler(req, res) {
       const extMatch = visuals[i].match(/\.(mp4|mov|webm|gif|webp)$/i);
       const ext = extMatch ? extMatch[0] : '';
       const rawP = path.join(tempDir, `visual_raw_${i}`);
-      await downloadFile(visuals[i], rawP, req);
+      await downloadFile(visuals[i], rawP);
 
       const isVideo = await new Promise((resolve) => {
         ffmpeg.ffprobe(rawP, (err, meta) => {
@@ -420,7 +140,7 @@ export default async function handler(req, res) {
     }
     if (downloadedVisuals.length === 0 && overlayMediaUrl) {
       const p = path.join(tempDir, "overlay.mp4");
-      await downloadFile(overlayMediaUrl, p, req);
+      await downloadFile(overlayMediaUrl, p);
       downloadedVisuals.push({ file: p, url: overlayMediaUrl, isVideo: true });
     }
 
@@ -444,24 +164,29 @@ export default async function handler(req, res) {
     let audioPath = null;
     if (audioUrl) {
       audioPath = path.join(tempDir, "audio.wav");
-      await downloadFile(audioUrl, audioPath, req);
+      await downloadFile(audioUrl, audioPath);
     }
-    await downloadFile(templateMediaUrl, backgroundPath, req);
-    try {
-      if (fs.existsSync(path.join(process.cwd(), "public", "fonts", "Hind-Bold.ttf"))) {
-        fs.copyFileSync(path.join(process.cwd(), "public", "fonts", "Hind-Bold.ttf"), fontPath);
-      } else if (embeddedFonts && embeddedFonts.hind) {
-        fs.writeFileSync(fontPath, Buffer.from(embeddedFonts.hind, "base64"));
-      } else {
-        await downloadFile(
-          "https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Bold.ttf",
-          fontPath,
-          req
-        );
-      }
-    } catch (e) {
-      console.warn("Could not copy fontPath:", e.message);
+    // [ANCHOR] Kick the FREE talking-head build NOW; the slow HF-Space HTTP call
+    // then runs in parallel with the heavy first encode. Failure => null (C5).
+    const anchorConfig = await getAnchorConfig();
+    let anchorPromise = Promise.resolve(null);
+    if (anchorVideoUrl) {
+      anchorPromise = (async () => {
+        const p = path.join(tempDir, "anchor_prebuilt.mp4");
+        await downloadFile(anchorVideoUrl, p);
+        return p;
+      })();
+    } else if (anchorConfig.enabled && audioPath) {
+      anchorPromise = buildAnchorVideoFromFile({ audioPath, tempDir, config: anchorConfig }).catch(e => {
+        console.warn("[anchor] build failed, rendering without anchor:", e?.message || e);
+        return null; 
+      });
     }
+    await downloadFile(templateMediaUrl, backgroundPath);
+    await downloadFile(
+      "https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Bold.ttf",
+      fontPath,
+    );
 
     // Scale factor for 720p
     const targetW = 720;
@@ -518,13 +243,13 @@ export default async function handler(req, res) {
       filterGraph.push(
         {
           filter: "scale",
-          options: `w=${targetW}:h=${targetH}:force_original_aspect_ratio=increase`,
+          options: `${targetW}:${targetH}:force_original_aspect_ratio=increase`,
           inputs: "0:v",
           outputs: "bg_scaled_raw",
         },
         {
           filter: "crop",
-          options: `w=${targetW}:h=${targetH}`,
+          options: `${targetW}:${targetH}`,
           inputs: "bg_scaled_raw",
           outputs: "bg_cropped_raw",
         },
@@ -536,7 +261,7 @@ export default async function handler(req, res) {
         },
         {
           filter: "scale",
-          options: `w=${targetW}:h=${targetH}:force_original_aspect_ratio=decrease`,
+          options: `${targetW}:${targetH}:force_original_aspect_ratio=decrease`,
           inputs: "0:v",
           outputs: "fg_scaled",
         },
@@ -552,13 +277,13 @@ export default async function handler(req, res) {
       filterGraph.push(
         {
           filter: "scale",
-          options: `w=${targetW}:h=${targetH}:force_original_aspect_ratio=increase`,
+          options: `${targetW}:${targetH}:force_original_aspect_ratio=increase`,
           inputs: "0:v",
           outputs: "bg_scaled",
         },
         {
           filter: "crop",
-          options: `w=${targetW}:h=${targetH}`,
+          options: `${targetW}:${targetH}`,
           inputs: "bg_scaled",
           outputs: "bg_cropped",
         },
@@ -623,11 +348,11 @@ export default async function handler(req, res) {
       const totalFrames = sceneDur * 25; // roughly the frames per scene
 
       const motions = [
-        `z=1+0.2*(on/${totalFrames})`, // zoom_in continuously
-        `z=1.2-0.2*(on/${totalFrames})`, // zoom_out continuously
-        `z=1.1:x=iw*0.05*(1-on/${totalFrames}):y=y`, // pan_left
-        `z=1.1:x=iw*0.05*(on/${totalFrames}):y=y`, // pan_right
-        `z=1.1+0.1*(on/${totalFrames}):x=iw*0.05*(on/${totalFrames}):y=ih*0.05*(on/${totalFrames})`, // ken_burns
+        `z='1+0.2*(on/${totalFrames})'`, // zoom_in continuously
+        `z='1.2-0.2*(on/${totalFrames})'`, // zoom_out continuously
+        `z=1.1:x='iw*0.05*(1-on/${totalFrames})':y='y'`, // pan_left
+        `z=1.1:x='iw*0.05*(on/${totalFrames})':y='y'`, // pan_right
+        `z='1.1+0.1*(on/${totalFrames})':x='iw*0.05*(on/${totalFrames})':y='ih*0.05*(on/${totalFrames})'`, // ken_burns
       ];
 
       const transitions = [
@@ -645,7 +370,7 @@ export default async function handler(req, res) {
 
         filterGraph.push({
           filter: "scale",
-          options: `w=${vBox[2]}:h=${vBox[3]}:force_original_aspect_ratio=increase`,
+          options: `${vBox[2]}:${vBox[3]}:force_original_aspect_ratio=increase`,
           inputs: `${idx}:v`,
           outputs: `vis_scaled_raw_${i}`,
         });
@@ -657,7 +382,7 @@ export default async function handler(req, res) {
         });
         filterGraph.push({
           filter: "crop",
-          options: `w=${vBox[2]}:h=${vBox[3]}`,
+          options: `${vBox[2]}:${vBox[3]}`,
           inputs: `vis_scaled_${i}`,
           outputs: `vis_cropped_${i}`,
         });
@@ -674,7 +399,7 @@ export default async function handler(req, res) {
           }
           filterGraph.push({
             filter: "zoompan",
-            options: `${motion}:d=${Math.ceil(sceneDur * 25) + 50}:s=${vBox[2]}x${vBox[3]}:fps=25`,
+            options: `${motion}:d=${Math.ceil(sceneDur * 25) + 50}:s=${vBox[2]}x${vBox[3]}`,
             inputs: `vis_cropped_${i}`,
             outputs: `vis_motion_${i}`,
           });
@@ -716,13 +441,6 @@ export default async function handler(req, res) {
           filter: "setpts",
           options: "PTS-STARTPTS",
           inputs: `vis_formatted_${i}`,
-          outputs: `vis_ptsed2_${i}`,
-        });
-
-        filterGraph.push({
-          filter: "fps",
-          options: "25",
-          inputs: `vis_ptsed2_${i}`,
           outputs: `vis_ready_${i}`,
         });
       }
@@ -758,32 +476,30 @@ export default async function handler(req, res) {
       currentOutput = "with_overlay";
     }
 
-    const overlayPngs = [];
-
     if (scriptData.headline && hBox) {
       const fontSize = Math.round(
         (Number(styleOverrides.headlineSize) || 80) * scaleFactor,
       );
-      const headlinePngPath = path.join(tempDir, "headline.png");
-      await renderTextToPng({
-        text: scriptData.headline,
-        width: hBox[2],
-        height: hBox[3],
-        fontSize,
-        fontColor: styleOverrides.headlineColor || "yellow",
-        strokeColor: "black",
-        strokeWidth: 4,
-        align: "center",
-        outputPath: headlinePngPath,
-      });
-
-      const headlineIdx = nextInputIndex++;
-      overlayPngs.push(headlinePngPath);
-
+      const headlinePath = path.join(tempDir, "headline.txt");
+      const wrappedHeadline = wrapText(scriptData.headline, hBox[2], fontSize);
+      fs.writeFileSync(headlinePath, wrappedHeadline);
       filterGraph.push({
-        filter: "overlay",
-        options: `x=${hBox[0]}:y=${hBox[1]}:enable='gte(t,${delayTime})'`,
-        inputs: [currentOutput, `${headlineIdx}:v`],
+        filter: "drawtext",
+        options: {
+          fontfile: fontPath,
+          fontcolor: styleOverrides.headlineColor || "yellow",
+          fontsize: fontSize.toString(),
+          x: `${hBox[0]}+(${hBox[2]}-text_w)/2`,
+          y: `${hBox[1]}+(${hBox[3]}-text_h)/2`,
+          textfile: headlinePath,
+          shadowcolor: "black@0.9",
+          shadowx: "4",
+          shadowy: "4",
+          bordercolor: "black",
+          borderw: "4",
+          enable: `gte(t,${delayTime})`,
+        },
+        inputs: currentOutput,
         outputs: "with_headline",
       });
       currentOutput = "with_headline";
@@ -793,24 +509,11 @@ export default async function handler(req, res) {
       const fontSize = Math.round(
         (Number(styleOverrides.tickerSize) || 50) * scaleFactor,
       );
+      const tickerPath = path.join(tempDir, "ticker.txt");
+      fs.writeFileSync(tickerPath, String(scriptData.ticker));
       const speed = Math.round(
         (template.style_rules.ticker_speed || 150) * scaleFactor,
       );
-      const tickerText = String(scriptData.ticker);
-      const tickerWidth = Math.max(tBox[2], Math.ceil(tickerText.length * fontSize * 0.75 + tBox[2]));
-      const tickerPngPath = path.join(tempDir, "ticker.png");
-
-      await renderTextToPng({
-        text: tickerText,
-        width: tickerWidth,
-        height: tBox[3],
-        fontSize,
-        fontColor: styleOverrides.tickerColor || "white",
-        strokeColor: "black",
-        strokeWidth: 3,
-        align: "left",
-        outputPath: tickerPngPath,
-      });
 
       // Draw static background box for ticker
       filterGraph.push({
@@ -827,15 +530,23 @@ export default async function handler(req, res) {
         inputs: currentOutput,
         outputs: "with_ticker_bg",
       });
-      currentOutput = "with_ticker_bg";
 
-      const tickerIdx = nextInputIndex++;
-      overlayPngs.push(tickerPngPath);
-
+      // Draw moving text over the background
       filterGraph.push({
-        filter: "overlay",
-        options: `x=${tBox[0]}+${tBox[2]}-(t*${speed}):y=${tBox[1]}+(${tBox[3]}-h)/2:enable='gte(t,${delayTime})'`,
-        inputs: [currentOutput, `${tickerIdx}:v`],
+        filter: "drawtext",
+        options: {
+          fontfile: fontPath,
+          fontcolor: styleOverrides.tickerColor || "white",
+          fontsize: fontSize.toString(),
+          x: `${tBox[0]}+${tBox[2]}-(t*${speed})`,
+          y: `${tBox[1]}+(${tBox[3]}-text_h)/2`,
+          textfile: tickerPath,
+          shadowcolor: "black@0.5",
+          shadowx: "2",
+          shadowy: "2",
+          enable: `gte(t,${delayTime})`,
+        },
+        inputs: "with_ticker_bg",
         outputs: "with_ticker",
       });
       currentOutput = "with_ticker";
@@ -848,53 +559,60 @@ export default async function handler(req, res) {
 
       let currentTime = 0;
 
-      for (let index = 0; index < subtitleLines.length; index++) {
-        const sub = subtitleLines[index];
+      subtitleLines.forEach((sub, index) => {
         const nextOutput = `sub_${index}`;
-        const subPngPath = path.join(tempDir, `sub_${index}.png`);
-
-        await renderTextToPng({
-          text: sub,
-          width: sBox[2],
-          height: sBox[3],
-          fontSize,
-          fontColor: styleOverrides.subtitleColor || "white",
-          strokeColor: "black",
-          strokeWidth: 4,
-          align: "center",
-          outputPath: subPngPath,
-        });
+        const subPath = path.join(tempDir, `sub_${index}.txt`);
+        const wrappedSub = wrapText(sub, sBox[2], fontSize);
+        fs.writeFileSync(subPath, wrappedSub);
 
         const words = String(sub).trim().split(/\s+/).filter(Boolean).length;
+        // The proportion of the total text length dictates the duration this chunk is shown.
         let duration = (words / totalWords) * exactAudioDuration;
 
         const startT = currentTime + delayTime;
         const endT = currentTime + duration + delayTime;
         currentTime += duration;
 
-        const subIdx = nextInputIndex++;
-        overlayPngs.push(subPngPath);
-
         filterGraph.push({
-          filter: "overlay",
-          options: `x=${sBox[0]}:y=${sBox[1]}:enable='between(t,${startT.toFixed(2)},${endT.toFixed(2)})'`,
-          inputs: [currentOutput, `${subIdx}:v`],
+          filter: "drawtext",
+          options: {
+            fontfile: fontPath,
+            fontcolor: styleOverrides.subtitleColor || "white",
+            fontsize: fontSize.toString(),
+            x: `${sBox[0]}+(${sBox[2]}-text_w)/2`,
+            y: `${sBox[1]}+(${sBox[3]}-text_h)/2`,
+            textfile: subPath,
+            shadowcolor: "black@0.9",
+            shadowx: "3",
+            shadowy: "3",
+            bordercolor: "black",
+            borderw: "4",
+            enable: `between(t,${startT.toFixed(2)},${endT.toFixed(2)})`,
+          },
+          inputs: currentOutput,
           outputs: nextOutput,
         });
         currentOutput = nextOutput;
-      }
+      });
     }
 
     console.log(
       "Starting FFmpeg with comprehensive layout and subtitle pass...",
     );
 
+    const hasBgAudio = await new Promise((res) => {
+      ffmpeg.ffprobe(backgroundPath, (err, metadata) => {
+        if (err || !metadata || !metadata.streams) res(false);
+        else res(metadata.streams.some(s => s.codec_type === 'audio'));
+      });
+    });
+
     await new Promise((resolve, reject) => {
       let command = ffmpeg();
 
       command = command
         .input(backgroundPath)
-        .inputOptions(["-stream_loop", "-1", "-an"]);
+        .inputOptions(["-stream_loop", "-1"]);
 
       if (downloadedVisuals.length > 0 && vBox) {
         for (let i = 0; i < downloadedVisuals.length; i++) {
@@ -904,10 +622,6 @@ export default async function handler(req, res) {
               .input(item.file)
               .inputOptions(inputOpts);
         }
-      }
-
-      for (const p of overlayPngs) {
-        command = command.input(p).inputOptions(["-stream_loop", "-1"]);
       }
 
       let audioIndex = -1;
@@ -924,36 +638,31 @@ export default async function handler(req, res) {
           ? exactAudioDuration / downloadedVisuals.length
           : 5;
 
-      let durationLimit = (audioPath ? exactAudioDuration : 15) + delayTime;
-
       // Custom BGM or Drone BGM
       bgmIndex = nextInputIndex++;
       if (bgmPath) {
         command = command.input(bgmPath).inputOptions(["-stream_loop", "-1"]);
       } else {
-        const defaultBgmPath = path.join(tempDir, "default_bgm.wav");
-        generateWavFile(defaultBgmPath, 10, (t) => 0.1 * Math.sin(2 * Math.PI * 110 * t) + 0.05 * Math.sin(2 * Math.PI * 165 * t));
-        command = command.input(defaultBgmPath).inputOptions(["-stream_loop", "-1"]);
+        command = command
+          .input("aevalsrc=0.1*sin(2*PI*110*t)+0.05*sin(2*PI*165*t)")
+          .inputFormat("lavfi");
       }
 
       // Whoosh SFX at transitions
       sfxIndex = nextInputIndex++;
-      const sfxPath = path.join(tempDir, "sfx_whoosh.wav");
-      generateWavFile(sfxPath, Math.ceil(durationLimit + 10), (t) => {
-        const modT = t % sceneDur;
-        return modT < 0.5 ? 0.3 * Math.sin(440 * 2 * Math.PI * t) * Math.exp(-modT * 5) : 0;
-      });
-      command = command.input(sfxPath);
+      command = command
+        .input(
+          `aevalsrc='if(lt(mod(t,${sceneDur}),0.5), 0.3*sin(440*2*PI*t)*exp(-mod(t,${sceneDur})*5), 0)'`,
+        )
+        .inputFormat("lavfi");
+
+      let durationLimit = (audioPath ? exactAudioDuration : 15) + delayTime;
 
       let outOpts = [
-        "-c:v",
-        "libx264",
-        "-preset",
-        "ultrafast",
-        "-crf",
-        "32", // Reduced quality for faster processing
-        "-pix_fmt",
-        "yuv420p",
+        "-c:v libx264",
+        "-preset ultrafast",
+        "-crf 32", // Reduced quality for faster processing
+        "-pix_fmt yuv420p",
         "-r",
         "24", // Reduce frame rate to speed up rendering
         "-t",
@@ -964,6 +673,15 @@ export default async function handler(req, res) {
 
       if (true) { // Always mix available audio tracks so output always has audio
         const mixInputs = [];
+        if (hasBgAudio) {
+          filterGraph.push({
+            filter: "volume",
+            options: "1.0",
+            inputs: "0:a",
+            outputs: "bg_media_audio",
+          });
+          mixInputs.push("bg_media_audio");
+        }
 
         if (audioPath) {
           filterGraph.push(
@@ -1093,10 +811,8 @@ export default async function handler(req, res) {
         let filterParts = [];
         let concatInputs = [];
         
-        // Add silent audio as input so we can use it to substitute missing audio
-        const silentAudioPath = path.join(tempDir, "silent_audio.wav");
-        generateWavFile(silentAudioPath, 10, null);
-        concatCommand = concatCommand.input(silentAudioPath);
+        // Add anullsrc as input so we can use it to substitute missing audio
+        concatCommand = concatCommand.input("anullsrc=r=44100:cl=stereo").inputFormat("lavfi");
         // Its input index will be the total number of files (+1 depending) - we will know later
         
         let fileIdx = 0;
@@ -1105,13 +821,13 @@ export default async function handler(req, res) {
         // Restructure adding parts
         const addPart = (fPath, hasA) => {
           concatCommand = concatCommand.input(fPath);
-          filterParts.push(`[${actualFileIdx}:v]scale=w=720:h=1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,format=yuv420p[v${fileIdx}]`);
+          filterParts.push(`[${actualFileIdx}:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,format=yuv420p[v${fileIdx}]`);
           
           if (hasA) {
-            filterParts.push(`[${actualFileIdx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a${fileIdx}]`);
+            filterParts.push(`[${actualFileIdx}:a]afifo[a${fileIdx}]`);
           } else {
             // map from anullsrc (which is at index 0)
-            filterParts.push(`[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a${fileIdx}]`);
+            filterParts.push(`[0:a]afifo[a${fileIdx}]`);
           }
 
           concatInputs.push(`[v${fileIdx}][a${fileIdx}]`);
@@ -1132,23 +848,26 @@ export default async function handler(req, res) {
           .map('[outv]')
           .map('[outa]')
           .outputOptions([
-             "-c:v",
-             "libx264",
-             "-preset",
-             "ultrafast",
-             "-crf",
-             "32",
-             "-pix_fmt",
-             "yuv420p",
-             "-r",
-             "24",
-             "-c:a",
-             "aac"
+             "-c:v libx264",
+             "-preset ultrafast",
+             "-crf 32",
+             "-pix_fmt yuv420p",
+             "-r 24",
+             "-c:a aac"
           ])
           .save(finalPath)
           .on("end", () => resolve())
           .on("error", (err) => reject(err));
       });
+    }
+
+    // [ANCHOR] Composite the talking-head as a framed presenter box (cheap 2nd
+    // pass). Audio copied untouched so lips stay in sync (C3/C6).
+    const anchorLocal = await anchorPromise;
+    if (anchorLocal) {
+      try {
+        finalPath = await overlayAnchorOnReel({ reelPath: finalPath, anchorPath: anchorLocal, tempDir, delayTime, config: anchorConfig });
+      } catch (e) { console.warn("[anchor] overlay failed, keeping reel without anchor:", e?.message || e); }
     }
 
     const outputBuffer = fs.readFileSync(finalPath);

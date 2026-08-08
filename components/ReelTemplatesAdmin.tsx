@@ -715,7 +715,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
                         padding: `${padding}px`,
                         color: 'white',
                         fontSize: `${fontSize}px`,
-                        fontFamily: '"Mukta", "Hind", "Noto Sans Devanagari", "Poppins", sans-serif',
+                        fontFamily: '"Noto Sans Devanagari", sans-serif',
                         lineHeight: 1,
                         pointerEvents: 'none',
                       }}>
@@ -736,7 +736,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
                         padding: `${padding}px`,
                         color: 'yellow',
                         fontSize: `${fontSize}px`,
-                        fontFamily: '"Mukta", "Hind", "Noto Sans Devanagari", "Poppins", sans-serif',
+                        fontFamily: '"Noto Sans Devanagari", sans-serif',
                         lineHeight: 1,
                         pointerEvents: 'none',
                       }}>
@@ -757,7 +757,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
                         padding: `${padding}px`,
                         color: 'white',
                         fontSize: `${fontSize}px`,
-                        fontFamily: '"Mukta", "Hind", "Noto Sans Devanagari", "Poppins", sans-serif',
+                        fontFamily: '"Noto Sans Devanagari", sans-serif',
                         lineHeight: 1,
                         pointerEvents: 'none',
                       }}>

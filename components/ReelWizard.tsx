@@ -31,7 +31,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
   const [videoBase64, setVideoBase64] = useState('');
   
   const [customCoords, setCustomCoords] = useState({ headline: '', ticker: '', subtitle: '', video: '' });
-  const [publishPlatforms, setPublishPlatforms] = useState({ facebook: true, instagram: true, youtube: false });
+  const [publishPlatforms, setPublishPlatforms] = useState({ facebook: true, instagram: autoStart ? true : false, youtube: false });
   const [customComment, setCustomComment] = useState<string>('');
 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -144,7 +144,6 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
 
       let successCount = 0;
       let errorMsgs = [];
-      let commentMsgs = [];
 
       if (publishPlatforms.facebook) {
         try {
@@ -159,20 +158,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
                comment: ctaComment || undefined
             }),
           });
-          const textRes = await res.text();
-          let fbData: any = {};
-          try { fbData = JSON.parse(textRes); } catch(e) {}
-
-          if (!res.ok) throw new Error(fbData.error || textRes || 'Failed to publish to Facebook');
+          if (!res.ok) throw new Error(await res.text());
           successCount++;
-
-          if (ctaComment) {
-            if (fbData.commentDropped) {
-              commentMsgs.push('Facebook: Comment dropped successfully! ✅');
-            } else {
-              commentMsgs.push('Facebook: Video published! (Comment drop note: ' + (fbData.commentError || 'Meta App permission required') + ')');
-            }
-          }
         } catch(e: any) {
           errorMsgs.push('Facebook: ' + e.message);
         }
@@ -191,20 +178,8 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
                comment: ctaComment || undefined
             }),
           });
-          const textRes = await res.text();
-          let igData: any = {};
-          try { igData = JSON.parse(textRes); } catch(e) {}
-
-          if (!res.ok) throw new Error(igData.error || textRes || 'Failed to publish to Instagram');
+          if (!res.ok) throw new Error(await res.text());
           successCount++;
-
-          if (ctaComment) {
-            if (igData.commentDropped) {
-              commentMsgs.push('Instagram: Comment dropped successfully! ✅');
-            } else {
-              commentMsgs.push('Instagram: Reel published! (Comment drop note: ' + (igData.commentError || 'Meta App permission required') + ')');
-            }
-          }
         } catch(e: any) {
           errorMsgs.push('Instagram: ' + e.message);
         }
@@ -230,18 +205,10 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
         }
       }
       
-      let finalNotice = '';
-      if (successCount > 0) {
-        finalNotice += 'Successfully published to selected platforms!';
-        if (commentMsgs.length > 0) {
-          finalNotice += '\n\nComment Drop Status:\n' + commentMsgs.join('\n');
-        }
-      }
-      
       if (errorMsgs.length > 0) {
-        alert('Some publishes failed:\n' + errorMsgs.join('\n') + (finalNotice ? '\n\n' + finalNotice : ''));
+        alert('Some publishes failed:\n' + errorMsgs.join('\n'));
       } else if (successCount > 0) {
-        alert(finalNotice);
+        alert('Successfully published to selected platforms!');
       } else {
         alert('No platforms selected for publishing. Please select at least one.');
       }
@@ -344,8 +311,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
          setStatus('Step 5/5: Auto Publishing Reel...');
          try {
             const message = updatedScriptData.facebookCaption || ((updatedScriptData.headline || article.title || 'Breaking News') + ' \n\n#kktnews');
-            const autoComment = updatedScriptData?.strategicCtaQuestion || updatedScriptData?.subheadline || updatedScriptData?.headline || article.title || '';
-            await doPublishReel(blob, message, autoComment);
+            await doPublishReel(blob, message);
          } catch(e) {
             console.error('Auto publish failed', e);
          }
@@ -1416,12 +1382,9 @@ function ReelEditorView({
                   onMouseDown={(e) => handleDragStart(e, 'headline_box', 'move')}
                   onTouchStart={(e) => handleDragStart(e, 'headline_box', 'move')}
                 >
-                   <span className="text-center font-extrabold pointer-events-none" style={{
+                   <span className="text-center font-bold pointer-events-none" style={{
                       color: styleOverrides.headlineColor || 'white', 
-                      fontSize: `${(parseInt(styleOverrides.headlineSize || '50') * scale)}px`,
-                      fontFamily: '"Mukta", "Hind", "Noto Sans Devanagari", "Poppins", sans-serif',
-                      textShadow: '2px 2px 4px rgba(0,0,0,0.9)',
-                      WebkitTextStroke: '2px black'
+                      fontSize: `${(parseInt(styleOverrides.headlineSize || '50') * scale)}px`
                    }}>{scriptData.headline}</span>
                    <div 
                      className="absolute bottom-0 right-0 w-8 h-8 -mr-4 -mb-4 bg-transparent cursor-nwse-resize flex items-center justify-center pointer-events-auto"
@@ -1447,8 +1410,7 @@ function ReelEditorView({
                    <div className="w-full h-full overflow-hidden flex items-center pointer-events-none">
                      <span className="font-bold" style={{
                         color: styleOverrides.tickerColor || 'white', 
-                        fontSize: `${(parseInt(styleOverrides.tickerSize || '40') * scale)}px`,
-                        fontFamily: '"Mukta", "Hind", "Noto Sans Devanagari", "Poppins", sans-serif'
+                        fontSize: `${(parseInt(styleOverrides.tickerSize || '40') * scale)}px`
                      }}>{scriptData.ticker}</span>
                    </div>
                    <div 
@@ -1471,10 +1433,9 @@ function ReelEditorView({
                   onMouseDown={(e) => handleDragStart(e, 'subtitle_box', 'move')}
                   onTouchStart={(e) => handleDragStart(e, 'subtitle_box', 'move')}
                 >
-                   <span className="text-center font-extrabold pointer-events-none" style={{
+                   <span className="text-center font-bold pointer-events-none" style={{
                       color: styleOverrides.subtitleColor || 'white', 
                       fontSize: `${(parseInt(styleOverrides.subtitleSize || '45') * scale)}px`,
-                      fontFamily: '"Mukta", "Hind", "Noto Sans Devanagari", "Poppins", sans-serif',
                       textShadow: '2px 2px 4px rgba(0,0,0,0.9)',
                       WebkitTextStroke: '2px black'
                    }}>{scriptData.subtitleChunks?.[0] || scriptData.subtitles?.[0] || 'Subtitle prev...'}</span>

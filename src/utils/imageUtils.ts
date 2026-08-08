@@ -158,9 +158,6 @@ export const overlayTextOnImage = (base64Str: string, data: ViralPostOverlayData
       }
 
       // Render the selected theme overlaid text
-      if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
-        await document.fonts.ready;
-      }
       renderThemeOverlay(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, data);
 
       resolve(canvas.toDataURL('image/jpeg', 0.9));
