@@ -1,5 +1,6 @@
 export const maxDuration = 300;
 import ffmpeg from 'fluent-ffmpeg';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import ffprobeStatic from 'ffprobe-static';
 import fs from 'fs';
@@ -16,7 +17,11 @@ const getFfmpegPath = () => {
   if (fs.existsSync("/usr/local/bin/ffmpeg")) {
     return "/usr/local/bin/ffmpeg";
   }
-  return ffmpegStatic;
+  const installerPath = ffmpegInstaller?.path || ffmpegInstaller?.default?.path;
+  if (installerPath && fs.existsSync(installerPath)) {
+    return installerPath;
+  }
+  return typeof ffmpegStatic === 'string' ? ffmpegStatic : (ffmpegStatic?.default || ffmpegStatic);
 };
 
 ffmpeg.setFfmpegPath(getFfmpegPath());

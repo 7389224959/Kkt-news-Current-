@@ -3,6 +3,7 @@ import path from "path";
 import crypto from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
 import { createClient } from "@supabase/supabase-js";
 const exec = promisify(execFile);
@@ -17,7 +18,11 @@ function getFfmpegPath() {
   if (fs.existsSync("/usr/local/bin/ffmpeg")) {
     return "/usr/local/bin/ffmpeg";
   }
-  return ffmpegStatic;
+  const installerPath = ffmpegInstaller?.path || ffmpegInstaller?.default?.path;
+  if (installerPath && fs.existsSync(installerPath)) {
+    return installerPath;
+  }
+  return typeof ffmpegStatic === "string" ? ffmpegStatic : (ffmpegStatic?.default || ffmpegStatic);
 }
 
 const ffmpegBinary = getFfmpegPath();

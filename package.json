@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@google/genai": "^1.40.0",
     "@imgly/background-removal": "^1.7.0",
     "@mozilla/readability": "^0.6.0",
