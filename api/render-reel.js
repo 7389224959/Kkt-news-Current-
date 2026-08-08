@@ -1,12 +1,13 @@
 export const maxDuration = 300;
 import ffmpeg from "fluent-ffmpeg";
-import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
+import sharp from "sharp";
 import fs from "fs";
 import path from "path";
 import os from "os";
 import { buildAnchorVideoFromFile, overlayAnchorOnReel, getAnchorConfig } from "../services/anchorVideoService.js";
+
 const getFfmpegPath = () => {
   if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
     return process.env.FFMPEG_PATH;
@@ -17,10 +18,6 @@ const getFfmpegPath = () => {
   if (fs.existsSync("/usr/local/bin/ffmpeg")) {
     return "/usr/local/bin/ffmpeg";
   }
-  const installerPath = ffmpegInstaller?.path || ffmpegInstaller?.default?.path;
-  if (installerPath && fs.existsSync(installerPath)) {
-    return installerPath;
-  }
   return typeof ffmpegStatic === "string" ? ffmpegStatic : (ffmpegStatic?.default || ffmpegStatic);
 };
 
@@ -28,6 +25,89 @@ ffmpeg.setFfmpegPath(getFfmpegPath());
 const ffprobePath = ffprobeStatic?.path || ffprobeStatic?.default?.path || ffprobeStatic;
 if (ffprobePath) {
   ffmpeg.setFfprobePath(ffprobePath);
+}
+
+function escapeXml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function wrapTextIntoLines(text, width, fontSize) {
+  const maxCharsPerLine = Math.max(1, Math.floor(width / (fontSize * 0.6)));
+  const words = String(text || "").trim().split(/\s+/);
+  const lines = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    if (!currentLine) {
+      currentLine = word;
+    } else if ((currentLine + " " + word).length <= maxCharsPerLine) {
+      currentLine += " " + word;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  return lines;
+}
+
+async function renderTextToPng({
+  text,
+  width,
+  height,
+  fontSize,
+  fontColor = "yellow",
+  strokeColor = "black",
+  strokeWidth = 4,
+  align = "center",
+  bgColor = null,
+  outputPath,
+}) {
+  const lines = wrapTextIntoLines(text, width, fontSize);
+  const lineHeight = fontSize * 1.25;
+  const totalTextHeight = lines.length * lineHeight;
+  const startY = Math.max(
+    fontSize,
+    (height - totalTextHeight) / 2 + fontSize * 0.85,
+  );
+
+  const xPos = align === "center" ? "50%" : "10";
+  const anchor = align === "center" ? "middle" : "start";
+
+  const tspans = lines
+    .map((line, idx) => {
+      const y = startY + idx * lineHeight;
+      return `<tspan x="${xPos}" y="${y}" text-anchor="${anchor}">${escapeXml(line)}</tspan>`;
+    })
+    .join("\n");
+
+  const bgRect = bgColor
+    ? `<rect width="100%" height="100%" fill="${bgColor}" rx="6"/>`
+    : "";
+
+  const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <style>
+      .txt {
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+        font-weight: 800;
+        font-size: ${fontSize}px;
+        fill: ${fontColor};
+        stroke: ${strokeColor};
+        stroke-width: ${strokeWidth}px;
+        paint-order: stroke fill;
+        stroke-linejoin: round;
+      }
+    </style>
+    ${bgRect}
+    <text class="txt">${tspans}</text>
+  </svg>`;
+
+  await sharp(Buffer.from(svg)).png().toFile(outputPath);
 }
 
 const downloadFile = async (url, dest) => {
@@ -541,30 +621,32 @@ export default async function handler(req, res) {
       currentOutput = "with_overlay";
     }
 
+    const overlayPngs = [];
+
     if (scriptData.headline && hBox) {
       const fontSize = Math.round(
         (Number(styleOverrides.headlineSize) || 80) * scaleFactor,
       );
-      const headlinePath = path.join(tempDir, "headline.txt");
-      const wrappedHeadline = wrapText(scriptData.headline, hBox[2], fontSize);
-      fs.writeFileSync(headlinePath, wrappedHeadline);
+      const headlinePngPath = path.join(tempDir, "headline.png");
+      await renderTextToPng({
+        text: scriptData.headline,
+        width: hBox[2],
+        height: hBox[3],
+        fontSize,
+        fontColor: styleOverrides.headlineColor || "yellow",
+        strokeColor: "black",
+        strokeWidth: 4,
+        align: "center",
+        outputPath: headlinePngPath,
+      });
+
+      const headlineIdx = nextInputIndex++;
+      overlayPngs.push(headlinePngPath);
+
       filterGraph.push({
-        filter: "drawtext",
-        options: {
-          fontfile: fontPath,
-          fontcolor: styleOverrides.headlineColor || "yellow",
-          fontsize: fontSize.toString(),
-          x: `${hBox[0]}+(${hBox[2]}-text_w)/2`,
-          y: `${hBox[1]}+(${hBox[3]}-text_h)/2`,
-          textfile: headlinePath,
-          shadowcolor: "black@0.9",
-          shadowx: "4",
-          shadowy: "4",
-          bordercolor: "black",
-          borderw: "4",
-          enable: `gte(t,${delayTime})`,
-        },
-        inputs: currentOutput,
+        filter: "overlay",
+        options: `x=${hBox[0]}:y=${hBox[1]}:enable='gte(t,${delayTime})'`,
+        inputs: [currentOutput, `${headlineIdx}:v`],
         outputs: "with_headline",
       });
       currentOutput = "with_headline";
@@ -574,11 +656,24 @@ export default async function handler(req, res) {
       const fontSize = Math.round(
         (Number(styleOverrides.tickerSize) || 50) * scaleFactor,
       );
-      const tickerPath = path.join(tempDir, "ticker.txt");
-      fs.writeFileSync(tickerPath, String(scriptData.ticker));
       const speed = Math.round(
         (template.style_rules.ticker_speed || 150) * scaleFactor,
       );
+      const tickerText = String(scriptData.ticker);
+      const tickerWidth = Math.max(tBox[2], Math.ceil(tickerText.length * fontSize * 0.75 + tBox[2]));
+      const tickerPngPath = path.join(tempDir, "ticker.png");
+
+      await renderTextToPng({
+        text: tickerText,
+        width: tickerWidth,
+        height: tBox[3],
+        fontSize,
+        fontColor: styleOverrides.tickerColor || "white",
+        strokeColor: "black",
+        strokeWidth: 3,
+        align: "left",
+        outputPath: tickerPngPath,
+      });
 
       // Draw static background box for ticker
       filterGraph.push({
@@ -595,23 +690,15 @@ export default async function handler(req, res) {
         inputs: currentOutput,
         outputs: "with_ticker_bg",
       });
+      currentOutput = "with_ticker_bg";
 
-      // Draw moving text over the background
+      const tickerIdx = nextInputIndex++;
+      overlayPngs.push(tickerPngPath);
+
       filterGraph.push({
-        filter: "drawtext",
-        options: {
-          fontfile: fontPath,
-          fontcolor: styleOverrides.tickerColor || "white",
-          fontsize: fontSize.toString(),
-          x: `${tBox[0]}+${tBox[2]}-(t*${speed})`,
-          y: `${tBox[1]}+(${tBox[3]}-text_h)/2`,
-          textfile: tickerPath,
-          shadowcolor: "black@0.5",
-          shadowx: "2",
-          shadowy: "2",
-          enable: `gte(t,${delayTime})`,
-        },
-        inputs: "with_ticker_bg",
+        filter: "overlay",
+        options: `x=${tBox[0]}+${tBox[2]}-(t*${speed}):y=${tBox[1]}+(${tBox[3]}-h)/2:enable='gte(t,${delayTime})'`,
+        inputs: [currentOutput, `${tickerIdx}:v`],
         outputs: "with_ticker",
       });
       currentOutput = "with_ticker";
@@ -624,41 +711,41 @@ export default async function handler(req, res) {
 
       let currentTime = 0;
 
-      subtitleLines.forEach((sub, index) => {
+      for (let index = 0; index < subtitleLines.length; index++) {
+        const sub = subtitleLines[index];
         const nextOutput = `sub_${index}`;
-        const subPath = path.join(tempDir, `sub_${index}.txt`);
-        const wrappedSub = wrapText(sub, sBox[2], fontSize);
-        fs.writeFileSync(subPath, wrappedSub);
+        const subPngPath = path.join(tempDir, `sub_${index}.png`);
+
+        await renderTextToPng({
+          text: sub,
+          width: sBox[2],
+          height: sBox[3],
+          fontSize,
+          fontColor: styleOverrides.subtitleColor || "white",
+          strokeColor: "black",
+          strokeWidth: 4,
+          align: "center",
+          outputPath: subPngPath,
+        });
 
         const words = String(sub).trim().split(/\s+/).filter(Boolean).length;
-        // The proportion of the total text length dictates the duration this chunk is shown.
         let duration = (words / totalWords) * exactAudioDuration;
 
         const startT = currentTime + delayTime;
         const endT = currentTime + duration + delayTime;
         currentTime += duration;
 
+        const subIdx = nextInputIndex++;
+        overlayPngs.push(subPngPath);
+
         filterGraph.push({
-          filter: "drawtext",
-          options: {
-            fontfile: fontPath,
-            fontcolor: styleOverrides.subtitleColor || "white",
-            fontsize: fontSize.toString(),
-            x: `${sBox[0]}+(${sBox[2]}-text_w)/2`,
-            y: `${sBox[1]}+(${sBox[3]}-text_h)/2`,
-            textfile: subPath,
-            shadowcolor: "black@0.9",
-            shadowx: "3",
-            shadowy: "3",
-            bordercolor: "black",
-            borderw: "4",
-            enable: `between(t,${startT.toFixed(2)},${endT.toFixed(2)})`,
-          },
-          inputs: currentOutput,
+          filter: "overlay",
+          options: `x=${sBox[0]}:y=${sBox[1]}:enable='between(t,${startT.toFixed(2)},${endT.toFixed(2)})'`,
+          inputs: [currentOutput, `${subIdx}:v`],
           outputs: nextOutput,
         });
         currentOutput = nextOutput;
-      });
+      }
     }
 
     console.log(
@@ -680,6 +767,10 @@ export default async function handler(req, res) {
               .input(item.file)
               .inputOptions(inputOpts);
         }
+      }
+
+      for (const p of overlayPngs) {
+        command = command.input(p).inputOptions(["-stream_loop", "-1"]);
       }
 
       let audioIndex = -1;
