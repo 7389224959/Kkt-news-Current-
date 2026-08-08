@@ -953,10 +953,10 @@ export default async function handler(req, res) {
           filterParts.push(`[${actualFileIdx}:v]scale=w=720:h=1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,format=yuv420p[v${fileIdx}]`);
           
           if (hasA) {
-            filterParts.push(`[${actualFileIdx}:a]afifo[a${fileIdx}]`);
+            filterParts.push(`[${actualFileIdx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a${fileIdx}]`);
           } else {
             // map from anullsrc (which is at index 0)
-            filterParts.push(`[0:a]afifo[a${fileIdx}]`);
+            filterParts.push(`[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a${fileIdx}]`);
           }
 
           concatInputs.push(`[v${fileIdx}][a${fileIdx}]`);
