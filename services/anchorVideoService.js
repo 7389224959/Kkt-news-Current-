@@ -7,6 +7,21 @@ import ffmpegStatic from "ffmpeg-static";
 import { createClient } from "@supabase/supabase-js";
 const exec = promisify(execFile);
 
+function getFfmpegPath() {
+  if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
+    return process.env.FFMPEG_PATH;
+  }
+  if (fs.existsSync("/usr/bin/ffmpeg")) {
+    return "/usr/bin/ffmpeg";
+  }
+  if (fs.existsSync("/usr/local/bin/ffmpeg")) {
+    return "/usr/local/bin/ffmpeg";
+  }
+  return ffmpegStatic;
+}
+
+const ffmpegBinary = getFfmpegPath();
+
 const HF_TIMEOUT = () => parseInt(process.env.ANCHOR_HF_TIMEOUT_MS || "180000", 10);
 const BUCKET     = process.env.ANCHOR_BUCKET || "anchor-videos";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36";
@@ -70,7 +85,7 @@ async function cachePut(key, buf) {
 }
 const sha = (b) => crypto.createHash("sha1").update(b).digest("hex");
 async function to16kWav(src, dest) {
-  await exec(ffmpegStatic, ["-y","-i",src,"-ar","16000","-ac","1","-acodec","pcm_s16le",dest], { timeout: 60000 });
+  await exec(ffmpegBinary, ["-y","-i",src,"-ar","16000","-ac","1","-acodec","pcm_s16le",dest], { timeout: 60000 });
 }
 async function fetchBytes(url) {
   const r = await fetch(url, { headers: { "User-Agent": UA } });
@@ -122,7 +137,7 @@ export async function overlayAnchorOnReel({ reelPath, anchorPath, tempDir, delay
   const overlay = haveXY
     ? `[0:v][a]overlay=x=${b[0]}:y=${b[1]}:enable='gte(t,${delayTime})':eof_action=pass[v]`
     : `[0:v][a]overlay=x=W-w-16:y=H-h-16:enable='gte(t,${delayTime})':eof_action=pass[v]`;
-  await exec(ffmpegStatic, [
+  await exec(ffmpegBinary, [
     "-y","-i",reelPath,"-i",anchorPath,
     "-filter_complex", `${scale};${overlay}`,
     "-map","[v]","-map","0:a",

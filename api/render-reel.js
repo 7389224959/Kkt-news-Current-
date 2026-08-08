@@ -6,7 +6,20 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { buildAnchorVideoFromFile, overlayAnchorOnReel, getAnchorConfig } from "../services/anchorVideoService.js";
-ffmpeg.setFfmpegPath(ffmpegStatic);
+const getFfmpegPath = () => {
+  if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
+    return process.env.FFMPEG_PATH;
+  }
+  if (fs.existsSync("/usr/bin/ffmpeg")) {
+    return "/usr/bin/ffmpeg";
+  }
+  if (fs.existsSync("/usr/local/bin/ffmpeg")) {
+    return "/usr/local/bin/ffmpeg";
+  }
+  return ffmpegStatic;
+};
+
+ffmpeg.setFfmpegPath(getFfmpegPath());
 ffmpeg.setFfprobePath(ffprobeStatic.path);
 
 const downloadFile = async (url, dest) => {
@@ -64,6 +77,43 @@ const downloadFile = async (url, dest) => {
     const base64BlackPixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
     fs.writeFileSync(dest, Buffer.from(base64BlackPixel, 'base64'));
   }
+};
+
+const generateWavFile = (destPath, durationSec, sampleFn = null, sampleRate = 44100) => {
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const bytesPerSample = bitsPerSample / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const numSamples = Math.floor(durationSec * sampleRate);
+  const dataSize = numSamples * blockAlign;
+  const chunkSize = 36 + dataSize;
+
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0);
+  header.writeUInt32LE(chunkSize, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(dataSize, 40);
+
+  const data = Buffer.alloc(dataSize);
+  if (sampleFn) {
+    for (let i = 0; i < numSamples; i++) {
+      const t = i / sampleRate;
+      const val = sampleFn(t, i);
+      const sample = Math.max(-1, Math.min(1, val)) * 32767;
+      data.writeInt16LE(Math.round(sample), i * 2);
+    }
+  }
+  fs.writeFileSync(destPath, Buffer.concat([header, data]));
 };
 
 export default async function handler(req, res) {
@@ -600,19 +650,12 @@ export default async function handler(req, res) {
       "Starting FFmpeg with comprehensive layout and subtitle pass...",
     );
 
-    const hasBgAudio = await new Promise((res) => {
-      ffmpeg.ffprobe(backgroundPath, (err, metadata) => {
-        if (err || !metadata || !metadata.streams) res(false);
-        else res(metadata.streams.some(s => s.codec_type === 'audio'));
-      });
-    });
-
     await new Promise((resolve, reject) => {
       let command = ffmpeg();
 
       command = command
         .input(backgroundPath)
-        .inputOptions(["-stream_loop", "-1"]);
+        .inputOptions(["-stream_loop", "-1", "-an"]);
 
       if (downloadedVisuals.length > 0 && vBox) {
         for (let i = 0; i < downloadedVisuals.length; i++) {
@@ -638,25 +681,26 @@ export default async function handler(req, res) {
           ? exactAudioDuration / downloadedVisuals.length
           : 5;
 
+      let durationLimit = (audioPath ? exactAudioDuration : 15) + delayTime;
+
       // Custom BGM or Drone BGM
       bgmIndex = nextInputIndex++;
       if (bgmPath) {
         command = command.input(bgmPath).inputOptions(["-stream_loop", "-1"]);
       } else {
-        command = command
-          .input("aevalsrc=0.1*sin(2*PI*110*t)+0.05*sin(2*PI*165*t)")
-          .inputFormat("lavfi");
+        const defaultBgmPath = path.join(tempDir, "default_bgm.wav");
+        generateWavFile(defaultBgmPath, 10, (t) => 0.1 * Math.sin(2 * Math.PI * 110 * t) + 0.05 * Math.sin(2 * Math.PI * 165 * t));
+        command = command.input(defaultBgmPath).inputOptions(["-stream_loop", "-1"]);
       }
 
       // Whoosh SFX at transitions
       sfxIndex = nextInputIndex++;
-      command = command
-        .input(
-          `aevalsrc='if(lt(mod(t,${sceneDur}),0.5), 0.3*sin(440*2*PI*t)*exp(-mod(t,${sceneDur})*5), 0)'`,
-        )
-        .inputFormat("lavfi");
-
-      let durationLimit = (audioPath ? exactAudioDuration : 15) + delayTime;
+      const sfxPath = path.join(tempDir, "sfx_whoosh.wav");
+      generateWavFile(sfxPath, Math.ceil(durationLimit + 10), (t) => {
+        const modT = t % sceneDur;
+        return modT < 0.5 ? 0.3 * Math.sin(440 * 2 * Math.PI * t) * Math.exp(-modT * 5) : 0;
+      });
+      command = command.input(sfxPath);
 
       let outOpts = [
         "-c:v libx264",
@@ -673,15 +717,6 @@ export default async function handler(req, res) {
 
       if (true) { // Always mix available audio tracks so output always has audio
         const mixInputs = [];
-        if (hasBgAudio) {
-          filterGraph.push({
-            filter: "volume",
-            options: "1.0",
-            inputs: "0:a",
-            outputs: "bg_media_audio",
-          });
-          mixInputs.push("bg_media_audio");
-        }
 
         if (audioPath) {
           filterGraph.push(
@@ -811,8 +846,10 @@ export default async function handler(req, res) {
         let filterParts = [];
         let concatInputs = [];
         
-        // Add anullsrc as input so we can use it to substitute missing audio
-        concatCommand = concatCommand.input("anullsrc=r=44100:cl=stereo").inputFormat("lavfi");
+        // Add silent audio as input so we can use it to substitute missing audio
+        const silentAudioPath = path.join(tempDir, "silent_audio.wav");
+        generateWavFile(silentAudioPath, 10, null);
+        concatCommand = concatCommand.input(silentAudioPath);
         // Its input index will be the total number of files (+1 depending) - we will know later
         
         let fileIdx = 0;

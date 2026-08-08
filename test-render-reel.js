@@ -6,7 +6,20 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-ffmpeg.setFfmpegPath(ffmpegStatic);
+const getFfmpegPath = () => {
+  if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
+    return process.env.FFMPEG_PATH;
+  }
+  if (fs.existsSync("/usr/bin/ffmpeg")) {
+    return "/usr/bin/ffmpeg";
+  }
+  if (fs.existsSync("/usr/local/bin/ffmpeg")) {
+    return "/usr/local/bin/ffmpeg";
+  }
+  return ffmpegStatic;
+};
+
+ffmpeg.setFfmpegPath(getFfmpegPath());
 ffmpeg.setFfprobePath(ffprobeStatic.path);
 
 const downloadFile = async (url, dest) => {
