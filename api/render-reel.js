@@ -6,8 +6,34 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { buildAnchorVideoFromFile, overlayAnchorOnReel, getAnchorConfig } from "../services/anchorVideoService.js";
-ffmpeg.setFfmpegPath(ffmpegStatic);
-ffmpeg.setFfprobePath(ffprobeStatic.path);
+import { execSync } from "child_process";
+
+function getFfmpegExecutable() {
+  try {
+    const sysPath = execSync("which ffmpeg", { stdio: ["pipe", "pipe", "ignore"] }).toString().trim();
+    if (sysPath) {
+      const filters = execSync(`${sysPath} -filters`, { stdio: ["pipe", "pipe", "ignore"] }).toString();
+      if (filters.includes("drawtext")) {
+        return sysPath;
+      }
+    }
+  } catch (e) {}
+  return ffmpegStatic;
+}
+
+function getFfprobeExecutable() {
+  try {
+    const sysPath = execSync("which ffprobe", { stdio: ["pipe", "pipe", "ignore"] }).toString().trim();
+    if (sysPath) return sysPath;
+  } catch (e) {}
+  return ffprobeStatic.path;
+}
+
+const ffmpegPath = getFfmpegExecutable();
+const ffprobePath = getFfprobeExecutable();
+
+ffmpeg.setFfmpegPath(ffmpegPath);
+ffmpeg.setFfprobePath(ffprobePath);
 
 const downloadFile = async (url, dest) => {
   if (!url) throw new Error("URL is missing");
