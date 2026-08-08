@@ -55,36 +55,48 @@ function wrapTextIntoLines(text, width, fontSize) {
   return lines;
 }
 
-let fontBase64Cache = {};
-
-async function loadFontBase64(name, url) {
-  if (fontBase64Cache[name]) return fontBase64Cache[name];
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-      }
-    });
-    if (res.ok) {
-      const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.length > 1000) {
-        fontBase64Cache[name] = buf.toString("base64");
-        return fontBase64Cache[name];
-      }
-    }
-  } catch (e) {
-    console.warn(`[font] Failed to download font ${name}:`, e.message);
-  }
-  return null;
-}
+let fontsInstalled = false;
 
 async function ensureFontsLoaded() {
-  await Promise.all([
-    loadFontBase64('mukta', 'https://raw.githubusercontent.com/google/fonts/main/ofl/mukta/Mukta-ExtraBold.ttf'),
-    loadFontBase64('hind', 'https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Bold.ttf'),
-    loadFontBase64('noto', 'https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf'),
-    loadFontBase64('poppins', 'https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-ExtraBold.ttf'),
-  ]);
+  if (fontsInstalled) return;
+
+  const userFontsDir = path.join(process.env.HOME || os.homedir() || '/root', '.fonts');
+  if (!fs.existsSync(userFontsDir)) {
+    fs.mkdirSync(userFontsDir, { recursive: true });
+  }
+
+  const fontsToDownload = [
+    { name: 'Mukta-ExtraBold.ttf', url: 'https://raw.githubusercontent.com/google/fonts/main/ofl/mukta/Mukta-ExtraBold.ttf' },
+    { name: 'Hind-Bold.ttf', url: 'https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Bold.ttf' },
+    { name: 'NotoSansDevanagari.ttf', url: 'https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf' },
+    { name: 'Poppins-ExtraBold.ttf', url: 'https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-ExtraBold.ttf' }
+  ];
+
+  for (const f of fontsToDownload) {
+    const filePath = path.join(userFontsDir, f.name);
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).size < 1000) {
+      try {
+        console.log(`[font] Downloading ${f.name}...`);
+        const res = await fetch(f.url);
+        if (res.ok) {
+          const buf = Buffer.from(await res.arrayBuffer());
+          fs.writeFileSync(filePath, buf);
+        }
+      } catch (e) {
+        console.warn(`[font] Error downloading ${f.name}:`, e.message);
+      }
+    }
+  }
+
+  try {
+    const { execSync } = await import("child_process");
+    execSync(`fc-cache -f "${userFontsDir}"`);
+    console.log('[font] fc-cache updated successfully.');
+  } catch (e) {
+    console.warn('[font] fc-cache failed:', e.message);
+  }
+
+  fontsInstalled = true;
 }
 
 async function renderTextToPng({
@@ -100,20 +112,6 @@ async function renderTextToPng({
   outputPath,
 }) {
   await ensureFontsLoaded();
-
-  let fontFaceDefs = "";
-  if (fontBase64Cache.mukta) {
-    fontFaceDefs += `@font-face { font-family: 'CapcutMukta'; src: url('data:font/ttf;charset=utf-8;base64,${fontBase64Cache.mukta}') format('truetype'); }\n`;
-  }
-  if (fontBase64Cache.hind) {
-    fontFaceDefs += `@font-face { font-family: 'CapcutHind'; src: url('data:font/ttf;charset=utf-8;base64,${fontBase64Cache.hind}') format('truetype'); }\n`;
-  }
-  if (fontBase64Cache.noto) {
-    fontFaceDefs += `@font-face { font-family: 'CapcutNoto'; src: url('data:font/ttf;charset=utf-8;base64,${fontBase64Cache.noto}') format('truetype'); }\n`;
-  }
-  if (fontBase64Cache.poppins) {
-    fontFaceDefs += `@font-face { font-family: 'CapcutPoppins'; src: url('data:font/ttf;charset=utf-8;base64,${fontBase64Cache.poppins}') format('truetype'); }\n`;
-  }
 
   const lines = wrapTextIntoLines(text, width, fontSize);
   const lineHeight = fontSize * 1.25;
@@ -137,11 +135,10 @@ async function renderTextToPng({
     ? `<rect width="100%" height="100%" fill="${bgColor}" rx="8"/>`
     : "";
 
-  const fontStack = "'CapcutMukta', 'CapcutHind', 'CapcutNoto', 'CapcutPoppins', system-ui, sans-serif";
+  const fontStack = "'Mukta', 'Hind', 'Noto Sans Devanagari', 'Poppins', sans-serif";
 
   const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
     <style>
-      ${fontFaceDefs}
       .txt {
         font-family: ${fontStack};
         font-weight: 800;
