@@ -119,13 +119,13 @@ export default async function handler(req, res) {
     const filterGraph = [
       {
         filter: 'scale',
-        options: `${targetW}:${targetH}:force_original_aspect_ratio=increase`,
+        options: `w=${targetW}:h=${targetH}:force_original_aspect_ratio=increase`,
         inputs: '0:v',
         outputs: 'bg_scaled'
       },
       {
         filter: 'crop',
-        options: `${targetW}:${targetH}`,
+        options: `w=${targetW}:h=${targetH}`,
         inputs: 'bg_scaled',
         outputs: 'bg_cropped'
       }
@@ -139,7 +139,7 @@ export default async function handler(req, res) {
       overlayIndex = nextInputIndex++;
       filterGraph.push({
         filter: 'scale',
-        options: `${vBox[2]}:${vBox[3]}:force_original_aspect_ratio=increase`,
+        options: `w=${vBox[2]}:h=${vBox[3]}:force_original_aspect_ratio=increase`,
         inputs: `${overlayIndex}:v`,
         outputs: 'ov_scaled'
       });

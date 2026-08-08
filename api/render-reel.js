@@ -296,13 +296,13 @@ export default async function handler(req, res) {
       filterGraph.push(
         {
           filter: "scale",
-          options: `${targetW}:${targetH}:force_original_aspect_ratio=increase`,
+          options: `w=${targetW}:h=${targetH}:force_original_aspect_ratio=increase`,
           inputs: "0:v",
           outputs: "bg_scaled_raw",
         },
         {
           filter: "crop",
-          options: `${targetW}:${targetH}`,
+          options: `w=${targetW}:h=${targetH}`,
           inputs: "bg_scaled_raw",
           outputs: "bg_cropped_raw",
         },
@@ -314,7 +314,7 @@ export default async function handler(req, res) {
         },
         {
           filter: "scale",
-          options: `${targetW}:${targetH}:force_original_aspect_ratio=decrease`,
+          options: `w=${targetW}:h=${targetH}:force_original_aspect_ratio=decrease`,
           inputs: "0:v",
           outputs: "fg_scaled",
         },
@@ -330,13 +330,13 @@ export default async function handler(req, res) {
       filterGraph.push(
         {
           filter: "scale",
-          options: `${targetW}:${targetH}:force_original_aspect_ratio=increase`,
+          options: `w=${targetW}:h=${targetH}:force_original_aspect_ratio=increase`,
           inputs: "0:v",
           outputs: "bg_scaled",
         },
         {
           filter: "crop",
-          options: `${targetW}:${targetH}`,
+          options: `w=${targetW}:h=${targetH}`,
           inputs: "bg_scaled",
           outputs: "bg_cropped",
         },
@@ -423,7 +423,7 @@ export default async function handler(req, res) {
 
         filterGraph.push({
           filter: "scale",
-          options: `${vBox[2]}:${vBox[3]}:force_original_aspect_ratio=increase`,
+          options: `w=${vBox[2]}:h=${vBox[3]}:force_original_aspect_ratio=increase`,
           inputs: `${idx}:v`,
           outputs: `vis_scaled_raw_${i}`,
         });
@@ -435,7 +435,7 @@ export default async function handler(req, res) {
         });
         filterGraph.push({
           filter: "crop",
-          options: `${vBox[2]}:${vBox[3]}`,
+          options: `w=${vBox[2]}:h=${vBox[3]}`,
           inputs: `vis_scaled_${i}`,
           outputs: `vis_cropped_${i}`,
         });
@@ -452,7 +452,7 @@ export default async function handler(req, res) {
           }
           filterGraph.push({
             filter: "zoompan",
-            options: `${motion}:d=${Math.ceil(sceneDur * 25) + 50}:s=${vBox[2]}x${vBox[3]}`,
+            options: `${motion}:d=${Math.ceil(sceneDur * 25) + 50}:s=${vBox[2]}x${vBox[3]}:fps=25`,
             inputs: `vis_cropped_${i}`,
             outputs: `vis_motion_${i}`,
           });
@@ -494,6 +494,13 @@ export default async function handler(req, res) {
           filter: "setpts",
           options: "PTS-STARTPTS",
           inputs: `vis_formatted_${i}`,
+          outputs: `vis_ptsed2_${i}`,
+        });
+
+        filterGraph.push({
+          filter: "fps",
+          options: "25",
+          inputs: `vis_ptsed2_${i}`,
           outputs: `vis_ready_${i}`,
         });
       }
@@ -865,7 +872,7 @@ export default async function handler(req, res) {
         // Restructure adding parts
         const addPart = (fPath, hasA) => {
           concatCommand = concatCommand.input(fPath);
-          filterParts.push(`[${actualFileIdx}:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,format=yuv420p[v${fileIdx}]`);
+          filterParts.push(`[${actualFileIdx}:v]scale=w=720:h=1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,format=yuv420p[v${fileIdx}]`);
           
           if (hasA) {
             filterParts.push(`[${actualFileIdx}:a]afifo[a${fileIdx}]`);
