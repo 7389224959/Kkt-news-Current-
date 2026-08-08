@@ -6,6 +6,7 @@ import sharp from "sharp";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { embeddedFonts, getFontFaceDefs, fontStack as defaultFontStack } from "./embeddedFonts.js";
 
 const getFfmpegPath = () => {
   if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
@@ -144,21 +145,8 @@ async function renderTextToPng({
   bgColor = null,
   outputPath,
 }) {
-  await ensureFontsLoaded();
-
-  let fontFaceDefs = "";
-  if (fontBase64Cache.mukta) {
-    fontFaceDefs += `@font-face { font-family: 'CapcutMukta'; src: url('data:font/ttf;charset=utf-8;base64,${fontBase64Cache.mukta}') format('truetype'); }\n`;
-  }
-  if (fontBase64Cache.hind) {
-    fontFaceDefs += `@font-face { font-family: 'CapcutHind'; src: url('data:font/ttf;charset=utf-8;base64,${fontBase64Cache.hind}') format('truetype'); }\n`;
-  }
-  if (fontBase64Cache.noto) {
-    fontFaceDefs += `@font-face { font-family: 'CapcutNoto'; src: url('data:font/ttf;charset=utf-8;base64,${fontBase64Cache.noto}') format('truetype'); }\n`;
-  }
-  if (fontBase64Cache.poppins) {
-    fontFaceDefs += `@font-face { font-family: 'CapcutPoppins'; src: url('data:font/ttf;charset=utf-8;base64,${fontBase64Cache.poppins}') format('truetype'); }\n`;
-  }
+  const fontFaceDefs = getFontFaceDefs();
+  const fontStack = defaultFontStack;
 
   const lines = wrapTextIntoLines(text, width, fontSize);
   const lineHeight = fontSize * 1.25;
@@ -181,8 +169,6 @@ async function renderTextToPng({
   const bgRect = bgColor
     ? `<rect width="100%" height="100%" fill="${bgColor}" rx="8"/>`
     : "";
-
-  const fontStack = "'CapcutMukta', 'CapcutHind', 'CapcutNoto', 'CapcutPoppins', 'Mukta', 'Hind', 'Noto Sans Devanagari', 'Poppins', sans-serif";
 
   const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
     <style>
@@ -400,10 +386,20 @@ export default async function handler(req, res) {
       await downloadFile(audioUrl, audioPath);
     }
     await downloadFile(templateMediaUrl, backgroundPath);
-    await downloadFile(
-      "https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Bold.ttf",
-      fontPath,
-    );
+    try {
+      if (fs.existsSync(path.join(process.cwd(), "public", "fonts", "Hind-Bold.ttf"))) {
+        fs.copyFileSync(path.join(process.cwd(), "public", "fonts", "Hind-Bold.ttf"), fontPath);
+      } else if (embeddedFonts && embeddedFonts.hind) {
+        fs.writeFileSync(fontPath, Buffer.from(embeddedFonts.hind, "base64"));
+      } else {
+        await downloadFile(
+          "https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Bold.ttf",
+          fontPath,
+        );
+      }
+    } catch (e) {
+      console.warn("Could not copy fontPath:", e.message);
+    }
 
     // Scale factor for 720p
     const targetW = 720;
