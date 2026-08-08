@@ -48,28 +48,8 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    let { audioUrl, templateMediaUrl, scriptData, template, styleOverrides = {} } = req.body || {};
-
-    if (typeof template === 'string') {
-      try { template = JSON.parse(template); } catch (e) { template = {}; }
-    }
-    if (!template || typeof template !== 'object') { template = {}; }
-
-    if (!templateMediaUrl) {
-      templateMediaUrl = template.mediaUrl || template.screenshotUrl || template.backgroundUrl || template.templateMediaUrl || "https://images.unsplash.com/photo-1495020689067-958852a7765e?ixlib=rb-4.0.3&auto=format&fit=crop&w=720&q=80";
-    }
-
-    if (!scriptData || typeof scriptData !== 'object') {
-      scriptData = { headline: "BREAKING NEWS", ticker: "LATEST NEWS TICKER SCROLLING...", subtitles: ["KKT News Update"] };
-    }
-
-    if (!template.coordinates || typeof template.coordinates !== 'object') {
-      template.coordinates = { headline_box: "50,150,620,100", video_box: "hidden", subtitle_box: "50,900,620,150", ticker_box: "0,1200,720,80" };
-    }
-
-    if (!template.style_rules || typeof template.style_rules !== 'object') {
-      template.style_rules = { ticker_speed: 150 };
-    }
+    const { audioUrl, templateMediaUrl, scriptData, template, styleOverrides = {} } = req.body;
+    if (!templateMediaUrl || !template) return res.status(400).json({ error: 'Missing required parameters.' });
 
     const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'reel-'));
     console.log("Working in temp directory:", tempDir);

@@ -1,33 +1,11 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { execFile, execSync } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
-import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
 import { createClient } from "@supabase/supabase-js";
 const exec = promisify(execFile);
-
-function getFfmpegExecutable() {
-  try {
-    const sysPath = execSync("which ffmpeg", { stdio: ["pipe", "pipe", "ignore"] }).toString().trim();
-    if (sysPath) {
-      const filters = execSync(`${sysPath} -filters`, { stdio: ["pipe", "pipe", "ignore"] }).toString();
-      if (filters.includes("drawtext")) {
-        return sysPath;
-      }
-    }
-  } catch (e) {}
-
-  const installerPath = ffmpegInstaller?.path || ffmpegInstaller?.default?.path;
-  if (installerPath && fs.existsSync(installerPath)) {
-    return installerPath;
-  }
-
-  return ffmpegStatic;
-}
-
-const ffmpegBin = getFfmpegExecutable();
 
 const HF_TIMEOUT = () => parseInt(process.env.ANCHOR_HF_TIMEOUT_MS || "180000", 10);
 const BUCKET     = process.env.ANCHOR_BUCKET || "anchor-videos";
@@ -92,7 +70,7 @@ async function cachePut(key, buf) {
 }
 const sha = (b) => crypto.createHash("sha1").update(b).digest("hex");
 async function to16kWav(src, dest) {
-  await exec(ffmpegBin, ["-y","-i",src,"-ar","16000","-ac","1","-acodec","pcm_s16le",dest], { timeout: 60000 });
+  await exec(ffmpegStatic, ["-y","-i",src,"-ar","16000","-ac","1","-acodec","pcm_s16le",dest], { timeout: 60000 });
 }
 async function fetchBytes(url) {
   const r = await fetch(url, { headers: { "User-Agent": UA } });
@@ -144,7 +122,7 @@ export async function overlayAnchorOnReel({ reelPath, anchorPath, tempDir, delay
   const overlay = haveXY
     ? `[0:v][a]overlay=x=${b[0]}:y=${b[1]}:enable='gte(t,${delayTime})':eof_action=pass[v]`
     : `[0:v][a]overlay=x=W-w-16:y=H-h-16:enable='gte(t,${delayTime})':eof_action=pass[v]`;
-  await exec(ffmpegBin, [
+  await exec(ffmpegStatic, [
     "-y","-i",reelPath,"-i",anchorPath,
     "-filter_complex", `${scale};${overlay}`,
     "-map","[v]","-map","0:a",

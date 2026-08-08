@@ -1,11 +1,11 @@
 {
   "functions": {
     "api/render-reel.js": {
-      "includeFiles": "node_modules/{@ffmpeg-installer/**,ffmpeg-static/ffmpeg,ffprobe-static/bin/linux/**/ffprobe}",
+      "includeFiles": "node_modules/{ffmpeg-static/ffmpeg,ffprobe-static/bin/linux/**/ffprobe}",
       "excludeFiles": "node_modules/onnxruntime-node/**",
       "maxDuration": 300
     },
-    "api/[...path].js": {
+    "api/search-images.ts": {
       "maxDuration": 60
     }
   },

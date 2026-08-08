@@ -1,46 +1,13 @@
 export const maxDuration = 300;
 import ffmpeg from "fluent-ffmpeg";
-import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
 import fs from "fs";
 import path from "path";
 import os from "os";
 import { buildAnchorVideoFromFile, overlayAnchorOnReel, getAnchorConfig } from "../services/anchorVideoService.js";
-import { execSync } from "child_process";
-
-function getFfmpegExecutable() {
-  try {
-    const sysPath = execSync("which ffmpeg", { stdio: ["pipe", "pipe", "ignore"] }).toString().trim();
-    if (sysPath) {
-      const filters = execSync(`${sysPath} -filters`, { stdio: ["pipe", "pipe", "ignore"] }).toString();
-      if (filters.includes("drawtext")) {
-        return sysPath;
-      }
-    }
-  } catch (e) {}
-
-  const installerPath = ffmpegInstaller?.path || ffmpegInstaller?.default?.path;
-  if (installerPath && fs.existsSync(installerPath)) {
-    return installerPath;
-  }
-
-  return ffmpegStatic;
-}
-
-function getFfprobeExecutable() {
-  try {
-    const sysPath = execSync("which ffprobe", { stdio: ["pipe", "pipe", "ignore"] }).toString().trim();
-    if (sysPath) return sysPath;
-  } catch (e) {}
-  return ffprobeStatic.path;
-}
-
-const ffmpegPath = getFfmpegExecutable();
-const ffprobePath = getFfprobeExecutable();
-
-ffmpeg.setFfmpegPath(ffmpegPath);
-ffmpeg.setFfprobePath(ffprobePath);
+ffmpeg.setFfmpegPath(ffmpegStatic);
+ffmpeg.setFfprobePath(ffprobeStatic.path);
 
 const downloadFile = async (url, dest) => {
   if (!url) throw new Error("URL is missing");
@@ -99,36 +66,12 @@ const downloadFile = async (url, dest) => {
   }
 };
 
-function createSilentWavFile(filePath, durationSec = 30, sampleRate = 44100) {
-  const numChannels = 2;
-  const bytesPerSample = 2;
-  const dataSize = Math.ceil(durationSec) * sampleRate * numChannels * bytesPerSample;
-  const buffer = Buffer.alloc(44 + dataSize);
-
-  buffer.write('RIFF', 0);
-  buffer.writeUInt32LE(36 + dataSize, 4);
-  buffer.write('WAVE', 8);
-  buffer.write('fmt ', 12);
-  buffer.writeUInt32LE(16, 16);
-  buffer.writeUInt16LE(1, 20);
-  buffer.writeUInt16LE(numChannels, 22);
-  buffer.writeUInt32LE(sampleRate, 24);
-  buffer.writeUInt32LE(sampleRate * numChannels * bytesPerSample, 28);
-  buffer.writeUInt16LE(numChannels * bytesPerSample, 32);
-  buffer.writeUInt16LE(bytesPerSample * 8, 34);
-  buffer.write('data', 36);
-  buffer.writeUInt32LE(dataSize, 40);
-
-  fs.writeFileSync(filePath, buffer);
-  return filePath;
-}
-
 export default async function handler(req, res) {
   if (req.method !== "POST")
     return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    let {
+    const {
       audioUrl,
       templateMediaUrl,
       scriptData,
@@ -136,54 +79,9 @@ export default async function handler(req, res) {
       styleOverrides = {},
       directorScenes = [],
       anchorVideoUrl,
-    } = req.body || {};
-
-    if (typeof template === "string") {
-      try {
-        template = JSON.parse(template);
-      } catch (e) {
-        template = {};
-      }
-    }
-    if (!template || typeof template !== "object") {
-      template = {};
-    }
-
-    if (!templateMediaUrl) {
-      templateMediaUrl =
-        template.mediaUrl ||
-        template.screenshotUrl ||
-        template.backgroundUrl ||
-        template.templateMediaUrl;
-    }
-
-    if (!templateMediaUrl || typeof templateMediaUrl !== "string") {
-      templateMediaUrl =
-        "https://images.unsplash.com/photo-1495020689067-958852a7765e?ixlib=rb-4.0.3&auto=format&fit=crop&w=720&q=80";
-    }
-
-    if (!scriptData || typeof scriptData !== "object") {
-      scriptData = {
-        headline: "BREAKING NEWS",
-        ticker: "LATEST NEWS TICKER SCROLLING...",
-        subtitles: ["KKT News Update"]
-      };
-    }
-
-    if (!template.coordinates || typeof template.coordinates !== "object") {
-      template.coordinates = {
-        headline_box: "50,150,620,100",
-        video_box: "hidden",
-        subtitle_box: "50,900,620,150",
-        ticker_box: "0,1200,720,80"
-      };
-    }
-
-    if (!template.style_rules || typeof template.style_rules !== "object") {
-      template.style_rules = {
-        ticker_speed: 150
-      };
-    }
+    } = req.body;
+    if (!templateMediaUrl || !template)
+      return res.status(400).json({ error: "Missing required parameters." });
 
     const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "reel-"));
     console.log("Working in temp directory:", tempDir);
@@ -745,32 +643,26 @@ export default async function handler(req, res) {
       if (bgmPath) {
         command = command.input(bgmPath).inputOptions(["-stream_loop", "-1"]);
       } else {
-        const bgmWav = path.join(tempDir, "bgm_default.wav");
-        createSilentWavFile(bgmWav, 180);
         command = command
-          .input(bgmWav)
-          .inputOptions(["-stream_loop", "-1"]);
+          .input("aevalsrc=0.1*sin(2*PI*110*t)+0.05*sin(2*PI*165*t)")
+          .inputFormat("lavfi");
       }
 
       // Whoosh SFX at transitions
       sfxIndex = nextInputIndex++;
-      const sfxWav = path.join(tempDir, "sfx_default.wav");
-      createSilentWavFile(sfxWav, 180);
       command = command
-        .input(sfxWav)
-        .inputOptions(["-stream_loop", "-1"]);
+        .input(
+          `aevalsrc='if(lt(mod(t,${sceneDur}),0.5), 0.3*sin(440*2*PI*t)*exp(-mod(t,${sceneDur})*5), 0)'`,
+        )
+        .inputFormat("lavfi");
 
       let durationLimit = (audioPath ? exactAudioDuration : 15) + delayTime;
 
       let outOpts = [
-        "-c:v",
-        "libx264",
-        "-preset",
-        "ultrafast",
-        "-crf",
-        "32", // Reduced quality for faster processing
-        "-pix_fmt",
-        "yuv420p",
+        "-c:v libx264",
+        "-preset ultrafast",
+        "-crf 32", // Reduced quality for faster processing
+        "-pix_fmt yuv420p",
         "-r",
         "24", // Reduce frame rate to speed up rendering
         "-t",
@@ -919,10 +811,8 @@ export default async function handler(req, res) {
         let filterParts = [];
         let concatInputs = [];
         
-        // Add silent WAV as input so we can use it to substitute missing audio
-        const silentWavPath = path.join(tempDir, "null_audio.wav");
-        createSilentWavFile(silentWavPath, 600);
-        concatCommand = concatCommand.input(silentWavPath);
+        // Add anullsrc as input so we can use it to substitute missing audio
+        concatCommand = concatCommand.input("anullsrc=r=44100:cl=stereo").inputFormat("lavfi");
         // Its input index will be the total number of files (+1 depending) - we will know later
         
         let fileIdx = 0;
@@ -958,18 +848,12 @@ export default async function handler(req, res) {
           .map('[outv]')
           .map('[outa]')
           .outputOptions([
-             "-c:v",
-             "libx264",
-             "-preset",
-             "ultrafast",
-             "-crf",
-             "32",
-             "-pix_fmt",
-             "yuv420p",
-             "-r",
-             "24",
-             "-c:a",
-             "aac"
+             "-c:v libx264",
+             "-preset ultrafast",
+             "-crf 32",
+             "-pix_fmt yuv420p",
+             "-r 24",
+             "-c:a aac"
           ])
           .save(finalPath)
           .on("end", () => resolve())
