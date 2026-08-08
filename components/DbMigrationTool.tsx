@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Database, Download, Upload, Copy, Check, RefreshCw, AlertTriangle, ShieldCheck, FileJson, ArrowRight } from 'lucide-react';
+import { Database, Download, Upload, Copy, Check, RefreshCw, AlertTriangle, ShieldCheck, FileJson, ArrowRight, Zap } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { SiteSettings } from '../types';
 
@@ -318,40 +318,194 @@ ON CONFLICT (id) DO UPDATE SET public = true;
     }
 
     setIsMigrating(true);
-    setMigrationStatus("Connecting to Old Supabase project...");
+    setMigrationStatus("Attempting server-side connection to Old Supabase project...");
     setErrorStatus(null);
 
     try {
-      const oldClient = createClient(oldUrl, oldKey);
-      const tables = [
-        'site_settings',
-        'articles',
-        'breaking_news',
-        'trending_keywords',
-        'workers',
-        'worker_tasks',
-        'worker_assets',
-        'clients',
-        'job_applications'
-      ];
+      // 1. Try server API proxy route
+      const response = await fetch('/api/migrate-old-supabase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldUrl, oldKey })
+      });
 
-      const backup: Record<string, any> = {};
-
-      for (const table of tables) {
-        setMigrationStatus(`Fetching '${table}' from Old Supabase...`);
-        const { data, error } = await oldClient.from(table).select('*');
-        if (error) {
-          console.warn(`Could not fetch '${table}' from old Supabase:`, error.message);
-          backup[table] = [];
-        } else {
-          backup[table] = data || [];
-        }
+      let resData: any = {};
+      try {
+        resData = await response.json();
+      } catch (jsonErr) {
+        throw new Error("Server returned an invalid response.");
       }
 
-      setMigrationStatus("Transferring templates & records to New Supabase...");
-      await importDataFromJson(backup);
+      if (!response.ok || !resData.success) {
+        throw new Error(resData.error || "Failed to communicate with old Supabase API.");
+      }
+
+      const fetchedData = resData.data || {};
+      const logMessages = resData.log || [];
+      const totalRows = resData.totalRows || 0;
+
+      if (totalRows === 0) {
+        setErrorStatus(
+          `Connected to old Supabase, but 0 records were returned. Log details:\n` +
+          logMessages.join('\n') +
+          `\n\nIf your old Supabase account is restricted or locked, Supabase blocks API access. You can use 'Seed Default Auto Reel & Viral Templates' below.`
+        );
+        return;
+      }
+
+      setMigrationStatus(`Successfully fetched ${totalRows} records from Old Supabase! Importing into New Supabase...`);
+      await importDataFromJson(fetchedData);
     } catch (e: any) {
-      setErrorStatus("Direct transfer error: " + e.message);
+      setErrorStatus(
+        "Could not fetch data from Old Supabase: " + e.message +
+        "\nNote: If your old Supabase project is restricted/blocked, Supabase disables API endpoints. Try using 'Seed Default Auto Reel & Viral Templates' below or upload a local JSON backup."
+      );
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
+  const seedDefaultTemplates = async () => {
+    if (!supabase) {
+      setErrorStatus("New Supabase client is not connected. Check your VITE_SUPABASE_URL.");
+      return;
+    }
+    setIsMigrating(true);
+    setMigrationStatus("Seeding default Auto Reel & Viral Templates into new database...");
+    setErrorStatus(null);
+
+    try {
+      const defaultReelTemplates = [
+        {
+          id: 'reel-default-1',
+          name: 'KKT Red Breaking News Reel',
+          category: 'breaking',
+          coordinates: {
+            video_box: '50,150,980,1200',
+            headline_box: '50,1380,980,240',
+            subtitle_box: '50,1640,980,160',
+            ticker_box: '0,1820,1080,80',
+            logo_box: '40,40,200,80',
+          },
+          safe_limits: {
+            headline_words: 12,
+            subtitle_lines: 3,
+            words_per_line: 8,
+            ticker_characters: 120,
+          },
+          fonts: { headline: 'Space Grotesk', subtitle: 'Plus Jakarta Sans' },
+          style_rules: { theme: 'breaking_red', ticker_speed: 30, text_shadow: true },
+          isActive: true,
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: 'reel-default-2',
+          name: 'KKT Modern Dark Viral Reel',
+          category: 'viral',
+          coordinates: {
+            video_box: '0,0,1080,1920',
+            headline_box: '60,1200,960,300',
+            subtitle_box: '60,1520,960,200',
+            ticker_box: '0,1800,1080,90',
+            logo_box: '50,50,220,90',
+          },
+          safe_limits: {
+            headline_words: 10,
+            subtitle_lines: 4,
+            words_per_line: 7,
+            ticker_characters: 100,
+          },
+          fonts: { headline: 'Space Grotesk', subtitle: 'Plus Jakarta Sans' },
+          style_rules: { theme: 'dark_gold', ticker_speed: 35, text_shadow: true },
+          isActive: true,
+          createdAt: new Date().toISOString()
+        }
+      ];
+
+      const defaultViralTemplates = [
+        {
+          id: 'viral-default-1',
+          name: 'KKT Standard Breaking News Card',
+          coordinates: {
+            headline_box: '8%, 68%, 84%, 18%',
+            subheadline_box: '8%, 86%, 84%, 10%',
+            summary_box: 'hidden',
+            breaking_tag_box: '8%, 60%, 45%, 7%',
+            image_box: '0%, 0%, 100%, 60%'
+          },
+          usedElements: {
+            hasHeadline: true,
+            hasSubheadline: true,
+            hasSummary: false,
+            hasBreakingTag: true,
+            hasImage: true
+          },
+          style_rules: {
+            headlineColor: '#FFFFFF',
+            subheadlineColor: '#FCD34D',
+            summaryColor: '#E5E7EB',
+            breakingTagColor: '#FFFFFF',
+            breakingTagBg: '#DC2626',
+            headlineBg: 'rgba(0,0,0,0.7)',
+            subheadlineBg: 'rgba(0,0,0,0.5)',
+            headlineFontSizeMult: 1.2,
+            subheadlineFontSizeMult: 0.95
+          },
+          isActive: true,
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: 'viral-default-2',
+          name: 'KKT Clean Minimalist Viral Post',
+          coordinates: {
+            headline_box: '10%, 72%, 80%, 20%',
+            subheadline_box: 'hidden',
+            summary_box: '10%, 92%, 80%, 6%',
+            breaking_tag_box: '10%, 64%, 35%, 6%',
+            image_box: '0%, 0%, 100%, 65%'
+          },
+          usedElements: {
+            hasHeadline: true,
+            hasSubheadline: false,
+            hasSummary: true,
+            hasBreakingTag: true,
+            hasImage: true
+          },
+          style_rules: {
+            headlineColor: '#1E293B',
+            summaryColor: '#475569',
+            breakingTagColor: '#FFFFFF',
+            breakingTagBg: '#2563EB',
+            headlineBg: '#FFFFFF',
+            summaryBg: '#F8FAFC',
+            headlineFontSizeMult: 1.1,
+            summaryFontSizeMult: 0.85
+          },
+          isActive: true,
+          createdAt: new Date().toISOString()
+        }
+      ];
+
+      const { data: existingSettings } = await supabase.from('site_settings').select('*').limit(1);
+      const baseSettings = existingSettings?.[0] || currentSettings || { appName: 'Khabar Kal Tak' };
+
+      const updatedSettings = {
+        ...baseSettings,
+        reelTemplates: defaultReelTemplates,
+        viralTemplates: defaultViralTemplates,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase.from('site_settings').upsert([updatedSettings]);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      setMigrationStatus("Default Auto Reel & Auto Viral Templates successfully created in your new database!");
+      if (onRefreshSettings) onRefreshSettings();
+    } catch (err: any) {
+      setErrorStatus("Failed to seed default templates: " + err.message);
     } finally {
       setIsMigrating(false);
     }
@@ -491,14 +645,25 @@ ON CONFLICT (id) DO UPDATE SET public = true;
             />
           </div>
 
-          <button
-            onClick={fetchDirectFromOldSupabase}
-            disabled={isMigrating}
-            className="bg-amber-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-amber-700 transition text-sm flex items-center justify-center space-x-2 disabled:opacity-50"
-          >
-            {isMigrating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-            <span>Transfer from Old Supabase to New Supabase</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={fetchDirectFromOldSupabase}
+              disabled={isMigrating}
+              className="bg-amber-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-amber-700 transition text-sm flex items-center justify-center space-x-2 disabled:opacity-50"
+            >
+              {isMigrating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+              <span>Transfer from Old Supabase to New Supabase</span>
+            </button>
+
+            <button
+              onClick={seedDefaultTemplates}
+              disabled={isMigrating}
+              className="bg-purple-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-purple-700 transition text-sm flex items-center justify-center space-x-2 disabled:opacity-50"
+            >
+              <Zap className="w-4 h-4" />
+              <span>Seed Default Auto Reel & Viral Templates (Instant Recovery)</span>
+            </button>
+          </div>
         </div>
 
         {/* Method D: Paste JSON directly */}
