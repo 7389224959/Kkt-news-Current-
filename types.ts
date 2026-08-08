@@ -117,12 +117,6 @@ export interface SiteSettings {
   adminDesignation?: string;
   autoTemplateIndex?: number;
   autoReelTemplateIndex?: number;
-  anchorSettings?: {
-    enabled: boolean;
-    imageUrl: string;
-    talkingHeadUrl: string;
-    box?: string;
-  };
 }
 
 export interface ViralTemplate {

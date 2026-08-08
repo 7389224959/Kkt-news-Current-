@@ -1,4 +1,3 @@
-import { buildLocalAndUpload } from "./build_anchor_local.js";
 import { createClient } from "@supabase/supabase-js";
 import { chromium } from "playwright";
 import fs from "fs";
@@ -181,7 +180,7 @@ async function runAutoRobot() {
       resolveDownload();
     });
 
-      // Intercept /api/render-reel for anchor building
+      // Intercept /api/render-reel to upload base64 audio if needed
       await page.route("**/api/render-reel", async (route) => {
         const req = route.request();
         if (req.method() === "POST") {
@@ -190,8 +189,6 @@ async function runAutoRobot() {
             console.log("[auto-robot] Intercepted render-reel POST request!");
             try {
               const body = JSON.parse(bodyStr);
-                            const settings = await page.evaluate(() => window.__SITE_SETTINGS__);
-              console.log("[auto-robot] Page anchorSettings:", JSON.stringify(settings?.anchorSettings || {}));
               
               // If audioUrl is a base64 data URI, upload to Supabase to prevent FUNCTION_PAYLOAD_TOO_LARGE
               if (body.audioUrl && body.audioUrl.startsWith('data:')) {
@@ -211,6 +208,8 @@ async function runAutoRobot() {
                         if (pData && pData.publicUrl) {
                           body.audioUrl = pData.publicUrl;
                           console.log("[auto-robot] Uploaded audioUrl to Supabase URL:", body.audioUrl);
+                          await route.continue({ postData: JSON.stringify(body) });
+                          return;
                         }
                       } else if (uErr) {
                         console.warn("[auto-robot] audioUrl upload to Supabase failed:", uErr.message);
@@ -220,26 +219,6 @@ async function runAutoRobot() {
                     console.warn("[auto-robot] Error uploading audioUrl to Supabase:", ae.message);
                   }
                 }
-              }
-
-              if (settings && settings.anchorSettings && settings.anchorSettings.enabled && settings.anchorSettings.imageUrl && body.audioUrl) {
-                console.log("[auto-robot] Building local anchor with audio string length:", body.audioUrl.length);
-                const anchorUrl = await buildLocalAndUpload(settings.anchorSettings.imageUrl, body.audioUrl);
-                if (anchorUrl) {
-                  body.anchorVideoUrl = anchorUrl;
-                  console.log("[auto-robot] Injected anchorVideoUrl into request! Length:", anchorUrl.length);
-                  await route.continue({ postData: JSON.stringify(body) });
-                  return;
-                } else {
-                  console.error("[auto-robot] buildLocalAndUpload returned null");
-                }
-              } else {
-                // If we uploaded audioUrl, continue with updated body
-                if (body.audioUrl && !body.audioUrl.startsWith('data:')) {
-                  await route.continue({ postData: JSON.stringify(body) });
-                  return;
-                }
-                console.log(`[auto-robot] Skipping anchor build. enabled=${settings?.anchorSettings?.enabled} hasImage=${!!settings?.anchorSettings?.imageUrl} hasAudio=${!!body.audioUrl}`);
               }
             } catch (e) {
               console.error("[auto-robot] Error intercepting render-reel:", e);
