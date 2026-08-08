@@ -6,7 +6,7 @@ import sharp from "sharp";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { embeddedFonts, getFontFaceDefs, fontStack as defaultFontStack } from "./embeddedFonts.js";
+import { embeddedFonts, getFontFaceDefs, fontStack as defaultFontStack } from "../lib/embeddedFonts.js";
 
 const getFfmpegPath = () => {
   if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {

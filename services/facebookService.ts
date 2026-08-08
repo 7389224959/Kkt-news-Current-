@@ -41,7 +41,7 @@ export const postToFacebook = async (message: string, imageUrl?: string, schedul
 
 export const publishFacebookPost = async (postId: string): Promise<boolean> => {
   try {
-    const response = await fetch('/api/facebook/publish', {
+    const response = await fetch('/api/facebook/post', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

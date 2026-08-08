@@ -4,7 +4,58 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { message, imageUrl, scheduledPublishTime, published = true, comment } = req.body;
+    const { postId, message, imageUrl, scheduledPublishTime, published = true, comment } = req.body;
+
+    // Handle Publish request if postId is provided
+    if (postId) {
+      const pageId = process.env.FB_PAGE_ID || process.env.VITE_FB_PAGE_ID;
+      const accessToken = process.env.FB_PAGE_ACCESS_TOKEN || process.env.VITE_FB_PAGE_ACCESS_TOKEN;
+
+      if (!accessToken) {
+        return res.status(400).json({ error: 'FB_PAGE_ACCESS_TOKEN is required.' });
+      }
+
+      let resolvedAccessToken = accessToken;
+      if (pageId) {
+        try {
+          const tokenCheckRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}?fields=access_token&access_token=${accessToken}`);
+          if (tokenCheckRes.ok) {
+            const tokenCheckData = await tokenCheckRes.json();
+            if (tokenCheckData.access_token) {
+              resolvedAccessToken = tokenCheckData.access_token;
+            }
+          }
+        } catch (e) {
+          // Ignore
+        }
+      }
+
+      const fbApiUrl = `https://graph.facebook.com/v19.0/${postId}`;
+      const fbResponse = await fetch(fbApiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_published: true,
+          access_token: resolvedAccessToken,
+        }),
+      });
+
+      const textData = await fbResponse.text();
+      let fbData = {};
+      if (textData) {
+        try { fbData = JSON.parse(textData); } catch (e) {}
+      }
+
+      if (!fbResponse.ok) {
+        let errorMessage = fbData.error?.message || 'Failed to publish post';
+        if (fbData.error?.code === 190 || errorMessage.includes('Session has expired') || errorMessage.includes('Error validating access token')) {
+          errorMessage = 'Your Facebook Page Access Token has expired. Please update FB_PAGE_ACCESS_TOKEN in Vercel.';
+        }
+        return res.status(400).json({ error: errorMessage });
+      }
+
+      return res.status(200).json({ success: true });
+    }
     
     if (!message) {
       return res.status(400).json({ error: 'Message is required to post to Facebook.' });
