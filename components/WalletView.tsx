@@ -60,8 +60,8 @@ export const WalletView: React.FC<{ workerInfo: any }> = ({ workerInfo }) => {
   const submitWithdrawal = async (e: React.FormEvent) => {
     e.preventDefault();
     const amountNum = parseFloat(withdrawAmount);
-    if (isNaN(amountNum) || amountNum <= 0) {
-      alert('Please enter a valid amount.');
+    if (isNaN(amountNum) || amountNum < 100) {
+      alert('Minimum withdrawal amount is ₹ 100.');
       return;
     }
 
@@ -201,7 +201,7 @@ export const WalletView: React.FC<{ workerInfo: any }> = ({ workerInfo }) => {
                 <label className="block text-sm font-bold text-slate-700 mb-1">Amount (₹)</label>
                 <input 
                   type="number" 
-                  min="1" 
+                  min="100" 
                   required 
                   value={withdrawAmount} 
                   onChange={e => setWithdrawAmount(e.target.value)} 
