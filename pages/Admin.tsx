@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ManageLeads } from '../components/ManageLeads';
 import { Article, Category, BreakingNews, SiteSettings, TrendingKeyword, ViralPost, ViralTemplate } from '../types';
 import { useApp } from '../context/AppContext';
 import { getCategoryLabel, generateSlug } from '../newsUtils';
@@ -46,7 +47,7 @@ const Admin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [workerId, setWorkerId] = useState('');
   const [workerPassword, setWorkerPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates' | 'job_applications' | 'tip_complaints' | 'workers' | 'clients'>('articles');
+  const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates' | 'job_applications' | 'tip_complaints' | 'workers' | 'clients' | 'leads'>('articles');
   const [viralTemplateTab, setViralTemplateTab] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -1727,6 +1728,12 @@ const Admin: React.FC = () => {
             <Users size={18} /> Workers
           </button>
           <button 
+            onClick={() => setActiveTab('leads')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md font-bold transition-colors ${activeTab === 'leads' ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
+            <MapPin size={18} /> Leads
+          </button>
+          <button 
             onClick={() => setActiveTab('clients')}
             className={`flex items-center gap-2 px-4 py-2 rounded-md font-bold transition-colors ${activeTab === 'clients' ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
           >
@@ -2792,6 +2799,10 @@ const Admin: React.FC = () => {
           <ManageWorkers />
         )}
         
+        {activeTab === 'leads' && (
+          <ManageLeads />
+        )}
+
         {activeTab === 'clients' && (
           <ManageClients />
         )}

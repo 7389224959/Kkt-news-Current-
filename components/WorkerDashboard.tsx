@@ -12,10 +12,12 @@ import { uploadImage } from '../services/supabase';
 
 
 import { WalletView } from './WalletView';
+import { AddLeadForm } from './AddLeadForm';
 
 const navItems = [
   { id: 'profile', label: 'My Profile', icon: Contact },
   { id: 'client', label: 'Add a Client', icon: Users },
+  { id: 'lead', label: 'Add a Lead', icon: MapPin },
   { id: 'assets', label: 'Assets', icon: Folder },
   { id: 'tasks', label: 'Task Management', icon: CheckSquare },
   { id: 'wallet', label: 'Wallet', icon: Wallet },
@@ -136,6 +138,7 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
     switch (activeTab) {
       case 'profile': return <DashboardHome workerInfo={workerInfo} workerTasks={workerTasks} onUpdateProfile={handleUpdateProfile} />;
       case 'client': return <ClientOnboardingForm workerId={finalWorkerId} />;
+      case 'lead': return <AddLeadForm workerId={finalWorkerId} />;
       case 'assets': return <WorkerAssets workerInfo={workerInfo} workerAssets={workerAssets} setWorkerAssets={setWorkerAssets} />;
       case 'tasks': return <TaskManagement workerId={finalWorkerId} workerTasks={workerTasks} allTasks={allTasks} onJoinTask={handleJoinTask} onUpdateTaskStatus={handleUpdateTaskStatus} />;
       case 'wallet': return <WalletView workerInfo={workerInfo} />;
