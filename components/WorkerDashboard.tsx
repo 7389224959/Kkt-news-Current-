@@ -40,6 +40,9 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
   });
 
   const [workerTasks, setWorkerTasks] = useState<any[]>([]);
+
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [workerAssets, setWorkerAssets] = useState<any[]>([]);
   const [allTasks, setAllTasks] = useState<any[]>([]);
 
@@ -71,6 +74,18 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
 
       const assets = await getAssets();
       setWorkerAssets(assets.filter((a: any) => a.receiverId === 'all' || a.receiverId === finalWorkerId || a.senderId === finalWorkerId));
+            
+      const notifAsset = assets.find((a: any) => a.receiverId === (me?.id || finalWorkerId) && a.fileName === 'notifications.json');
+      if (notifAsset) {
+        try {
+          const parsed = JSON.parse(notifAsset.fileUrl);
+          setNotifications(Array.isArray(parsed) ? parsed.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : []);
+        } catch(e) {
+          setNotifications([]);
+        }
+      } else {
+        setNotifications([]);
+      }
       setIsLoading(false);
     };
     loadData();
@@ -189,10 +204,41 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
               <span className="font-bold text-amber-700 text-sm">{workerInfo.walletBalance}</span>
             </button>
             <button className="relative text-slate-500 hover:text-slate-800"><MessageSquare size={20} /></button>
-            <button className="relative text-slate-500 hover:text-slate-800">
-              <Bell size={20} />
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
+            <div className="relative">
+              <button onClick={() => setShowNotifications(!showNotifications)} className="relative text-slate-500 hover:text-slate-800">
+                <Bell size={20} />
+                {notifications.filter((n: any) => !n.read).length > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">{notifications.filter((n: any) => !n.read).length}</span>}
+              </button>
+              
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+                  <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <h3 className="font-bold text-slate-800 text-sm">Notifications</h3>
+                    <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-slate-600">
+                      <XCircle size={16} />
+                    </button>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length > 0 ? notifications.map((n: any) => (
+                      <div key={n.id} className={`p-3 border-b border-slate-50 hover:bg-slate-50 flex gap-3 ${!n.read ? 'bg-blue-50/30' : ''}`}>
+                        <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${n.type === 'alert' ? 'bg-red-100 text-red-600' : n.type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
+                          <Bell size={14} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">{n.title}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{n.message}</p>
+                          <p className="text-[10px] text-slate-400 mt-1">{new Date(n.date).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="p-6 text-center text-slate-500 text-sm">
+                        No new notifications
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="flex items-center gap-3 pl-4 md:pl-6 border-l border-slate-200">
               <div className="text-right hidden sm:block cursor-pointer">
                 <p className="text-sm font-bold text-slate-800 leading-tight">{workerInfo.name}</p>
