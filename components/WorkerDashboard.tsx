@@ -11,11 +11,14 @@ import { uploadImage } from '../services/supabase';
 
 
 
+import { WalletView } from './WalletView';
+
 const navItems = [
   { id: 'profile', label: 'My Profile', icon: Contact },
   { id: 'client', label: 'Add a Client', icon: Users },
   { id: 'assets', label: 'Assets', icon: Folder },
   { id: 'tasks', label: 'Task Management', icon: CheckSquare },
+  { id: 'wallet', label: 'Wallet', icon: Wallet },
 ];
 
 export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string }> = ({ onLogout, workerId }) => {
@@ -120,6 +123,7 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
       case 'client': return <ClientOnboardingForm workerId={finalWorkerId} />;
       case 'assets': return <WorkerAssets workerInfo={workerInfo} workerAssets={workerAssets} setWorkerAssets={setWorkerAssets} />;
       case 'tasks': return <TaskManagement workerId={finalWorkerId} workerTasks={workerTasks} allTasks={allTasks} onJoinTask={handleJoinTask} onUpdateTaskStatus={handleUpdateTaskStatus} />;
+      case 'wallet': return <WalletView workerInfo={workerInfo} />;
       default: return <DashboardHome workerInfo={workerInfo} workerTasks={workerTasks} onUpdateProfile={handleUpdateProfile} />;
     }
   };
@@ -180,10 +184,10 @@ export const WorkerDashboard: React.FC<{ onLogout: () => void; workerId?: string
           </div>
           
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-50 to-amber-100 rounded-full border border-amber-200 shadow-sm">
+            <button onClick={() => setActiveTab('wallet')} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-50 to-amber-100 rounded-full border border-amber-200 shadow-sm hover:from-amber-100 hover:to-amber-200 transition-colors">
               <Wallet size={16} className="text-amber-600" />
               <span className="font-bold text-amber-700 text-sm">{workerInfo.walletBalance}</span>
-            </div>
+            </button>
             <button className="relative text-slate-500 hover:text-slate-800"><MessageSquare size={20} /></button>
             <button className="relative text-slate-500 hover:text-slate-800">
               <Bell size={20} />
