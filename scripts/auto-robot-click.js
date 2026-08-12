@@ -77,6 +77,9 @@ async function executePhase(page, buttonSelector, phaseName) {
       // However, if the alert says "No new articles found or already posted" it might be treated as success in fetch
       if (phaseName === 'Auto Fetch' && messageLower.includes("no new articles")) {
          alertSuccess = true;
+      } else if (messageLower.includes("some publishes failed") || messageLower.includes("partial success")) {
+         alertSuccess = true;
+         console.log("Partial publish failure, treating as success to prevent duplicate posting.");
       } else {
          alertError = true;
       }

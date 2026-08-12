@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     const checkStatusUrl = `https://graph.facebook.com/v19.0/${creationId}?fields=status_code&access_token=${accessToken}`;
     let isReady = false;
     let attempts = 0;
-    const maxAttempts = 12; // Wait up to 60 seconds (12 * 5s)
+    const maxAttempts = 36; // Wait up to 180 seconds (36 * 5s)
 
     while (!isReady && attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 5000));
