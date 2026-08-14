@@ -1,4 +1,13 @@
-import React, { useState, useEffect } from 'react';
+const fs = require('fs');
+const path = require('path');
+
+const filePath = path.join(__dirname, 'components', 'ManageClients.tsx');
+
+// Reset to a clean slate using the patch logic but safely
+let content = fs.readFileSync(filePath, 'utf8');
+
+// I will just rewrite the entire ManageClients.tsx because it's only 150 lines and it's easier to ensure correctness.
+content = `import React, { useState, useEffect } from 'react';
 import { getClients, deleteClient, getWorkers, saveClient } from '../services/workerService';
 import { Loader2, Trash2, Building, Phone, MapPin, Globe, CheckCircle, Store, Tag, Plus, X } from 'lucide-react';
 import { Worker } from '../types';
@@ -230,3 +239,7 @@ export default function ManageClients() {
     </>
   );
 }
+`;
+
+fs.writeFileSync(filePath, content, 'utf8');
+console.log('ManageClients.tsx fully restored and patched');

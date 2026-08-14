@@ -1,19 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import fs from 'fs';
-
 dotenv.config();
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
-
 async function check() {
   const { data } = await supabase.from('site_settings').select('*').single();
   const allReels = data.reelTemplates || [];
-  const clientReelTemplates = allReels.filter(r => r.isClientTemplate);
-  const reelTemplates = allReels.filter(r => !r.isClientTemplate);
-  
-  console.log("Client:", clientReelTemplates.map(t => t.name));
-  console.log("News:", reelTemplates.map(t => t.name));
+  console.log(JSON.stringify(allReels, null, 2));
 }
-
 check();

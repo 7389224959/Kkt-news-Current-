@@ -31,10 +31,12 @@ import {
 import { useNavigate } from 'react-router-dom';
 import NewsImage from '../components/NewsImage';
 import ReelTemplatesAdmin from '../components/ReelTemplatesAdmin';
+import ClientTemplatesAdmin from '../components/ClientTemplatesAdmin';
 import ViralTemplatesAdmin from '../components/ViralTemplatesAdmin';
 import ViralTemplateEditor from '../components/ViralTemplateEditor';
 import AIImproveTemplate from '../components/AIImproveTemplate';
 import ReelWizard from '../components/ReelWizard';
+import ClientReelWizard from '../components/ClientReelWizard';
 import { WorkerDashboard } from '../components/WorkerDashboard';
 import ManageWorkers from '../components/ManageWorkers';
 import ManageClients from '../components/ManageClients';
@@ -48,7 +50,7 @@ const Admin: React.FC = () => {
   const [workerId, setWorkerId] = useState('');
   const [workerPassword, setWorkerPassword] = useState('');
   const [activeTab, setActiveTab] = useState<'articles' | 'breaking' | 'settings' | 'templates' | 'job_applications' | 'tip_complaints' | 'workers' | 'clients' | 'leads'>('articles');
-  const [viralTemplateTab, setViralTemplateTab] = useState(false);
+  const [templateTab, setTemplateTab] = useState<'reel' | 'viral' | 'client'>('reel');
   const [isGenerating, setIsGenerating] = useState(false);
 
   // --- Data State ---
@@ -184,6 +186,7 @@ const Admin: React.FC = () => {
 
   // --- Reel Generation State ---
   const [showReelModal, setShowReelModal] = useState(false);
+  const [showClientReelModal, setShowClientReelModal] = useState(false);
   const [reelAutoStart, setReelAutoStart] = useState(false);
   const [isGeneratingReel, setIsGeneratingReel] = useState(false);
   const [reelStatus, setReelStatus] = useState('');
@@ -1270,7 +1273,7 @@ const Admin: React.FC = () => {
       return;
     }
 
-    if (!settings || !settings.reelTemplates || settings.reelTemplates.filter(t => t.isActive).length === 0) {
+    if (!settings || !settings.reelTemplates || settings.reelTemplates.filter(t => t.isActive && !t.isClientTemplate).length === 0) {
       alert("No active reel templates found. Please add an active template in the Templates tab first.");
       return;
     }
@@ -1283,7 +1286,7 @@ const Admin: React.FC = () => {
       const articleContent = `${latestArticle.title}\n\n${latestArticle.content}`;
 
       // Find best active template
-      const activeTemplates = settings.reelTemplates.filter(t => t.isActive);
+      const activeTemplates = settings.reelTemplates.filter(t => t.isActive && !t.isClientTemplate);
       // Try to match category, else pick first
       let selectedTemplate = activeTemplates.find(t => t.category === latestArticle.category) || activeTemplates[0];
 
@@ -2232,6 +2235,13 @@ const Admin: React.FC = () => {
                      <Zap size={18} />
                      Reel Wizard
                    </button>
+                   <button
+                      onClick={() => setShowClientReelModal(true)}
+                     className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-all"
+                   >
+                     <Zap size={20} />
+                     Client Marketing Reel
+                   </button>
                    <button 
                      onClick={handleDeleteOldArticles}
                      className={`${confirmDeleteAll ? 'bg-red-700 animate-pulse outline outline-2 outline-offset-2 outline-red-600' : 'bg-red-600'} hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-all`}
@@ -2633,50 +2643,51 @@ const Admin: React.FC = () => {
         {activeTab === 'templates' && (
           <div className="space-y-4">
             <div className="flex gap-2">
-              <button 
-                onClick={() => setViralTemplateTab(false)}
-                className={`px-4 py-2 font-bold rounded-lg transition-colors border ${!viralTemplateTab ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-              >
-                Reel Templates (Video)
-              </button>
-              <button 
-                onClick={() => setViralTemplateTab(true)}
-                className={`px-4 py-2 font-bold rounded-lg transition-colors border ${viralTemplateTab ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-              >
-                Viral Auto Post Templates (Image)
-              </button>
+              <button onClick={() => setTemplateTab('reel')} className={`px-4 py-2 font-bold rounded-lg transition-colors border ${templateTab === 'reel' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>News Reel Templates</button>
+              <button onClick={() => setTemplateTab('client')} className={`px-4 py-2 font-bold rounded-lg transition-colors border ${templateTab === 'client' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>Client Reel Templates</button>
+              <button onClick={() => setTemplateTab('viral')} className={`px-4 py-2 font-bold rounded-lg transition-colors border ${templateTab === 'viral' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>Viral Auto Post Templates</button>
             </div>
 
-            {!viralTemplateTab ? (
-              <ReelTemplatesAdmin 
-                 settings={settings!}
-                 onSaveSettings={async (updatedSettings: SiteSettings) => {
-                   try {
-                     const result = await saveSiteSettings(updatedSettings);
-                     setSiteSettings(updatedSettings);
-                     if (result.strippedColumns && result.strippedColumns.length > 0) {
-                       alert(`Warning: The following fields were NOT saved due to missing columns in Supabase: ${result.strippedColumns.join(', ')}`);
-                     }
-                   } catch (error: any) {
-                     throw error; // Rethrow so ReelTemplatesAdmin can catch it and display it
-                   }
-                 }}
+            {templateTab === 'reel' && (
+              <ReelTemplatesAdmin
+                  settings={settings!} 
+                onSaveSettings={async (updatedSettings: SiteSettings) => {
+                  try {
+                    const result = await saveSiteSettings(updatedSettings);
+                    setSiteSettings(updatedSettings);
+                  } catch (error: any) {
+                    throw error;
+                  }
+                }}
               />
-            ) : (
-              <ViralTemplatesAdmin 
-                 settings={settings!}
-                 articles={articles}
-                 onSaveSettings={async (updatedSettings: SiteSettings) => {
-                   try {
-                     const result = await saveSiteSettings(updatedSettings);
-                     setSiteSettings(updatedSettings);
-                     if (result.strippedColumns && result.strippedColumns.length > 0) {
-                       alert(`Warning: The following fields were NOT saved due to missing columns in Supabase: ${result.strippedColumns.join(', ')}`);
-                     }
-                   } catch (error: any) {
-                     throw error; 
-                   }
-                 }}
+            )}
+            
+            {templateTab === 'client' && (
+              <ClientTemplatesAdmin
+                  settings={settings!} 
+                onSaveSettings={async (updatedSettings: SiteSettings) => {
+                  try {
+                    const result = await saveSiteSettings(updatedSettings);
+                    setSiteSettings(updatedSettings);
+                  } catch (error: any) {
+                    throw error;
+                  }
+                }}
+              />
+            )}
+
+            {templateTab === 'viral' && (
+              <ViralTemplatesAdmin
+                  settings={settings!} 
+                articles={articles} 
+                onSaveSettings={async (updatedSettings: SiteSettings) => {
+                  try {
+                    const result = await saveSiteSettings(updatedSettings);
+                    setSiteSettings(updatedSettings);
+                  } catch (error: any) {
+                    throw error; 
+                  }
+                }}
               />
             )}
           </div>
@@ -3299,6 +3310,13 @@ const Admin: React.FC = () => {
         </div>
       )}
 
+      {showClientReelModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowClientReelModal(false)}>
+          <div className="w-full max-w-4xl" onClick={e => e.stopPropagation()}>
+            <ClientReelWizard settings={settings} onClose={() => setShowClientReelModal(false)} />
+          </div>
+        </div>
+      )}
       {showReelModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowReelModal(false)}>
           <div className="w-full max-w-4xl" onClick={e => e.stopPropagation()}>

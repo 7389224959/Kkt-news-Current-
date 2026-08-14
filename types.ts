@@ -60,6 +60,7 @@ export interface TrendingKeyword {
 }
 
 export interface ReelTemplate {
+  isClientTemplate?: boolean;
   id: string;
   name: string;
   category: string;
@@ -112,6 +113,7 @@ export interface SiteSettings {
   };
   tickerSpeed?: number;
   reelTemplates?: ReelTemplate[];
+  clientReelTemplates?: ReelTemplate[];
   viralTemplates?: ViralTemplate[];
   adminPhoto?: string;
   adminDesignation?: string;
@@ -236,4 +238,25 @@ export interface WorkerAsset {
   fileUrl: string;
   fileName: string;
   timestamp: string;
+}
+
+export interface Client {
+  id: string;
+  worker_id?: string;
+  business_name: string;
+  owner_name: string;
+  phone: string;
+  whatsapp: string;
+  address: string;
+  category: string;
+  services: string;
+  offer?: string;
+  facebook_link?: string;
+  instagram_link?: string;
+  google_link?: string;
+  logo_url?: string;
+  payment_screenshot_url?: string;
+  photos_urls?: string[];
+  created_at?: string;
+  reel_categories?: string[];
 }

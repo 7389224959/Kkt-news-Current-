@@ -3163,3 +3163,55 @@ Return a STRICT JSON response only (no markdown, no explanations) containing:
     throw error;
   }
 };
+
+export const generateClientReelScript = async (
+  client: any,
+  category: string,
+  prompt: string,
+  template: any,
+  enableAudioTags: boolean = true
+) => {
+  const ai = getAiClient();
+  if (!ai) throw new Error("API Key missing");
+
+  const coords = template?.coordinates || {};
+  const hasHeadline = coords.headline_box && coords.headline_box !== "hidden";
+  const hasTicker = coords.ticker_box && coords.ticker_box !== "hidden";
+  
+  const limits = template?.safe_limits || { headline_words: 6, subtitle_lines: 2, ticker_characters: 50 };
+
+  const systemPrompt = `You are an expert marketing copywriter and video script creator for businesses.
+We are creating a ${category} reel for our client:
+- Business Name: ${client.business_name}
+- Category: ${client.category}
+- Services: ${client.services}
+- Special Offer: ${client.offer || 'N/A'}
+- Owner Name: ${client.owner_name}
+
+The user's specific prompt for this reel is: "${prompt}"
+
+Generate the script components for a 15-30 second reel.
+${hasHeadline ? `- \`headline\`: A very short, punchy headline text for the video (Max ${limits.headline_words} words).` : ''}
+${hasTicker ? `- \`ticker\`: A short scrolling text (Max ${limits.ticker_characters} chars) highlighting the CTA or offer.` : ''}
+- \`voiceoverScript\`: The spoken audio script. Must sound natural, persuasive, and fit the brand. Use SSML if helpful, but plain text is fine.
+- \`fullScript\`: A plain text transcript of the voiceover.
+
+Output as pure JSON, with keys: ${hasHeadline ? '"headline", ' : ''}${hasTicker ? '"ticker", ' : ''}"voiceoverScript", "fullScript".`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-pro',
+    contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
+    config: {
+      temperature: 0.7,
+      responseMimeType: "application/json"
+    }
+  });
+
+  const text = response.text || '';
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("Failed to parse JSON response:", text);
+    throw new Error("Failed to generate client reel script");
+  }
+};

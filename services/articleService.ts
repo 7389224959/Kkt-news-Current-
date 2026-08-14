@@ -316,6 +316,13 @@ export const getSiteSettings = async (): Promise<SiteSettings | null> => {
     .select('*')
     .single();
   if (error && error.code !== 'PGRST116') throw error;
+  
+  if (data) {
+    const allReels = data.reelTemplates || [];
+    data.clientReelTemplates = allReels.filter((r: any) => r.isClientTemplate);
+    data.reelTemplates = allReels.filter((r: any) => !r.isClientTemplate);
+  }
+  
   return data as SiteSettings;
 };
 
@@ -335,7 +342,16 @@ export const saveSiteSettings = async (settings: SiteSettings): Promise<any> => 
       }
     }
 
-    const payload = targetId ? { ...settings, id: targetId } : settings;
+    const payload = targetId ? { ...settings, id: targetId } : { ...settings };
+    
+    // Combine reelTemplates and clientReelTemplates
+    const combinedReels = [
+      ...(payload.reelTemplates || []).map((t: any) => ({ ...t, isClientTemplate: false })),
+      ...(payload.clientReelTemplates || []).map((t: any) => ({ ...t, isClientTemplate: true }))
+    ];
+    
+    payload.reelTemplates = combinedReels;
+    delete payload.clientReelTemplates;
 
     const { data, error } = await supabase
       .from('site_settings')
@@ -344,6 +360,13 @@ export const saveSiteSettings = async (settings: SiteSettings): Promise<any> => 
       .single();
 
     if (error) throw error;
+    
+    if (data) {
+      const allReels = data.reelTemplates || [];
+      data.clientReelTemplates = allReels.filter((r: any) => r.isClientTemplate);
+      data.reelTemplates = allReels.filter((r: any) => !r.isClientTemplate);
+    }
+
     return data;
   } catch (error) {
     console.error("Error in saveSiteSettings:", error);

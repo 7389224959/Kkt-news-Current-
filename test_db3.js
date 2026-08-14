@@ -1,0 +1,13 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+
+async function check() {
+  const { data } = await supabase.from('site_settings').select('reelTemplates').single();
+  const allReels = data.reelTemplates || [];
+  console.log(JSON.stringify(allReels, null, 2));
+}
+
+check();

@@ -225,8 +225,9 @@ export default async function handler(req, res) {
       });
     }
     await downloadFile(templateMediaUrl, backgroundPath);
+    const isJson = scriptData.headline && scriptData.headline.includes('{');
     await downloadFile(
-      "https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Bold.ttf",
+      isJson ? "https://raw.githubusercontent.com/google/fonts/main/ofl/robotomono/RobotoMono-Bold.ttf" : "https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Bold.ttf",
       fontPath,
     );
 
@@ -258,22 +259,26 @@ export default async function handler(req, res) {
     const wrapText = (text, maxWidth, fontSize) => {
       const charWidth = fontSize * 0.45;
       const maxChars = Math.max(10, Math.floor(maxWidth / charWidth));
-      const words = String(text).split(" ");
-      let lines = [];
-      let currentLine = "";
-      for (const word of words) {
-        if (
-          currentLine.length + word.length + 1 > maxChars &&
-          currentLine.length > 0
-        ) {
-          lines.push(currentLine);
-          currentLine = word;
-        } else {
-          currentLine += (currentLine ? " " : "") + word;
+      let finalLines = [];
+      const originalLines = String(text).split("\n");
+      
+      for (const origLine of originalLines) {
+        const words = origLine.split(" ");
+        let currentLine = "";
+        for (const word of words) {
+          if (
+            currentLine.length + word.length + 1 > maxChars &&
+            currentLine.length > 0
+          ) {
+            finalLines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine += (currentLine ? " " : "") + word;
+          }
         }
+        if (currentLine) finalLines.push(currentLine);
       }
-      if (currentLine) lines.push(currentLine);
-      return lines.join("\n");
+      return finalLines.join("\n");
     };
 
     const preset = scriptData.stylePreset || "";
