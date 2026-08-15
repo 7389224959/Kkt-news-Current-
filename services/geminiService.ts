@@ -361,7 +361,7 @@ CONTENT:
 ${content}`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -537,7 +537,7 @@ export const draftNewsReport = async (
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: { parts },
       config: {
         tools: tools.length > 0 ? tools : undefined,
@@ -615,7 +615,7 @@ export const fetchTrendingKeywords = async (): Promise<
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
@@ -1182,7 +1182,7 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
         "\n\nCRITICAL: Respond ONLY with valid JSON array, starting with [ and ending with ]. Do NOT wrap it in ```json\n...\n``` blocks. Do NOT include any conversational text before or after the JSON. Ensure there is no punctuation (like . or ।) outside of the double quotes. Valid JSON ONLY. Do NOT use double quotes inside your string values (use single quotes for quotes within text).";
 
       const response = await ai!.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.5-flash",
         contents: promptWithFormatInstruction,
         config: {
           responseMimeType: "application/json",
@@ -1637,7 +1637,7 @@ export const fetchTickerHeadlines = async (
     const toolsConfig: any[] = [{ googleSearch: {} }];
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: prompt,
       config: {
         tools: toolsConfig,
@@ -1830,7 +1830,7 @@ Only generate text content for overlay.
   }
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.5-flash",
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -2072,7 +2072,7 @@ ${articleContent.substring(0, 2000)}
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -2148,7 +2148,7 @@ Script to analyze:
 ${script}`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.5-flash",
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -2395,7 +2395,7 @@ Return ONE complete JSON containing exactly this structure:
 Return strictly ONLY the raw JSON without markdown formatting.`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.5-flash",
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -2554,7 +2554,7 @@ Return ONLY a JSON array:
   let classifications: any[] = [];
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: prompt,
       config: { responseMimeType: "application/json", temperature: 0.1 }
     });
@@ -2831,7 +2831,7 @@ Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly 
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -2969,7 +2969,7 @@ Please return the updated Data and Styles in JSON format matching this schema. N
 
   try {
     const response = await client.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -3057,7 +3057,7 @@ Return a JSON object with this exact structure (if an element is not present, ma
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: [
         {
           role: "user",
@@ -3136,7 +3136,7 @@ Return a STRICT JSON response only (no markdown, no explanations) containing:
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: [
         {
           role: "user",
@@ -3199,7 +3199,7 @@ ${hasTicker ? `- \`ticker\`: A short scrolling text (Max ${limits.ticker_charact
 Output as pure JSON, with keys: ${hasHeadline ? '"headline", ' : ''}${hasTicker ? '"ticker", ' : ''}"voiceoverScript", "fullScript".`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3.5-flash',
     contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
     config: {
       temperature: 0.7,
