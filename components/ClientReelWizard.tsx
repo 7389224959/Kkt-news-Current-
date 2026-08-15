@@ -12,7 +12,7 @@ export default function ClientReelWizard({ settings, onClose }: { settings: any,
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [reelCategory, setReelCategory] = useState<string>('Hiring Reel');
   const [prompt, setPrompt] = useState<string>('');
-  const [jobDetails, setJobDetails] = useState({ designation: '', location: '', salary: '' });
+  const [jobDetails, setJobDetails] = useState({ designation: '', location: '', salary: '', experience: '' });
   
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [scriptData, setScriptData] = useState<any>({ fullScript: '', headline: '', ticker: '', voiceoverScript: '' });
@@ -80,8 +80,8 @@ export default function ClientReelWizard({ settings, onClose }: { settings: any,
       let finalPrompt = prompt;
       let prefilledHeadline = '';
       if (reelCategory === 'Hiring Reel' && jobDetails.designation) {
-        finalPrompt = `Generate a hiring reel for ${jobDetails.designation} located in ${jobDetails.location} with salary ${jobDetails.salary}. ${prompt}`;
-        prefilledHeadline = `{\n  "Role": "${jobDetails.designation}",\n  "Loc": "${jobDetails.location}",\n  "Pay": "${jobDetails.salary}"\n}`;
+        finalPrompt = `Generate a hiring reel for ${jobDetails.designation} located in ${jobDetails.location} with salary ${jobDetails.salary} and experience required ${jobDetails.experience}. ${prompt}`;
+        prefilledHeadline = `{\n  "Role": "${jobDetails.designation}",\n  "Loc": "${jobDetails.location}",\n  "Pay": "${jobDetails.salary}",\n  "Exp": "${jobDetails.experience}"\n}`;
       }
 
       const data = await generateClientReelScript(selectedClient, reelCategory, finalPrompt, template);
@@ -207,6 +207,15 @@ export default function ClientReelWizard({ settings, onClose }: { settings: any,
                       />
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Experience</label>
+                    <input 
+                      value={jobDetails.experience}
+                      onChange={e => setJobDetails({...jobDetails, experience: e.target.value})}
+                      placeholder="e.g. 3-5 Years"
+                      className="w-full border rounded p-2 text-sm"
+                    />
+                  </div>
                 </div>
               ) : (
                 <div>
@@ -251,7 +260,10 @@ export default function ClientReelWizard({ settings, onClose }: { settings: any,
                        <img src={t.screenshotUrl || t.mediaUrl} className="w-full h-full object-cover opacity-80" />
                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-end p-3 text-white">
                          <span className="font-bold text-sm truncate">{t.name}</span>
-                         <span className="text-xs text-blue-300">{t.category}</span>
+                         <span className="text-xs text-blue-300 mb-1">{t.category}</span>
+                         {t.hasVoiceover === false && (
+                           <span className="text-[10px] bg-red-500/80 text-white px-2 py-0.5 rounded w-max">No Voiceover</span>
+                         )}
                        </div>
                     </div>
                   </div>
@@ -331,14 +343,28 @@ export default function ClientReelWizard({ settings, onClose }: { settings: any,
 
               <div className="pt-4 flex justify-between">
                 <button onClick={() => setStep(2)} className="px-4 py-2 border rounded-lg hover:bg-gray-50">Back</button>
-                <button 
-                  onClick={handleGenerateAudio}
-                  disabled={isGenerating || !scriptData.voiceoverScript}
-                  className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center"
-                >
-                  {isGenerating ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Mic className="w-4 h-4 mr-2" />}
-                  Generate Audio
-                </button>
+                {filteredTemplates.find(t=>t.id===selectedTemplateId)?.hasVoiceover !== false ? (
+                  <button 
+                    onClick={handleGenerateAudio}
+                    disabled={isGenerating || !scriptData.voiceoverScript}
+                    className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center"
+                  >
+                    {isGenerating ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Mic className="w-4 h-4 mr-2" />}
+                    Generate Audio
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      setAudioUrl('');
+                      setAudioDataUri('');
+                      setStep(4);
+                    }}
+                    disabled={isGenerating}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                  >
+                    Next: Final Output <ChevronRight className="w-4 h-4 ml-2" />
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -352,16 +378,21 @@ export default function ClientReelWizard({ settings, onClose }: { settings: any,
                 </div>
               </div>
 
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                <h4 className="font-bold text-gray-800 mb-2">Voiceover Audio</h4>
-                {audioUrl && (
+              {audioUrl ? (
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                  <h4 className="font-bold text-gray-800 mb-2">Voiceover Audio</h4>
                   <audio controls src={audioUrl} className="w-full mb-4" />
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                  <h4 className="font-bold text-gray-800 mb-2">Voiceover</h4>
+                  <p className="text-sm text-gray-500">Audio generation was disabled for this template.</p>
+                </div>
+              )}
               
               <div className="p-4 bg-green-50 text-green-800 rounded-lg text-sm border border-green-200">
                 <p className="font-bold mb-1">Ready for Rendering</p>
-                <p>The client reel script and audio are ready. We can pass these to the FFmpeg engine or Anchor backend to combine with the selected template and client's logo.</p>
+                <p>The client reel script {audioUrl ? 'and audio are' : 'is'} ready. We can pass these to the FFmpeg engine to combine with the selected template and client's logo.</p>
               </div>
 
             </div>

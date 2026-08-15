@@ -61,6 +61,7 @@ export interface TrendingKeyword {
 
 export interface ReelTemplate {
   isClientTemplate?: boolean;
+  hasVoiceover?: boolean;
   id: string;
   name: string;
   category: string;

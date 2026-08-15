@@ -800,6 +800,10 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
                           <div style={{ color: '#FBBF24', fontSize: `${25 * scale}px` }}>LOCATION</div>
                           <div>RAIPUR</div>
                         </div>
+                        <div>
+                          <div style={{ color: '#FBBF24', fontSize: `${25 * scale}px` }}>EXPERIENCE</div>
+                          <div>3-5 YEARS</div>
+                        </div>
                       </div>
                     );
                   }

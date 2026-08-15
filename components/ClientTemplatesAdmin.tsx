@@ -515,6 +515,20 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
               placeholder="e.g. Breaking News Blue"
             />
           </div>
+          
+          <div className="flex items-center gap-2 mt-4 p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+            <input 
+              type="checkbox" 
+              id="hasVoiceover"
+              checked={template.hasVoiceover ?? true} 
+              onChange={e => setTemplate({...template, hasVoiceover: e.target.checked})}
+              className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+            />
+            <label htmlFor="hasVoiceover" className="text-sm font-bold text-indigo-900 cursor-pointer">
+              Include AI Voiceover Step
+            </label>
+          </div>
+
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">Category</label>
             <select 
@@ -800,6 +814,10 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
                         <div>
                           <div style={{ color: '#FBBF24', fontSize: `${25 * scale}px` }}>LOCATION</div>
                           <div>RAIPUR</div>
+                        </div>
+                        <div>
+                          <div style={{ color: '#FBBF24', fontSize: `${25 * scale}px` }}>EXPERIENCE</div>
+                          <div>3-5 YEARS</div>
                         </div>
                       </div>
                     );

@@ -2080,10 +2080,17 @@ ${articleContent.substring(0, 2000)}
     });
 
     const text = response.text || "{}";
-    const cleanedText = text
+    let cleanedText = text
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
+    
+    const firstBrace = cleanedText.indexOf('{');
+    const lastBrace = cleanedText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanedText = cleanedText.substring(firstBrace, lastBrace + 1);
+    }
+
     const result = JSON.parse(cleanedText) as ReelScript;
     if (result.fullScript) {
       result.fullScript = cleanVoiceoverScript(result.fullScript, enableAudioTags);
@@ -3157,7 +3164,13 @@ Return a STRICT JSON response only (no markdown, no explanations) containing:
     });
 
     const text = response.text || "{}";
-    return JSON.parse(text);
+    let cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    const firstBrace = cleanText.indexOf('{');
+    const lastBrace = cleanText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    }
+    return JSON.parse(cleanText);
   } catch (error) {
     console.error("Error analyzing template improvement:", error);
     throw error;
@@ -3207,9 +3220,15 @@ Output as pure JSON, with keys: ${hasHeadline ? '"headline", ' : ''}${hasTicker 
     }
   });
 
-  const text = response.text || '';
+  let text = response.text || '';
   try {
-    return JSON.parse(text);
+    let cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    const firstBrace = cleanText.indexOf('{');
+    const lastBrace = cleanText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    }
+    return JSON.parse(cleanText);
   } catch (e) {
     console.error("Failed to parse JSON response:", text);
     throw new Error("Failed to generate client reel script");
