@@ -35,6 +35,7 @@ const ClientTemplatesAdmin: React.FC<ClientTemplatesAdminProps> = ({ settings, o
         subtitle_box: '100,400,200,100',
         ticker_box: '0,500,400,50',
         logo_box: '20,20,50,50',
+        json_box: 'hidden',
       },
       safe_limits: {
         headline_words: 10,
@@ -398,7 +399,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     setDragStart({ x: clientX, y: clientY });
-    setStartCoords(parseCoords(template.coordinates[boxName]));
+    setStartCoords(parseCoords(template.coordinates[boxName] || 'hidden'));
   };
 
   useEffect(() => {
@@ -462,12 +463,13 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
     };
   }, [activeBox, dragAction, dragStart, startCoords]);
   
-  const boxColors = {
+  const boxColors: Record<keyof ReelTemplate['coordinates'], string> = {
     video_box: 'rgba(59, 130, 246, 0.4)', // blue
     headline_box: 'rgba(239, 68, 68, 0.4)', // red
     subtitle_box: 'rgba(16, 185, 129, 0.4)', // green
     ticker_box: 'rgba(245, 158, 11, 0.4)', // yellow
     logo_box: 'rgba(139, 92, 246, 0.4)', // purple
+    json_box: 'rgba(236, 72, 153, 0.4)', // pink
   };
 
   return (
@@ -521,12 +523,12 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
               className="w-full px-4 py-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
             >
               <option value="general">General</option>
-              <option value="breaking">Breaking News</option>
-              <option value="crime">Crime</option>
-              <option value="politics">Politics</option>
-              <option value="sports">Sports</option>
-              <option value="entertainment">Entertainment</option>
-              <option value="viral">Viral/Shocking</option>
+              <option value="product">Product Reel</option>
+              <option value="hiring">Hiring Reel</option>
+              <option value="marketing">Marketing Reel</option>
+              <option value="offer">Offer/Discount Reel</option>
+              <option value="event">Event Promo Reel</option>
+              <option value="testimonial">Testimonial Reel</option>
             </select>
           </div>
 
@@ -676,10 +678,10 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
              )}
 
              {/* Rendering the boxes */}
-             {(Object.keys(template.coordinates) as Array<keyof ReelTemplate['coordinates']>).map(boxName => {
-                if (template.coordinates[boxName] === 'hidden') return null;
+             {(['video_box', 'headline_box', 'subtitle_box', 'ticker_box', 'logo_box', 'json_box'] as const).map(boxName => {
+                if (!template.coordinates[boxName] || template.coordinates[boxName] === 'hidden') return null;
 
-                const c = parseCoords(template.coordinates[boxName]);
+                const c = parseCoords(template.coordinates[boxName] || '0,0,100,100');
                 const scale = 360 / 1080; // visual scale relative to logical 1080px width
                 
                 // MOCK FFmpeg Styles
@@ -768,6 +770,40 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
                 } else if (boxName === 'video_box') {
                   boxStyle.alignItems = 'center';
                   boxStyle.justifyContent = 'center';
+                } else if (boxName === 'json_box') {
+                  const fontSize = 35 * scale;
+                  const padding = 20 * scale;
+                  if (!ffmpegPreviewUrl) {
+                    boxStyle.backgroundColor = 'rgba(15, 23, 42, 0.8)';
+                  }
+                  boxStyle.border = `2px dashed ${ffmpegPreviewUrl ? 'rgba(255,255,255,0.4)' : 'rgba(236,72,153,0.9)'}`;
+                  if (!ffmpegPreviewUrl) {
+                    content = (
+                      <div style={{
+                        padding: `${padding}px`,
+                        color: 'white',
+                        fontSize: `${fontSize}px`,
+                        fontFamily: 'sans-serif',
+                        lineHeight: 1.5,
+                        pointerEvents: 'none',
+                        width: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        whiteSpace: 'normal',
+                        gap: `${10 * scale}px`
+                      }}>
+                        <div style={{ fontWeight: 'bold', fontSize: `${45 * scale}px`, borderBottom: '2px solid rgba(255,255,255,0.2)', paddingBottom: `${10 * scale}px` }}>SALES MANAGER</div>
+                        <div>
+                          <div style={{ color: '#FBBF24', fontSize: `${25 * scale}px` }}>SALES</div>
+                          <div>₹35,000 - ₹50,000</div>
+                        </div>
+                        <div>
+                          <div style={{ color: '#FBBF24', fontSize: `${25 * scale}px` }}>LOCATION</div>
+                          <div>RAIPUR</div>
+                        </div>
+                      </div>
+                    );
+                  }
                 }
 
                 return (
@@ -792,9 +828,8 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
              })}
           </div>
           <div className="mt-4 flex flex-wrap gap-4 w-full justify-center text-xs">
-            {Object.keys(template.coordinates).map((boxKey) => {
-              const boxName = boxKey as keyof ReelTemplate['coordinates'];
-              const isHidden = template.coordinates[boxName] === 'hidden';
+            {(['video_box', 'headline_box', 'subtitle_box', 'ticker_box', 'logo_box', 'json_box'] as const).map((boxName) => {
+              const isHidden = !template.coordinates[boxName] || template.coordinates[boxName] === 'hidden';
               return (
                 <button 
                   key={boxName} 
@@ -802,7 +837,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTempla
                     setTemplate(prev => {
                       const newCoords = { ...prev.coordinates };
                       if (isHidden) {
-                        newCoords[boxName] = '100,100,200,100'; // Default unhide
+                        newCoords[boxName] = boxName === 'json_box' ? '100,500,800,600' : '100,100,800,200'; // Default unhide
                       } else {
                         newCoords[boxName] = 'hidden';
                       }

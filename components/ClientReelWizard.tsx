@@ -47,6 +47,27 @@ export default function ClientReelWizard({ settings, onClose }: { settings: any,
   // For now, allow all templates, later we can filter by client category
   const filteredTemplates = templates;
 
+  const getBoxStyle = (boxName: string, defaultStyle: React.CSSProperties): React.CSSProperties => {
+    const t = filteredTemplates.find(t=>t.id===selectedTemplateId);
+    if (!t || !t.coordinates) {
+      return defaultStyle;
+    }
+    const coordStr = t.coordinates[boxName as keyof typeof t.coordinates];
+    if (!coordStr || coordStr === 'hidden') {
+      return defaultStyle;
+    }
+    const [x, y, w, h] = coordStr.split(',').map(Number);
+    return {
+      position: 'absolute',
+      left: `${(x / 1080) * 100}%`,
+      top: `${(y / 1920) * 100}%`,
+      width: `${(w / 1080) * 100}%`,
+      height: `${(h / 1920) * 100}%`,
+      zIndex: 20,
+      overflow: 'hidden'
+    };
+  };
+
   const handleGenerateScript = async () => {
     if (!selectedClient) return;
     
@@ -355,9 +376,9 @@ export default function ClientReelWizard({ settings, onClose }: { settings: any,
             {/* Background Template */}
             {selectedTemplateId ? (
               filteredTemplates.find(t=>t.id===selectedTemplateId)?.mediaUrl ? (
-                <video src={filteredTemplates.find(t=>t.id===selectedTemplateId)?.mediaUrl} poster={filteredTemplates.find(t=>t.id===selectedTemplateId)?.screenshotUrl} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover opacity-50 bg-gray-900" />
+                <video src={filteredTemplates.find(t=>t.id===selectedTemplateId)?.mediaUrl} poster={filteredTemplates.find(t=>t.id===selectedTemplateId)?.screenshotUrl} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover" />
               ) : (
-                <img src={filteredTemplates.find(t=>t.id===selectedTemplateId)?.screenshotUrl} className="absolute inset-0 w-full h-full object-cover opacity-50" />
+                <img src={filteredTemplates.find(t=>t.id===selectedTemplateId)?.screenshotUrl} className="absolute inset-0 w-full h-full object-cover" />
               )
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 font-medium bg-gray-100 ring-inset ring-1 ring-gray-200">
@@ -368,18 +389,46 @@ export default function ClientReelWizard({ settings, onClose }: { settings: any,
 
             {/* Simulated Overlays */}
             {selectedClient?.logo_url && (
-              <img src={selectedClient.logo_url} className="absolute top-8 right-4 w-16 h-16 object-contain bg-white/10 rounded-lg backdrop-blur-sm p-1" />
+              <img src={selectedClient.logo_url} style={getBoxStyle('logo_box', { top: '2rem', right: '1rem', width: '4rem', height: '4rem', position: 'absolute' })} className="object-contain bg-white/10 rounded-lg backdrop-blur-sm p-1 z-20" />
             )}
 
             {scriptData.headline && (
-              <div className="absolute top-1/4 w-full px-6 text-center">
-                <pre className="text-xl sm:text-2xl font-extrabold text-white drop-shadow-lg whitespace-pre-wrap text-left" style={{textShadow: '0 4px 8px rgba(0,0,0,0.8)', fontFamily: scriptData.headline.includes('{') ? 'monospace' : 'inherit'}}>{scriptData.headline}</pre>
-              </div>
+              scriptData.headline.trim().startsWith('{') ? (
+                <div 
+                  style={getBoxStyle('json_box', { top: '30%', left: '10%', width: '80%', position: 'absolute' })} 
+                  className="bg-[#0B1626]/85 backdrop-blur-md rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.5)] text-left z-20 border border-white/10 overflow-hidden flex flex-col"
+                >
+                  <div className="bg-[#16263F]/90 px-3 py-2 sm:px-4 sm:py-3 border-b border-white/10 flex items-center justify-between">
+                    <span className="font-extrabold text-[11px] sm:text-sm text-white uppercase tracking-wider truncate mr-2">{jobDetails.designation || "ROLE DETAILS"}</span>
+                    <span className="bg-[#159E8C] text-white text-[8px] sm:text-[10px] font-bold px-2 py-1 rounded-full tracking-widest uppercase shrink-0">Hiring</span>
+                  </div>
+                  
+                  <div className="p-3 sm:p-4 flex flex-col gap-2 sm:gap-3">
+                  {(() => {
+                    try {
+                      const jsonObj = JSON.parse(scriptData.headline);
+                      return Object.entries(jsonObj).map(([k, v], i) => (
+                        <div key={i} className="flex flex-row items-center justify-between border-b border-white/5 pb-2 last:border-0 last:pb-0">
+                          <span className="text-[#6FD0C2] text-[9px] sm:text-[11px] font-bold uppercase tracking-widest">{k}</span>
+                          <span className="text-white text-[11px] sm:text-[13px] font-semibold text-right max-w-[60%] truncate">{String(v)}</span>
+                        </div>
+                      ));
+                    } catch (e) {
+                      return <pre className="text-white whitespace-pre-wrap text-[10px] font-mono">{scriptData.headline}</pre>;
+                    }
+                  })()}
+                  </div>
+                </div>
+              ) : (
+                <div style={getBoxStyle('headline_box', { top: '25%', left: 0, width: '100%', padding: '0 1.5rem', position: 'absolute', textAlign: 'center' })} className="z-20 flex items-center justify-center">
+                  <pre className="text-lg sm:text-xl font-extrabold text-white drop-shadow-lg whitespace-pre-wrap text-center" style={{textShadow: '0 4px 8px rgba(0,0,0,0.8)'}}>{scriptData.headline}</pre>
+                </div>
+              )
             )}
 
             {scriptData.ticker && (
-              <div className="absolute bottom-16 left-0 right-0 bg-red-600 text-white font-bold whitespace-nowrap overflow-hidden py-1 px-4 text-lg">
-                {scriptData.ticker}
+              <div style={getBoxStyle('ticker_box', { bottom: '4rem', left: 0, right: 0, position: 'absolute' })} className="bg-[#159E8C]/95 border-y border-white/20 text-white font-bold whitespace-nowrap py-1 px-4 text-[10px] sm:text-[11px] tracking-widest uppercase z-20 flex items-center overflow-hidden">
+                <span className="truncate w-full">{scriptData.ticker}</span>
               </div>
             )}
             

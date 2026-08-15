@@ -75,6 +75,7 @@ export interface ReelTemplate {
     subtitle_box: string;
     ticker_box: string;
     logo_box: string;
+    json_box?: string;
   };
   safe_limits: {
     headline_words: number;

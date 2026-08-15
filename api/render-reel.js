@@ -251,6 +251,11 @@ export default async function handler(req, res) {
       template.coordinates.subtitle_box !== "hidden"
         ? parseAndScaleCoords(template.coordinates.subtitle_box)
         : null;
+    const jBox =
+      template.coordinates.json_box &&
+      template.coordinates.json_box !== "hidden"
+        ? parseAndScaleCoords(template.coordinates.json_box)
+        : null;
     const tBox =
       template.coordinates.ticker_box && template.coordinates.ticker_box !== "hidden"
         ? parseAndScaleCoords(template.coordinates.ticker_box)
@@ -550,6 +555,88 @@ export default async function handler(req, res) {
         outputs: "with_headline",
       });
       currentOutput = "with_headline";
+    }
+
+    if (scriptData.headline && jBox) {
+      try {
+        let jsonObj = typeof scriptData.headline === 'string' ? JSON.parse(scriptData.headline) : scriptData.headline;
+        const keys = Object.keys(jsonObj);
+        
+        filterGraph.push({
+          filter: "drawbox",
+          options: {
+            x: jBox[0],
+            y: jBox[1],
+            w: jBox[2],
+            h: jBox[3],
+            color: "black@0.8",
+            t: "fill",
+            enable: `gte(t,${delayTime})`
+          },
+          inputs: currentOutput,
+          outputs: "with_json_bg"
+        });
+        currentOutput = "with_json_bg";
+
+        let currentYOffset = jBox[1] + Math.round(20 * scaleFactor);
+        
+        let i = 0;
+        for (const key of keys) {
+          const value = jsonObj[key];
+          const keyFontSize = Math.round(35 * scaleFactor);
+          const valFontSize = Math.round(45 * scaleFactor);
+          const paddingY = Math.round(15 * scaleFactor);
+          
+          const keyPath = path.join(tempDir, `json_key_${i}.txt`);
+          fs.writeFileSync(keyPath, String(key).toUpperCase());
+          filterGraph.push({
+            filter: "drawtext",
+            options: {
+              fontfile: fontPath,
+              fontcolor: "#FBBF24",
+              fontsize: keyFontSize.toString(),
+              x: `${jBox[0]}`,
+              y: `${currentYOffset}`,
+              textfile: keyPath,
+              shadowcolor: "black@0.9",
+              shadowx: "4",
+              shadowy: "4",
+              enable: `gte(t,${delayTime})`,
+            },
+            inputs: currentOutput,
+            outputs: `with_json_key_${i}`,
+          });
+          currentOutput = `with_json_key_${i}`;
+          
+          currentYOffset += keyFontSize + Math.round(5 * scaleFactor);
+          
+          const valPath = path.join(tempDir, `json_val_${i}.txt`);
+          fs.writeFileSync(valPath, String(value));
+          filterGraph.push({
+            filter: "drawtext",
+            options: {
+              fontfile: fontPath,
+              fontcolor: "white",
+              fontsize: valFontSize.toString(),
+              x: `${jBox[0]}`,
+              y: `${currentYOffset}`,
+              textfile: valPath,
+              shadowcolor: "black@0.9",
+              shadowx: "4",
+              shadowy: "4",
+              enable: `gte(t,${delayTime})`,
+            },
+            inputs: currentOutput,
+            outputs: `with_json_val_${i}`,
+          });
+          currentOutput = `with_json_val_${i}`;
+          
+          currentYOffset += valFontSize + paddingY;
+          i++;
+        }
+      } catch (e) {
+        console.warn("Failed to parse json_box headline:", e);
+      }
     }
 
     if (scriptData.ticker && tBox) {
