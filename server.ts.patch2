@@ -1,0 +1,19 @@
+--- server.ts	2026-08-18 01:53:00.000000000 -0700
++++ server.ts.new	2026-08-18 05:15:00.000000000 -0700
+@@ -41,6 +41,19 @@
+     }
+   });
+ 
++  app.get("/migration.txt", (req, res) => {
++    const filePath = path.join(process.cwd(), "public", "migration.txt");
++    if (fs.existsSync(filePath)) {
++      res.setHeader("Content-Disposition", 'attachment; filename="migration-guide.txt"');
++      res.setHeader("Content-Type", "text/plain");
++      const stream = fs.createReadStream(filePath);
++      stream.pipe(res);
++    } else {
++      res.status(404).send("Not found");
++    }
++  });
++
+   // Dynamically mount Vercel API routes for local development

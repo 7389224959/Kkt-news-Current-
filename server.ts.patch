@@ -1,0 +1,21 @@
+--- server.ts	2026-08-18 01:51:00.000000000 -0700
++++ server.ts.new	2026-08-18 01:53:00.000000000 -0700
+@@ -28,6 +28,19 @@
+   // API routes FIRST
+   app.get("/api/health", (req, res) => {
+     res.json({ status: "ok" });
+   });
++
++  app.get("/arani-reel-system-export.tar.gz", (req, res) => {
++    const filePath = path.join(process.cwd(), "public", "arani-reel-system-export.tar.gz");
++    if (fs.existsSync(filePath)) {
++      res.setHeader("Content-Disposition", "attachment; filename=\"arani-reel-system-export.tar.gz\"");
++      res.setHeader("Content-Type", "application/octet-stream");
++      const stream = fs.createReadStream(filePath);
++      stream.pipe(res);
++    } else {
++      res.status(404).send("Not found");
++    }
++  });
+ 
+   // Dynamically mount Vercel API routes for local development

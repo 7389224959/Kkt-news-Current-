@@ -29,6 +29,30 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
+  app.get("/arani-reel-system-export.tar.gz", (req, res) => {
+    const filePath = path.join(process.cwd(), "public", "arani-reel-system-export.tar.gz");
+    if (fs.existsSync(filePath)) {
+      res.setHeader("Content-Disposition", 'attachment; filename="arani-reel-system-export.tar.gz"');
+      res.setHeader("Content-Type", "application/octet-stream");
+      const stream = fs.createReadStream(filePath);
+      stream.pipe(res);
+    } else {
+      res.status(404).send("Not found");
+    }
+  });
+
+  app.get("/migration.txt", (req, res) => {
+    const filePath = path.join(process.cwd(), "public", "migration.txt");
+    if (fs.existsSync(filePath)) {
+      res.setHeader("Content-Disposition", 'attachment; filename="migration-guide.txt"');
+      res.setHeader("Content-Type", "text/plain");
+      const stream = fs.createReadStream(filePath);
+      stream.pipe(res);
+    } else {
+      res.status(404).send("Not found");
+    }
+  });
+
   // Dynamically mount Vercel API routes for local development
   app.use("/api", async (req, res, next) => {
     // Skip health check

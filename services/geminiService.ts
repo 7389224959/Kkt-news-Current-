@@ -1981,7 +1981,8 @@ export const cleanVoiceoverScript = (text: string, preserveAudioTags: boolean = 
     return text.replace(/\s+/g, " ").trim();
   }
   return text
-    .replace(/\[.*?\]/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/\*[^*]+\*/g, "") // Also strip *asterisk* emotion tags just in case
     .replace(/\s+/g, " ")
     .trim();
 };
@@ -2912,15 +2913,9 @@ export const generateReelAudio = async (
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
-  const cleanScript = cleanVoiceoverScript(script, enableAudioTags);
+  const cleanScript = cleanVoiceoverScript(script, false);
 
-  const ttsPrompt = enableAudioTags
-    ? `Read the following news script in an engaging professional news anchor tone.
-AUDIO TAGS INSTRUCTION: The script contains bracketed emotion, pacing, and tone direction tags (such as [serious], [fast], [slow], [pause], [dramatic], [excited], [urgent]). You MUST interpret and execute these bracketed tags to dynamically adjust your speech rate, emotion, inflection, and pauses mid-sentence. Do NOT read out the bracketed tag words themselves; use them strictly as vocal performance directions.
-
-SCRIPT:
-${cleanScript}`
-    : `Read the following news script in an engaging, fast-paced, and energetic professional news anchor tone.
+  const ttsPrompt = `Read the following news script in an engaging, fast-paced, and energetic professional news anchor tone.
 Speak with a clear, authoritative, and urgent reporting style. Deliver the news quickly and dynamically to keep the viewer hooked, ensuring the ending call-to-action (if any) sounds highly compelling and natural.
 Ensure clear articulation and punch the key words to maintain high engagement.
 

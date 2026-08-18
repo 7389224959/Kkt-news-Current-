@@ -1,0 +1,2646 @@
+# AI STUDIO MIGRATION INSTRUCTIONS
+
+Please implement the Reel Generation System using the following files and configurations.
+
+## 1. Dependencies
+Run the following command to install the necessary packages:
+```bash
+npm install @google/genai fluent-ffmpeg ffmpeg-static ffprobe-static lucide-react
+npm install -D @types/fluent-ffmpeg
+```
+
+
+## File: api/render-reel.js
+Create or overwrite this file with the exact content below:
+```javascript
+export const maxDuration = 300;
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegStatic from "ffmpeg-static";
+import ffprobeStatic from "ffprobe-static";
+import fs from "fs";
+import path from "path";
+import os from "os";
+import { buildAnchorVideoFromFile, overlayAnchorOnReel, getAnchorConfig } from "../services/anchorVideoService.js";
+ffmpeg.setFfmpegPath(ffmpegStatic);
+ffmpeg.setFfprobePath(ffprobeStatic.path);
+
+const downloadFile = async (url, dest) => {
+  if (!url) throw new Error("URL is missing");
+
+  if (url.startsWith("data:")) {
+    const matches = url.match(
+      /^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+)?(?:;charset=[a-zA-Z0-9-]+)?(;base64)?,(.*)$/,
+    );
+    if (!matches) throw new Error("Invalid data URI");
+    const isBase64 = matches[2] === ";base64";
+    const dataString = matches[3];
+    const buffer = Buffer.from(
+      isBase64 ? dataString : decodeURIComponent(dataString),
+      isBase64 ? "base64" : "utf8",
+    );
+    fs.writeFileSync(dest, buffer);
+    return;
+  }
+
+  if (url.startsWith("/")) {
+    url = `http://localhost:${process.env.PORT || 3000}${url}`;
+  }
+
+  // Unwrap duckduckgo proxy URLs if they exist in state
+  if (url.startsWith("https://external-content.duckduckgo.com/iu/?u=")) {
+    try {
+      const parsedUrl = new URL(url);
+      const uParam = parsedUrl.searchParams.get("u");
+      if (uParam) {
+        url = uParam;
+      }
+    } catch(e) {
+      // ignore parse error
+    }
+  }
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    });
+    if (!response.ok) {
+      console.warn(`Failed to fetch ${url}: ${response.statusText}, using fallback image`);
+      const base64BlackPixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+      fs.writeFileSync(dest, Buffer.from(base64BlackPixel, 'base64'));
+      return;
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    fs.writeFileSync(dest, buffer);
+  } catch (error) {
+    console.warn(`Error fetching ${url}: ${error.message}, using fallback image`);
+    const base64BlackPixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+    fs.writeFileSync(dest, Buffer.from(base64BlackPixel, 'base64'));
+  }
+};
+
+const createSyntheticWav = (filepath, durationSeconds = 5, synthFn = null) => {
+  const sampleRate = 44100;
+  const numChannels = 2;
+  const bytesPerSample = 2;
+  const numSamples = Math.floor(sampleRate * durationSeconds);
+  const dataSize = numSamples * numChannels * bytesPerSample;
+  const buffer = Buffer.alloc(44 + dataSize);
+
+  buffer.write("RIFF", 0);
+  buffer.writeUInt32LE(36 + dataSize, 4);
+  buffer.write("WAVE", 8);
+
+  buffer.write("fmt ", 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(numChannels, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * numChannels * bytesPerSample, 28);
+  buffer.writeUInt16LE(numChannels * bytesPerSample, 32);
+  buffer.writeUInt16LE(bytesPerSample * 8, 34);
+
+  buffer.write("data", 36);
+  buffer.writeUInt32LE(dataSize, 40);
+
+  let offset = 44;
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const val = synthFn ? synthFn(t) : 0;
+    const clamped = Math.max(-1, Math.min(1, val));
+    const int16 = Math.floor(clamped * 32767);
+    buffer.writeInt16LE(int16, offset);
+    buffer.writeInt16LE(int16, offset + 2);
+    offset += 4;
+  }
+
+  fs.writeFileSync(filepath, buffer);
+};
+
+const createSilentWav = (filepath, durationSeconds = 5) => {
+  createSyntheticWav(filepath, durationSeconds, null);
+};
+
+export default async function handler(req, res) {
+  if (req.method !== "POST")
+    return res.status(405).json({ error: "Method not allowed" });
+
+  try {
+    const {
+      audioUrl,
+      templateMediaUrl,
+      scriptData,
+      template,
+      styleOverrides = {},
+      directorScenes = [],
+      anchorVideoUrl,
+    } = req.body;
+    if (!templateMediaUrl || !template)
+      return res.status(400).json({ error: "Missing required parameters." });
+
+    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "reel-"));
+    console.log("Working in temp directory:", tempDir);
+
+    const backgroundPath = path.join(tempDir, "background.mp4");
+    const fontPath = path.join(tempDir, "font.ttf");
+    const middlePath = path.join(tempDir, "middle.mp4");
+
+    const introMediaUrl = template.introMediaUrl;
+    const outroMediaUrl = template.outroMediaUrl;
+    const bgmUrl = template.bgmUrl;
+
+    let introPath = null;
+    let outroPath = null;
+    let bgmPath = null;
+
+    if (introMediaUrl) {
+      introPath = path.join(tempDir, "intro.mp4");
+      await downloadFile(introMediaUrl, introPath);
+    }
+    if (outroMediaUrl) {
+      outroPath = path.join(tempDir, "outro.mp4");
+      await downloadFile(outroMediaUrl, outroPath);
+    }
+    if (bgmUrl) {
+      bgmPath = path.join(tempDir, "bgm.mp3");
+      await downloadFile(bgmUrl, bgmPath);
+    }
+
+    const { overlayMediaUrl, visuals = [] } = req.body;
+    let downloadedVisuals = [];
+    for (let i = 0; i < visuals.length; i++) {
+      const extMatch = visuals[i].match(/\.(mp4|mov|webm|gif|webp)$/i);
+      const ext = extMatch ? extMatch[0] : '';
+      const rawP = path.join(tempDir, `visual_raw_${i}`);
+      await downloadFile(visuals[i], rawP);
+
+      const isVideo = await new Promise((resolve) => {
+        ffmpeg.ffprobe(rawP, (err, meta) => {
+          if (err || !meta || !meta.streams) return resolve(false);
+          const vStream = meta.streams.find(s => s.codec_type === 'video');
+          if (!vStream) return resolve(false);
+          // treat gif and webp as potentially animated (video)
+          if (vStream.codec_name && ['mjpeg', 'png'].includes(vStream.codec_name)) return resolve(false);
+          if (vStream.codec_name && ['webp'].includes(vStream.codec_name) && vStream.nb_frames && parseInt(vStream.nb_frames) === 1) return resolve(false);
+          if (vStream.nb_frames && parseInt(vStream.nb_frames) === 1 && vStream.codec_name !== 'gif') return resolve(false);
+          resolve(true);
+        });
+      });
+
+      const finalExt = isVideo ? (ext || '.mp4') : (ext || '.jpg');
+      const finalP = path.join(tempDir, `visual_${i}${finalExt}`);
+      fs.renameSync(rawP, finalP);
+
+      downloadedVisuals.push({ file: finalP, url: visuals[i], isVideo });
+    }
+    if (downloadedVisuals.length === 0 && overlayMediaUrl) {
+      const p = path.join(tempDir, "overlay.mp4");
+      await downloadFile(overlayMediaUrl, p);
+      downloadedVisuals.push({ file: p, url: overlayMediaUrl, isVideo: true });
+    }
+
+    // Move first video/gif to the beginning
+    const firstVideoIndex = downloadedVisuals.findIndex(v => v.isVideo);
+    if (firstVideoIndex > 0) {
+      const firstVideo = downloadedVisuals.splice(firstVideoIndex, 1)[0];
+      downloadedVisuals.unshift(firstVideo);
+    }
+
+    // Ensure 5-6 scenes if not enough by repeating
+    if (downloadedVisuals.length > 0 && downloadedVisuals.length < 5) {
+      const original = [...downloadedVisuals];
+      while (downloadedVisuals.length < 5) {
+        downloadedVisuals.push(
+          original[downloadedVisuals.length % original.length],
+        );
+      }
+    }
+
+    let audioPath = null;
+    if (audioUrl) {
+      audioPath = path.join(tempDir, "audio.wav");
+      await downloadFile(audioUrl, audioPath);
+    }
+    // [ANCHOR] Kick the FREE talking-head build NOW; the slow HF-Space HTTP call
+    // then runs in parallel with the heavy first encode. Failure => null (C5).
+    const anchorConfig = await getAnchorConfig();
+    let anchorPromise = Promise.resolve(null);
+    if (anchorVideoUrl) {
+      anchorPromise = (async () => {
+        const p = path.join(tempDir, "anchor_prebuilt.mp4");
+        await downloadFile(anchorVideoUrl, p);
+        return p;
+      })();
+    } else if (anchorConfig.enabled && audioPath) {
+      anchorPromise = buildAnchorVideoFromFile({ audioPath, tempDir, config: anchorConfig }).catch(e => {
+        console.warn("[anchor] build failed, rendering without anchor:", e?.message || e);
+        return null; 
+      });
+    }
+    await downloadFile(templateMediaUrl, backgroundPath);
+    const isJson = scriptData.headline && scriptData.headline.includes('{');
+    await downloadFile(
+      isJson ? "https://raw.githubusercontent.com/google/fonts/main/ofl/robotomono/RobotoMono-Bold.ttf" : "https://raw.githubusercontent.com/google/fonts/main/ofl/hind/Hind-Bold.ttf",
+      fontPath,
+    );
+
+    // Scale factor for 720p
+    const targetW = 720;
+    const targetH = 1280;
+    const scaleFactor = targetW / 1080;
+    const parseAndScaleCoords = (cStr) =>
+      cStr.split(",").map((n) => Math.round(Number(n) * scaleFactor / 2) * 2);
+
+    const vBox =
+      template.coordinates.video_box && template.coordinates.video_box !== "hidden"
+        ? parseAndScaleCoords(template.coordinates.video_box)
+        : null;
+    const hBox =
+      template.coordinates.headline_box && template.coordinates.headline_box !== "hidden"
+        ? parseAndScaleCoords(template.coordinates.headline_box)
+        : null;
+    const sBox =
+      template.coordinates.subtitle_box &&
+      template.coordinates.subtitle_box !== "hidden"
+        ? parseAndScaleCoords(template.coordinates.subtitle_box)
+        : null;
+    const jBox =
+      template.coordinates.json_box &&
+      template.coordinates.json_box !== "hidden"
+        ? parseAndScaleCoords(template.coordinates.json_box)
+        : null;
+    const tBox =
+      template.coordinates.ticker_box && template.coordinates.ticker_box !== "hidden"
+        ? parseAndScaleCoords(template.coordinates.ticker_box)
+        : null;
+
+    const wrapText = (text, maxWidth, fontSize) => {
+      const charWidth = fontSize * 0.45;
+      const maxChars = Math.max(10, Math.floor(maxWidth / charWidth));
+      let finalLines = [];
+      const originalLines = String(text).split("\n");
+      
+      for (const origLine of originalLines) {
+        const words = origLine.split(" ");
+        let currentLine = "";
+        for (const word of words) {
+          if (
+            currentLine.length + word.length + 1 > maxChars &&
+            currentLine.length > 0
+          ) {
+            finalLines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine += (currentLine ? " " : "") + word;
+          }
+        }
+        if (currentLine) finalLines.push(currentLine);
+      }
+      return finalLines.join("\n");
+    };
+
+    const preset = scriptData.stylePreset || "";
+    const isImage = !templateMediaUrl.match(/\.(mp4|mov|webm)$/i);
+
+    const filterGraph = [];
+
+    if (isImage) {
+      filterGraph.push(
+        {
+          filter: "scale",
+          options: `${targetW}:${targetH}:force_original_aspect_ratio=increase`,
+          inputs: "0:v",
+          outputs: "bg_scaled_raw",
+        },
+        {
+          filter: "crop",
+          options: `${targetW}:${targetH}`,
+          inputs: "bg_scaled_raw",
+          outputs: "bg_cropped_raw",
+        },
+        {
+          filter: "boxblur",
+          options: "luma_radius=15:luma_power=1",
+          inputs: "bg_cropped_raw",
+          outputs: "bg_blurred",
+        },
+        {
+          filter: "scale",
+          options: `${targetW}:${targetH}:force_original_aspect_ratio=decrease`,
+          inputs: "0:v",
+          outputs: "fg_scaled",
+        },
+        {
+          filter: "overlay",
+          options: "(W-w)/2:(H-h)/2",
+          inputs: ["bg_blurred", "fg_scaled"],
+          outputs: "bg_composed",
+        },
+        { filter: "null", inputs: "bg_composed", outputs: "bg_cropped" },
+      );
+    } else {
+      filterGraph.push(
+        {
+          filter: "scale",
+          options: `${targetW}:${targetH}:force_original_aspect_ratio=increase`,
+          inputs: "0:v",
+          outputs: "bg_scaled",
+        },
+        {
+          filter: "crop",
+          options: `${targetW}:${targetH}`,
+          inputs: "bg_scaled",
+          outputs: "bg_cropped",
+        },
+      );
+    }
+
+
+    let currentOutput = "bg_cropped";
+    let nextInputIndex = 1;
+
+    const delayTime = template.isIntroCombined ? (Number(template.introDuration) || 0) : 0;
+
+    // Prepare text content for words counting
+    let rawLines =
+      Array.isArray(scriptData.subtitleChunks) &&
+      scriptData.subtitleChunks.length > 0
+        ? scriptData.subtitleChunks
+        : Array.isArray(scriptData.subtitles) && scriptData.subtitles.length > 0
+          ? scriptData.subtitles
+          : null;
+    if (!rawLines && scriptData.voiceoverScript) {
+      rawLines = String(scriptData.voiceoverScript)
+        .split(/[,.।!?]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    const subtitleLines = rawLines || ["Subtitle missing"];
+    // Accurately count words to ensure timing sums exactly to 1.0
+    const totalWords = Math.max(
+      1,
+      subtitleLines.reduce(
+        (acc, sub) =>
+          acc + String(sub).trim().split(/\s+/).filter(Boolean).length,
+        0,
+      ),
+    );
+    const voiceoverWords = scriptData.voiceoverScript
+      ? String(scriptData.voiceoverScript).trim().split(/\s+/).filter(Boolean)
+          .length
+      : totalWords;
+    let exactAudioDuration = Math.max(10, voiceoverWords / 2.0);
+
+    if (audioPath) {
+      try {
+        const metadata = await new Promise((resolve, reject) =>
+          ffmpeg.ffprobe(audioPath, (err, meta) =>
+            err ? reject(err) : resolve(meta),
+          ),
+        );
+        if (metadata && metadata.format && metadata.format.duration) {
+          exactAudioDuration = parseFloat(metadata.format.duration);
+          console.log("Probed exact audio duration:", exactAudioDuration);
+        }
+      } catch (e) {
+        console.warn("Failed to probe audio", e);
+      }
+    }
+
+    let overlayInputs = [];
+    if (downloadedVisuals.length > 0 && vBox) {
+      const sceneDur = exactAudioDuration / downloadedVisuals.length;
+      const totalFrames = sceneDur * 25; // roughly the frames per scene
+
+      const motions = [
+        `z='1+0.2*(on/${totalFrames})'`, // zoom_in continuously
+        `z='1.2-0.2*(on/${totalFrames})'`, // zoom_out continuously
+        `z=1.1:x='iw*0.05*(1-on/${totalFrames})':y='y'`, // pan_left
+        `z=1.1:x='iw*0.05*(on/${totalFrames})':y='y'`, // pan_right
+        `z='1.1+0.1*(on/${totalFrames})':x='iw*0.05*(on/${totalFrames})':y='ih*0.05*(on/${totalFrames})'`, // ken_burns
+      ];
+
+      const transitions = [
+        "fade",
+        "slideleft",
+        "slideright",
+        "fadeblack",
+        "dissolve",
+      ];
+
+      for (let i = 0; i < downloadedVisuals.length; i++) {
+        const item = downloadedVisuals[i];
+        const idx = nextInputIndex++;
+        const isImgInfo = !item.isVideo;
+
+        filterGraph.push({
+          filter: "scale",
+          options: `${vBox[2]}:${vBox[3]}:force_original_aspect_ratio=increase`,
+          inputs: `${idx}:v`,
+          outputs: `vis_scaled_raw_${i}`,
+        });
+        filterGraph.push({
+          filter: "setsar",
+          options: "1",
+          inputs: `vis_scaled_raw_${i}`,
+          outputs: `vis_scaled_${i}`,
+        });
+        filterGraph.push({
+          filter: "crop",
+          options: `${vBox[2]}:${vBox[3]}`,
+          inputs: `vis_scaled_${i}`,
+          outputs: `vis_cropped_${i}`,
+        });
+
+        if (isImgInfo) {
+          let motion = motions[i % motions.length];
+          if (directorScenes && directorScenes[i] && directorScenes[i].motion) {
+             const dm = directorScenes[i].motion;
+             if (dm === 'slow_zoom_in' || dm === 'push_in') motion = motions[0];
+             else if (dm === 'slow_zoom_out' || dm === 'push_out') motion = motions[1];
+             else if (dm === 'pan_left') motion = motions[2];
+             else if (dm === 'pan_right') motion = motions[3];
+             else if (dm === 'parallax' || dm === 'spotlight_focus') motion = motions[4];
+          }
+          filterGraph.push({
+            filter: "zoompan",
+            options: `${motion}:d=${Math.ceil(sceneDur * 25) + 50}:s=${vBox[2]}x${vBox[3]}`,
+            inputs: `vis_cropped_${i}`,
+            outputs: `vis_motion_${i}`,
+          });
+          filterGraph.push({
+            filter: "trim",
+            options: `duration=${sceneDur + 1.0}`,
+            inputs: `vis_motion_${i}`,
+            outputs: `vis_trimmed_${i}`,
+          });
+        } else {
+          filterGraph.push({
+            filter: "setpts",
+            options: "PTS-STARTPTS",
+            inputs: `vis_cropped_${i}`,
+            outputs: `vis_ptsed_${i}`,
+          });
+          filterGraph.push({
+            filter: "fps",
+            options: "25",
+            inputs: `vis_ptsed_${i}`,
+            outputs: `vis_fps_${i}`,
+          });
+          filterGraph.push({
+            filter: "trim",
+            options: `duration=${sceneDur + 1.0}`,
+            inputs: `vis_fps_${i}`,
+            outputs: `vis_trimmed_${i}`,
+          });
+        }
+
+        filterGraph.push({
+          filter: "format",
+          options: "yuv420p",
+          inputs: `vis_trimmed_${i}`,
+          outputs: `vis_formatted_${i}`,
+        });
+
+        filterGraph.push({
+          filter: "setpts",
+          options: "PTS-STARTPTS",
+          inputs: `vis_formatted_${i}`,
+          outputs: `vis_ready_${i}`,
+        });
+      }
+
+      // xfade them together
+      let currentVis = `vis_ready_0`;
+      for (let i = 1; i < downloadedVisuals.length; i++) {
+        let trans = transitions[i % transitions.length];
+        if (directorScenes && directorScenes[i] && directorScenes[i].transition) {
+            const dt = directorScenes[i].transition;
+            if (dt === 'slideleft' || dt === 'slideright' || dt === 'fadeblack' || dt === 'dissolve') {
+                trans = dt;
+            } else if (dt === 'flash_transition') {
+                trans = 'fadeblack';
+            }
+        }
+        const offset = i * sceneDur;
+        filterGraph.push({
+          filter: "xfade",
+          options: `transition=${trans}:duration=0.5:offset=${offset}`,
+          inputs: [currentVis, `vis_ready_${i}`],
+          outputs: `xfade_${i}`,
+        });
+        currentVis = `xfade_${i}`;
+      }
+
+      filterGraph.push({
+        filter: "overlay",
+        options: `x=${vBox[0]}:y=${vBox[1]}:enable='gte(t,${delayTime})'`,
+        inputs: [currentOutput, currentVis],
+        outputs: "with_overlay",
+      });
+      currentOutput = "with_overlay";
+    }
+
+    if (scriptData.headline && hBox) {
+      const fontSize = Math.round(
+        (Number(styleOverrides.headlineSize) || 80) * scaleFactor,
+      );
+      const headlinePath = path.join(tempDir, "headline.txt");
+      const wrappedHeadline = wrapText(scriptData.headline, hBox[2], fontSize);
+      fs.writeFileSync(headlinePath, wrappedHeadline);
+      filterGraph.push({
+        filter: "drawtext",
+        options: {
+          fontfile: fontPath,
+          fontcolor: styleOverrides.headlineColor || "yellow",
+          fontsize: fontSize.toString(),
+          x: `${hBox[0]}+(${hBox[2]}-text_w)/2`,
+          y: `${hBox[1]}+(${hBox[3]}-text_h)/2`,
+          textfile: headlinePath,
+          shadowcolor: "black@0.9",
+          shadowx: "4",
+          shadowy: "4",
+          bordercolor: "black",
+          borderw: "4",
+          enable: `gte(t,${delayTime})`,
+        },
+        inputs: currentOutput,
+        outputs: "with_headline",
+      });
+      currentOutput = "with_headline";
+    }
+
+    if (scriptData.headline && jBox) {
+      try {
+        let jsonObj = typeof scriptData.headline === 'string' ? JSON.parse(scriptData.headline) : scriptData.headline;
+        const keys = Object.keys(jsonObj);
+        
+        filterGraph.push({
+          filter: "drawbox",
+          options: {
+            x: jBox[0],
+            y: jBox[1],
+            w: jBox[2],
+            h: jBox[3],
+            color: "black@0.8",
+            t: "fill",
+            enable: `gte(t,${delayTime})`
+          },
+          inputs: currentOutput,
+          outputs: "with_json_bg"
+        });
+        currentOutput = "with_json_bg";
+
+        let currentYOffset = jBox[1] + Math.round(20 * scaleFactor);
+        
+        let i = 0;
+        for (const key of keys) {
+          const value = jsonObj[key];
+          const keyFontSize = Math.round(35 * scaleFactor);
+          const valFontSize = Math.round(45 * scaleFactor);
+          const paddingY = Math.round(15 * scaleFactor);
+          
+          const keyPath = path.join(tempDir, `json_key_${i}.txt`);
+          fs.writeFileSync(keyPath, String(key).toUpperCase());
+          filterGraph.push({
+            filter: "drawtext",
+            options: {
+              fontfile: fontPath,
+              fontcolor: "#FBBF24",
+              fontsize: keyFontSize.toString(),
+              x: `${jBox[0]}`,
+              y: `${currentYOffset}`,
+              textfile: keyPath,
+              shadowcolor: "black@0.9",
+              shadowx: "4",
+              shadowy: "4",
+              enable: `gte(t,${delayTime})`,
+            },
+            inputs: currentOutput,
+            outputs: `with_json_key_${i}`,
+          });
+          currentOutput = `with_json_key_${i}`;
+          
+          currentYOffset += keyFontSize + Math.round(5 * scaleFactor);
+          
+          const valPath = path.join(tempDir, `json_val_${i}.txt`);
+          fs.writeFileSync(valPath, String(value));
+          filterGraph.push({
+            filter: "drawtext",
+            options: {
+              fontfile: fontPath,
+              fontcolor: "white",
+              fontsize: valFontSize.toString(),
+              x: `${jBox[0]}`,
+              y: `${currentYOffset}`,
+              textfile: valPath,
+              shadowcolor: "black@0.9",
+              shadowx: "4",
+              shadowy: "4",
+              enable: `gte(t,${delayTime})`,
+            },
+            inputs: currentOutput,
+            outputs: `with_json_val_${i}`,
+          });
+          currentOutput = `with_json_val_${i}`;
+          
+          currentYOffset += valFontSize + paddingY;
+          i++;
+        }
+      } catch (e) {
+        console.warn("Failed to parse json_box headline:", e);
+      }
+    }
+
+    if (scriptData.ticker && tBox) {
+      const fontSize = Math.round(
+        (Number(styleOverrides.tickerSize) || 50) * scaleFactor,
+      );
+      const tickerPath = path.join(tempDir, "ticker.txt");
+      fs.writeFileSync(tickerPath, String(scriptData.ticker));
+      const speed = Math.round(
+        (template.style_rules.ticker_speed || 150) * scaleFactor,
+      );
+
+      // Draw static background box for ticker
+      filterGraph.push({
+        filter: "drawbox",
+        options: {
+          x: tBox[0],
+          y: tBox[1],
+          w: tBox[2],
+          h: tBox[3],
+          color: styleOverrides.tickerBg || "red@0.8",
+          t: "fill",
+          enable: `gte(t,${delayTime})`,
+        },
+        inputs: currentOutput,
+        outputs: "with_ticker_bg",
+      });
+
+      // Draw moving text over the background
+      filterGraph.push({
+        filter: "drawtext",
+        options: {
+          fontfile: fontPath,
+          fontcolor: styleOverrides.tickerColor || "white",
+          fontsize: fontSize.toString(),
+          x: `${tBox[0]}+${tBox[2]}-(t*${speed})`,
+          y: `${tBox[1]}+(${tBox[3]}-text_h)/2`,
+          textfile: tickerPath,
+          shadowcolor: "black@0.5",
+          shadowx: "2",
+          shadowy: "2",
+          enable: `gte(t,${delayTime})`,
+        },
+        inputs: "with_ticker_bg",
+        outputs: "with_ticker",
+      });
+      currentOutput = "with_ticker";
+    }
+
+    if ((scriptData.subtitles || scriptData.subtitleChunks) && sBox) {
+      const fontSize = Math.round(
+        (Number(styleOverrides.subtitleSize) || 65) * scaleFactor,
+      );
+
+      let currentTime = 0;
+
+      subtitleLines.forEach((sub, index) => {
+        const nextOutput = `sub_${index}`;
+        const subPath = path.join(tempDir, `sub_${index}.txt`);
+        const wrappedSub = wrapText(sub, sBox[2], fontSize);
+        fs.writeFileSync(subPath, wrappedSub);
+
+        const words = String(sub).trim().split(/\s+/).filter(Boolean).length;
+        // The proportion of the total text length dictates the duration this chunk is shown.
+        let duration = (words / totalWords) * exactAudioDuration;
+
+        const startT = currentTime + delayTime;
+        const endT = currentTime + duration + delayTime;
+        currentTime += duration;
+
+        filterGraph.push({
+          filter: "drawtext",
+          options: {
+            fontfile: fontPath,
+            fontcolor: styleOverrides.subtitleColor || "white",
+            fontsize: fontSize.toString(),
+            x: `${sBox[0]}+(${sBox[2]}-text_w)/2`,
+            y: `${sBox[1]}+(${sBox[3]}-text_h)/2`,
+            textfile: subPath,
+            shadowcolor: "black@0.9",
+            shadowx: "3",
+            shadowy: "3",
+            bordercolor: "black",
+            borderw: "4",
+            enable: `between(t,${startT.toFixed(2)},${endT.toFixed(2)})`,
+          },
+          inputs: currentOutput,
+          outputs: nextOutput,
+        });
+        currentOutput = nextOutput;
+      });
+    }
+
+    console.log(
+      "Starting FFmpeg with comprehensive layout and subtitle pass...",
+    );
+
+    const hasBgAudio = await new Promise((res) => {
+      ffmpeg.ffprobe(backgroundPath, (err, metadata) => {
+        if (err || !metadata || !metadata.streams) res(false);
+        else res(metadata.streams.some(s => s.codec_type === 'audio'));
+      });
+    });
+
+    await new Promise((resolve, reject) => {
+      let command = ffmpeg();
+
+      command = command
+        .input(backgroundPath)
+        .inputOptions(["-stream_loop", "-1"]);
+
+      if (downloadedVisuals.length > 0 && vBox) {
+        for (let i = 0; i < downloadedVisuals.length; i++) {
+          const item = downloadedVisuals[i];
+          let inputOpts = ["-stream_loop", "-1", "-an"];
+          command = command
+              .input(item.file)
+              .inputOptions(inputOpts);
+        }
+      }
+
+      let audioIndex = -1;
+      let bgmIndex = -1;
+      let sfxIndex = -1;
+
+      if (audioPath) {
+        audioIndex = nextInputIndex++;
+        command = command.input(audioPath);
+      }
+
+      const sceneDur =
+        downloadedVisuals.length > 0
+          ? exactAudioDuration / downloadedVisuals.length
+          : 5;
+
+      // Custom BGM or Drone BGM
+      let bgmInputRef = null;
+      if (bgmPath) {
+        bgmIndex = nextInputIndex++;
+        command = command.input(bgmPath).inputOptions(["-stream_loop", "-1"]);
+        bgmInputRef = `${bgmIndex}:a`;
+      } else {
+        const synthBgmPath = path.join(tempDir, "synth_bgm.wav");
+        createSyntheticWav(synthBgmPath, 30, (t) => 0.1 * Math.sin(2 * Math.PI * 110 * t) + 0.05 * Math.sin(2 * Math.PI * 165 * t));
+        bgmIndex = nextInputIndex++;
+        command = command.input(synthBgmPath).inputOptions(["-stream_loop", "-1"]);
+        bgmInputRef = `${bgmIndex}:a`;
+      }
+
+      // Whoosh SFX at transitions
+      const synthSfxPath = path.join(tempDir, "synth_sfx.wav");
+      createSyntheticWav(synthSfxPath, 30, (t) => {
+        const modT = t % sceneDur;
+        return modT < 0.5 ? 0.3 * Math.sin(440 * 2 * Math.PI * t) * Math.exp(-modT * 5) : 0;
+      });
+      sfxIndex = nextInputIndex++;
+      command = command.input(synthSfxPath).inputOptions(["-stream_loop", "-1"]);
+      const sfxInputRef = `${sfxIndex}:a`;
+
+      let durationLimit = (audioPath ? exactAudioDuration : 15) + delayTime;
+
+      let outOpts = [
+        "-c:v libx264",
+        "-preset ultrafast",
+        "-crf 32", // Reduced quality for faster processing
+        "-pix_fmt yuv420p",
+        "-r",
+        "24", // Reduce frame rate to speed up rendering
+        "-t",
+        durationLimit.toString(),
+        "-threads",
+        "2", // Prevent resource exhaustion in Vercel limits
+      ];
+
+      if (true) { // Always mix available audio tracks so output always has audio
+        const mixInputs = [];
+        if (hasBgAudio) {
+          filterGraph.push({
+            filter: "volume",
+            options: "1.0",
+            inputs: "0:a",
+            outputs: "bg_media_audio",
+          });
+          mixInputs.push("bg_media_audio");
+        }
+
+        if (audioPath) {
+          filterGraph.push(
+            {
+              filter: "adelay",
+              options: `${delayTime * 1000}|${delayTime * 1000}`,
+              inputs: `${audioIndex}:a`,
+              outputs: "vo_delayed",
+            },
+            {
+              filter: "highpass",
+              options: "f=80",
+              inputs: "vo_delayed",
+              outputs: "vo_hp"
+            },
+            {
+              filter: "equalizer",
+              options: "f=3500:t=h:width=1500:g=3",
+              inputs: "vo_hp",
+              outputs: "vo_eq"
+            },
+            {
+              filter: "acompressor",
+              options: "threshold=-18dB:ratio=3",
+              inputs: "vo_eq",
+              outputs: "vo_comp"
+            },
+            {
+              filter: "loudnorm",
+              options: "I=-16:TP=-1.5:LRA=11",
+              inputs: "vo_comp",
+              outputs: "vo_norm"
+            },
+            {
+              filter: "volume",
+              options: "0.8",
+              inputs: "vo_norm",
+              outputs: "vo_mix",
+            }
+          );
+          mixInputs.push("vo_mix");
+        }
+
+        filterGraph.push(
+          {
+            filter: "adelay",
+            options: `${delayTime * 1000}|${delayTime * 1000}`,
+            inputs: sfxInputRef,
+            outputs: "sfx_delayed",
+          },
+          {
+            filter: "adelay",
+            options: `${delayTime * 1000}|${delayTime * 1000}`,
+            inputs: bgmInputRef,
+            outputs: "bgm_delayed",
+          },
+          {
+            filter: "volume",
+            options: bgmPath ? "0.2" : "0.12",
+            inputs: "bgm_delayed",
+            outputs: "bgm_mix",
+          },
+          {
+            filter: "volume",
+            options: "0.18",
+            inputs: "sfx_delayed",
+            outputs: "sfx_mix",
+          }
+        );
+        mixInputs.push("bgm_mix", "sfx_mix");
+
+        filterGraph.push(
+          {
+            filter: "amix",
+            options: `inputs=${mixInputs.length}:duration=first:dropout_transition=2`,
+            inputs: mixInputs,
+            outputs: "mixed_audio",
+          },
+          {
+            filter: "volume",
+            options: "3.0",
+            inputs: "mixed_audio",
+            outputs: "final_audio",
+          }
+        );
+        outOpts = [
+          "-map",
+          "[final_audio]",
+          ...outOpts,
+          "-c:a",
+          "aac",
+          "-shortest",
+        ];
+      }
+
+      console.log("Filter graph:", JSON.stringify(filterGraph, null, 2));
+
+      command
+        .complexFilter(filterGraph)
+        .map(currentOutput)
+        .outputOptions(outOpts)
+        .save(middlePath)
+        .on("end", () => resolve())
+        .on("error", (err) => reject(err));
+    });
+
+    let finalPath = middlePath;
+    if (introPath || outroPath) {
+      finalPath = path.join(tempDir, "final.mp4");
+      
+      const hasAudio = await Promise.all([introPath, middlePath, outroPath].map(async (p) => {
+        if(!p) return false;
+        return new Promise((res) => {
+          ffmpeg.ffprobe(p, (err, metadata) => {
+            if (err) res(false);
+            else res(metadata.streams.some(s => s.codec_type === 'audio'));
+          });
+        });
+      }));
+
+      const introHasAudio = hasAudio[0];
+      const middleHasAudio = hasAudio[1];
+      const outroHasAudio = hasAudio[2];
+
+      await new Promise((resolve, reject) => {
+        const silentAudioPath = path.join(tempDir, "silent.wav");
+        createSilentWav(silentAudioPath, 5);
+
+        let concatCommand = ffmpeg();
+        let filterParts = [];
+        let concatInputs = [];
+        
+        // Add silent.wav as input so we can use it to substitute missing audio
+        concatCommand = concatCommand.input(silentAudioPath).inputOptions(["-stream_loop", "-1"]);
+        // Its input index is 0
+        
+        let fileIdx = 0;
+        let actualFileIdx = 1; // since anullsrc is at index 0
+        
+        // Restructure adding parts
+        const addPart = (fPath, hasA) => {
+          concatCommand = concatCommand.input(fPath);
+          filterParts.push(`[${actualFileIdx}:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,format=yuv420p[v${fileIdx}]`);
+          
+          if (hasA) {
+            filterParts.push(`[${actualFileIdx}:a]afifo[a${fileIdx}]`);
+          } else {
+            // map from anullsrc (which is at index 0)
+            filterParts.push(`[0:a]afifo[a${fileIdx}]`);
+          }
+
+          concatInputs.push(`[v${fileIdx}][a${fileIdx}]`);
+          fileIdx++;
+          actualFileIdx++;
+        };
+
+        if (introPath) addPart(introPath, introHasAudio);
+        addPart(middlePath, middleHasAudio);
+        if (outroPath) addPart(outroPath, outroHasAudio);
+
+        const complexFilterStr = filterParts.join(';') + ';' + concatInputs.join('') + `concat=n=${fileIdx}:v=1:a=1[outv][outa]`;
+
+        console.log("Concat filter graph:", complexFilterStr);
+
+        concatCommand
+          .complexFilter(complexFilterStr)
+          .map('[outv]')
+          .map('[outa]')
+          .outputOptions([
+             "-c:v libx264",
+             "-preset ultrafast",
+             "-crf 32",
+             "-pix_fmt yuv420p",
+             "-r 24",
+             "-c:a aac"
+          ])
+          .save(finalPath)
+          .on("end", () => resolve())
+          .on("error", (err) => reject(err));
+      });
+    }
+
+    // [ANCHOR] Composite the talking-head as a framed presenter box (cheap 2nd
+    // pass). Audio copied untouched so lips stay in sync (C3/C6).
+    const anchorLocal = await anchorPromise;
+    if (anchorLocal) {
+      try {
+        finalPath = await overlayAnchorOnReel({ reelPath: finalPath, anchorPath: anchorLocal, tempDir, delayTime, config: anchorConfig });
+      } catch (e) { console.warn("[anchor] overlay failed, keeping reel without anchor:", e?.message || e); }
+    }
+
+    const outputBuffer = fs.readFileSync(finalPath);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Content-Length", outputBuffer.length);
+    return res.status(200).send(outputBuffer);
+  } catch (error) {
+    console.error("Error rendering reel:", error);
+    return res
+      .status(500)
+      .json({ error: error.message || "Failed to render reel" });
+  }
+}
+
+```
+
+## File: components/ClientReelWizard.tsx
+Create or overwrite this file with the exact content below:
+```tsx
+import React, { useState, useEffect } from 'react';
+import { RefreshCw, Zap, X, Image as ImageIcon, Video, Settings, Play, ChevronRight, ChevronLeft, Mic } from 'lucide-react';
+import { Client, SiteSettings, ReelTemplate } from '../types';
+import { generateClientReelScript, generateReelAudio, ANCHOR_VOICES } from '../services/geminiService';
+import { pcmBase64ToWavUrl, pcmBase64ToWavDataUri } from '../src/utils/audioUtils';
+import { getClients } from '../services/workerService';
+
+export default function ClientReelWizard({ settings, onClose }: { settings: any, onClose: () => void }) {
+  const [step, setStep] = useState(1);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [reelCategory, setReelCategory] = useState<string>('Hiring Reel');
+  const [prompt, setPrompt] = useState<string>('');
+  const [jobDetails, setJobDetails] = useState({ designation: '', location: '', salary: '', experience: '' });
+  
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [scriptData, setScriptData] = useState<any>({ fullScript: '', headline: '', ticker: '', voiceoverScript: '' });
+  const [selectedVoice, setSelectedVoice] = useState<string>('Puck');
+  
+  const [audioUrl, setAudioUrl] = useState('');
+  const [audioDataUri, setAudioDataUri] = useState('');
+  
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [status, setStatus] = useState('');
+
+  const REEL_CATEGORIES = ['Hiring Reel', 'Promotion Reel', 'Educational Reel', 'Testimonial', 'Service Showcase'];
+
+  useEffect(() => {
+    const loadClients = async () => {
+      const data = await getClients();
+      setClients(data);
+      if (data.length > 0) {
+        setSelectedClientId(data[0].id);
+        setSelectedClient(data[0]);
+      }
+    };
+    loadClients();
+  }, []);
+
+  const handleClientChange = (id: string) => {
+    setSelectedClientId(id);
+    setSelectedClient(clients.find(c => c.id === id) || null);
+  };
+
+  const templates: ReelTemplate[] = settings?.clientReelTemplates || settings?.reelTemplates || [];
+  // For now, allow all templates, later we can filter by client category
+  const filteredTemplates = templates;
+
+  const getBoxStyle = (boxName: string, defaultStyle: React.CSSProperties): React.CSSProperties => {
+    const t = filteredTemplates.find(t=>t.id===selectedTemplateId);
+    if (!t || !t.coordinates) {
+      return defaultStyle;
+    }
+    const coordStr = t.coordinates[boxName as keyof typeof t.coordinates];
+    if (!coordStr || coordStr === 'hidden') {
+      return defaultStyle;
+    }
+    const [x, y, w, h] = coordStr.split(',').map(Number);
+    return {
+      position: 'absolute',
+      left: `${(x / 1080) * 100}%`,
+      top: `${(y / 1920) * 100}%`,
+      width: `${(w / 1080) * 100}%`,
+      height: `${(h / 1920) * 100}%`,
+      zIndex: 20,
+      overflow: 'hidden'
+    };
+  };
+
+  const handleGenerateScript = async () => {
+    if (!selectedClient) return;
+    
+    const template = templates.find(t => t.id === selectedTemplateId);
+    
+    setIsGenerating(true);
+    setStatus('Generating script tailored for ' + selectedClient.business_name + '...');
+    try {
+      // Build specific prompt for hiring
+      let finalPrompt = prompt;
+      let prefilledHeadline = '';
+      if (reelCategory === 'Hiring Reel' && jobDetails.designation) {
+        finalPrompt = `Generate a hiring reel for ${jobDetails.designation} located in ${jobDetails.location} with salary ${jobDetails.salary} and experience required ${jobDetails.experience}. ${prompt}`;
+        prefilledHeadline = `{\n  "Role": "${jobDetails.designation}",\n  "Loc": "${jobDetails.location}",\n  "Pay": "${jobDetails.salary}",\n  "Exp": "${jobDetails.experience}"\n}`;
+      }
+
+      const data = await generateClientReelScript(selectedClient, reelCategory, finalPrompt, template);
+      
+      if (prefilledHeadline) {
+        data.headline = prefilledHeadline;
+      }
+      
+      setScriptData(data);
+      setStep(3);
+
+    } catch (e: any) {
+      alert("Error generating script: " + e.message);
+    } finally {
+      setIsGenerating(false);
+      setStatus('');
+    }
+  };
+
+  const handleGenerateAudio = async () => {
+    setIsGenerating(true);
+    setStatus('Generating voiceover...');
+    try {
+      const b64 = await generateReelAudio(scriptData.voiceoverScript, selectedVoice);
+      setAudioUrl(pcmBase64ToWavUrl(b64));
+      setAudioDataUri(pcmBase64ToWavDataUri(b64));
+      setStep(4);
+    } catch (e: any) {
+      alert("Error generating audio: " + e.message);
+    } finally {
+      setIsGenerating(false);
+      setStatus('');
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col w-full max-h-[90vh] lg:max-h-[80vh] border border-gray-100 overflow-y-auto">
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-4 text-white flex justify-between items-center shrink-0">
+        <div className="flex items-center space-x-2">
+          <Zap className="w-5 h-5 text-yellow-300" />
+          <h2 className="text-lg font-bold">Advanced Client Reel Generator</h2>
+        </div>
+        <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-full transition-colors">
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+
+      <div className="flex flex-col lg:flex-row flex-1">
+        {/* Left Panel: Steps & Controls */}
+        <div className="w-full lg:w-1/2 p-4 lg:p-6 lg:border-r border-gray-200">
+          
+          {step === 1 && (
+            <div className="space-y-6">
+              <h3 className="text-xl font-semibold">1. Select Client & Context</h3>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select Client</label>
+                <select 
+                  className="w-full border rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 transition-shadow"
+                  value={selectedClientId} 
+                  onChange={(e) => handleClientChange(e.target.value)}
+                >
+                  <option value="">-- Select Client --</option>
+                  {clients.map(c => (
+                    <option key={c.id} value={c.id}>{c.business_name} ({c.category})</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedClient && (
+                <div className="p-4 bg-blue-50 text-blue-800 rounded-lg text-sm">
+                  <strong>Business Type:</strong> {selectedClient.category}<br/>
+                  <strong>Services:</strong> {selectedClient.services}<br/>
+                  <strong>Offer:</strong> {selectedClient.offer || 'None set'}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reel Category</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {REEL_CATEGORIES.map(cat => (
+                    <button 
+                      key={cat}
+                      onClick={() => setReelCategory(cat)}
+                      className={`p-2 border rounded-lg text-sm font-medium transition-all ${reelCategory === cat ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              
+              {reelCategory === 'Hiring Reel' ? (
+                <div className="space-y-3 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <h4 className="font-bold text-gray-700 text-sm">Job Details (Will be formatted as JSON)</h4>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Designation</label>
+                    <input 
+                      value={jobDetails.designation}
+                      onChange={e => setJobDetails({...jobDetails, designation: e.target.value})}
+                      placeholder="e.g. Senior Credit Analyst"
+                      className="w-full border rounded p-2 text-sm"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Location</label>
+                      <input 
+                        value={jobDetails.location}
+                        onChange={e => setJobDetails({...jobDetails, location: e.target.value})}
+                        placeholder="e.g. New York, NY"
+                        className="w-full border rounded p-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Salary</label>
+                      <input 
+                        value={jobDetails.salary}
+                        onChange={e => setJobDetails({...jobDetails, salary: e.target.value})}
+                        placeholder="e.g. $120k - $150k"
+                        className="w-full border rounded p-2 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Experience</label>
+                    <input 
+                      value={jobDetails.experience}
+                      onChange={e => setJobDetails({...jobDetails, experience: e.target.value})}
+                      placeholder="e.g. 3-5 Years"
+                      className="w-full border rounded p-2 text-sm"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Specific Prompt (Optional)</label>
+                  <textarea 
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="e.g., We are urgently hiring 5 senior credit analysts..."
+                    className="w-full border rounded-lg p-3 h-24 focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+
+
+              <div className="pt-4 flex justify-end">
+                <button 
+                  onClick={() => setStep(2)}
+                  disabled={!selectedClientId}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                >
+                  Next: Choose Template <ChevronRight className="w-4 h-4 ml-1" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-6">
+              <div className="flex items-center space-x-2">
+                <button onClick={() => setStep(1)} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5"/></button>
+                <h3 className="text-xl font-semibold">2. Choose Template</h3>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                {filteredTemplates.map(t => (
+                  <div 
+                    key={t.id}
+                    onClick={() => setSelectedTemplateId(t.id)}
+                    className={`cursor-pointer border-2 rounded-xl overflow-hidden transition-all ${selectedTemplateId === t.id ? 'border-blue-600 shadow-md scale-[1.02]' : 'border-gray-200 hover:border-blue-300'}`}
+                  >
+                    <div className="aspect-[9/16] relative bg-black">
+                       <img src={t.screenshotUrl || t.mediaUrl} className="w-full h-full object-cover opacity-80" />
+                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-end p-3 text-white">
+                         <span className="font-bold text-sm truncate">{t.name}</span>
+                         <span className="text-xs text-blue-300 mb-1">{t.category}</span>
+                         {t.hasVoiceover === false && (
+                           <span className="text-[10px] bg-red-500/80 text-white px-2 py-0.5 rounded w-max">No Voiceover</span>
+                         )}
+                       </div>
+                    </div>
+                  </div>
+                ))}
+                {filteredTemplates.length === 0 && (
+                  <div className="col-span-2 text-gray-500 text-center py-8 bg-gray-50 rounded-lg">No templates configured. Go to Admin to add templates.</div>
+                )}
+              </div>
+
+              <div className="pt-4 flex justify-between">
+                <button onClick={() => setStep(1)} className="px-4 py-2 border rounded-lg hover:bg-gray-50">Back</button>
+                <button 
+                  onClick={handleGenerateScript}
+                  disabled={!selectedTemplateId || isGenerating}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                >
+                  {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Generate AI Script'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-6">
+              <div className="flex items-center space-x-2">
+                <button onClick={() => setStep(2)} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5"/></button>
+                <h3 className="text-xl font-semibold">3. Review AI Script</h3>
+              </div>
+
+              <div className="space-y-4">
+                {scriptData.headline && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase">Headline Overlay</label>
+                    <textarea 
+                      value={scriptData.headline}
+                      onChange={e => setScriptData({...scriptData, headline: e.target.value})}
+                      className="w-full border-2 border-gray-200 py-2 px-2 focus:border-blue-500 outline-none font-bold text-sm font-mono h-32 rounded"
+                    />
+                  </div>
+                )}
+                
+                {scriptData.ticker && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase">Scrolling Ticker</label>
+                    <input 
+                      value={scriptData.ticker}
+                      onChange={e => setScriptData({...scriptData, ticker: e.target.value})}
+                      className="w-full border-b-2 border-gray-200 py-2 focus:border-blue-500 outline-none font-mono text-sm bg-yellow-50 px-2"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Voiceover Script (SSML/Text)</label>
+                  <textarea 
+                    value={scriptData.voiceoverScript}
+                    onChange={e => setScriptData({...scriptData, voiceoverScript: e.target.value})}
+                    className="w-full border rounded-lg p-3 h-40 focus:ring-2 focus:ring-blue-500 text-sm leading-relaxed"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Select Voice</label>
+                  <div className="flex flex-wrap gap-2">
+                    {ANCHOR_VOICES.map(v => (
+                      <button 
+                        key={v.id}
+                        onClick={() => setSelectedVoice(v.id)}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium border ${selectedVoice === v.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                      >
+                        {v.name} ({v.gender})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 flex justify-between">
+                <button onClick={() => setStep(2)} className="px-4 py-2 border rounded-lg hover:bg-gray-50">Back</button>
+                {filteredTemplates.find(t=>t.id===selectedTemplateId)?.hasVoiceover !== false ? (
+                  <button 
+                    onClick={handleGenerateAudio}
+                    disabled={isGenerating || !scriptData.voiceoverScript}
+                    className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center"
+                  >
+                    {isGenerating ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Mic className="w-4 h-4 mr-2" />}
+                    Generate Audio
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      setAudioUrl('');
+                      setAudioDataUri('');
+                      setStep(4);
+                    }}
+                    disabled={isGenerating}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                  >
+                    Next: Final Output <ChevronRight className="w-4 h-4 ml-2" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <button onClick={() => setStep(3)} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5"/></button>
+                  <h3 className="text-xl font-semibold">4. Final Output</h3>
+                </div>
+              </div>
+
+              {audioUrl ? (
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                  <h4 className="font-bold text-gray-800 mb-2">Voiceover Audio</h4>
+                  <audio controls src={audioUrl} className="w-full mb-4" />
+                </div>
+              ) : (
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                  <h4 className="font-bold text-gray-800 mb-2">Voiceover</h4>
+                  <p className="text-sm text-gray-500">Audio generation was disabled for this template.</p>
+                </div>
+              )}
+              
+              <div className="p-4 bg-green-50 text-green-800 rounded-lg text-sm border border-green-200">
+                <p className="font-bold mb-1">Ready for Rendering</p>
+                <p>The client reel script {audioUrl ? 'and audio are' : 'is'} ready. We can pass these to the FFmpeg engine to combine with the selected template and client's logo.</p>
+              </div>
+
+            </div>
+          )}
+
+        </div>
+
+        {/* Right Panel: Preview */}
+        <div className="w-full lg:w-1/2 bg-gray-100 p-4 lg:p-6 flex flex-col items-center justify-start lg:justify-center border-t lg:border-t-0 lg:border-l border-gray-200 min-h-[400px]">
+          <div className="relative bg-gray-100 rounded-2xl overflow-hidden shadow-2xl w-full max-w-[280px] sm:max-w-[320px] aspect-[9/16] shrink-0 flex items-center justify-center ring-4 ring-gray-900">
+            
+            {/* Background Template */}
+            {selectedTemplateId ? (
+              filteredTemplates.find(t=>t.id===selectedTemplateId)?.mediaUrl ? (
+                <video src={filteredTemplates.find(t=>t.id===selectedTemplateId)?.mediaUrl} poster={filteredTemplates.find(t=>t.id===selectedTemplateId)?.screenshotUrl} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover" />
+              ) : (
+                <img src={filteredTemplates.find(t=>t.id===selectedTemplateId)?.screenshotUrl} className="absolute inset-0 w-full h-full object-cover" />
+              )
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 font-medium bg-gray-100 ring-inset ring-1 ring-gray-200">
+                <svg className="w-12 h-12 mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                <span>Select a Template</span>
+              </div>
+            )}
+
+            {/* Simulated Overlays */}
+            {selectedClient?.logo_url && (
+              <img src={selectedClient.logo_url} style={getBoxStyle('logo_box', { top: '2rem', right: '1rem', width: '4rem', height: '4rem', position: 'absolute' })} className="object-contain bg-white/10 rounded-lg backdrop-blur-sm p-1 z-20" />
+            )}
+
+            {scriptData.headline && (
+              scriptData.headline.trim().startsWith('{') ? (
+                <div 
+                  style={getBoxStyle('json_box', { top: '30%', left: '10%', width: '80%', position: 'absolute' })} 
+                  className="bg-[#0B1626]/85 backdrop-blur-md rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.5)] text-left z-20 border border-white/10 overflow-hidden flex flex-col"
+                >
+                  <div className="bg-[#16263F]/90 px-3 py-2 sm:px-4 sm:py-3 border-b border-white/10 flex items-center justify-between">
+                    <span className="font-extrabold text-[11px] sm:text-sm text-white uppercase tracking-wider truncate mr-2">{jobDetails.designation || "ROLE DETAILS"}</span>
+                    <span className="bg-[#159E8C] text-white text-[8px] sm:text-[10px] font-bold px-2 py-1 rounded-full tracking-widest uppercase shrink-0">Hiring</span>
+                  </div>
+                  
+                  <div className="p-3 sm:p-4 flex flex-col gap-2 sm:gap-3">
+                  {(() => {
+                    try {
+                      const jsonObj = JSON.parse(scriptData.headline);
+                      return Object.entries(jsonObj).map(([k, v], i) => (
+                        <div key={i} className="flex flex-row items-center justify-between border-b border-white/5 pb-2 last:border-0 last:pb-0">
+                          <span className="text-[#6FD0C2] text-[9px] sm:text-[11px] font-bold uppercase tracking-widest">{k}</span>
+                          <span className="text-white text-[11px] sm:text-[13px] font-semibold text-right max-w-[60%] truncate">{String(v)}</span>
+                        </div>
+                      ));
+                    } catch (e) {
+                      return <pre className="text-white whitespace-pre-wrap text-[10px] font-mono">{scriptData.headline}</pre>;
+                    }
+                  })()}
+                  </div>
+                </div>
+              ) : (
+                <div style={getBoxStyle('headline_box', { top: '25%', left: 0, width: '100%', padding: '0 1.5rem', position: 'absolute', textAlign: 'center' })} className="z-20 flex items-center justify-center">
+                  <pre className="text-lg sm:text-xl font-extrabold text-white drop-shadow-lg whitespace-pre-wrap text-center" style={{textShadow: '0 4px 8px rgba(0,0,0,0.8)'}}>{scriptData.headline}</pre>
+                </div>
+              )
+            )}
+
+            {scriptData.ticker && (
+              <div style={getBoxStyle('ticker_box', { bottom: '4rem', left: 0, right: 0, position: 'absolute' })} className="bg-[#159E8C]/95 border-y border-white/20 text-white font-bold whitespace-nowrap py-1 px-4 text-[10px] sm:text-[11px] tracking-widest uppercase z-20 flex items-center overflow-hidden">
+                <span className="truncate w-full">{scriptData.ticker}</span>
+              </div>
+            )}
+            
+            {selectedClient && step > 1 && (
+              <div className="absolute bottom-4 left-0 right-0 text-center text-white/80 text-sm font-semibold">
+                {selectedClient.business_name}
+              </div>
+            )}
+
+            {isGenerating && (
+              <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-50">
+                 <RefreshCw className="w-12 h-12 text-blue-500 animate-spin mb-4" />
+                 <span className="text-white font-medium px-6 text-center">{status}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Just defining Loader2 since we used it directly above
+function Loader2(props: any) {
+  return <RefreshCw {...props} />;
+}
+
+```
+
+## File: components/ClientTemplatesAdmin.tsx
+Create or overwrite this file with the exact content below:
+```tsx
+import React, { useState, useRef, useEffect, MouseEvent } from 'react';
+import { ReelTemplate, SiteSettings } from '../types';
+import { Plus, Edit, Trash2, CheckCircle, X, Image as ImageIcon, Zap, AlertTriangle } from 'lucide-react';
+import { uploadImage } from '../services/supabase';
+
+// We'll import analyzing function from geminiService
+// import { analyzeReelTemplate } from '../services/geminiService';
+
+interface ClientTemplatesAdminProps {
+  settings: SiteSettings | null;
+  onSaveSettings: (settings: SiteSettings) => Promise<void>;
+}
+
+const ClientTemplatesAdmin: React.FC<ClientTemplatesAdminProps> = ({ settings, onSaveSettings }) => {
+  const [templates, setTemplates] = useState<ReelTemplate[]>(settings?.clientReelTemplates || []);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<Partial<ReelTemplate> | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  useEffect(() => {
+    setTemplates(settings?.clientReelTemplates || []);
+  }, [settings?.clientReelTemplates]);
+
+  const handleAddNew = () => {
+    setEditingTemplate({
+      id: Date.now().toString(),
+      name: '',
+      category: 'general',
+      mediaUrl: '',
+      screenshotUrl: '',
+      coordinates: {
+        video_box: '100,100,200,200',
+        headline_box: '100,300,200,100',
+        subtitle_box: '100,400,200,100',
+        ticker_box: '0,500,400,50',
+        logo_box: '20,20,50,50',
+        json_box: 'hidden',
+      },
+      safe_limits: {
+        headline_words: 10,
+        subtitle_lines: 3,
+        words_per_line: 8,
+        ticker_characters: 100,
+      },
+      fonts: {
+        headline: 'Inter',
+        subtitle: 'Inter',
+      },
+      style_rules: {
+        theme: 'modern',
+        ticker_speed: 30,
+        text_shadow: true,
+      },
+      isActive: true,
+      isIntroCombined: false,
+      introDuration: 3,
+      createdAt: new Date().toISOString(),
+    });
+    setIsEditing(true);
+  };
+
+  const handleSave = async (updatedTemplate: ReelTemplate) => {
+    try {
+      const updatedTemplates = editingTemplate?.id && templates.find(t => t.id === editingTemplate.id)
+        ? templates.map(t => t.id === updatedTemplate.id ? updatedTemplate : t)
+        : [...templates, updatedTemplate];
+
+      setTemplates(updatedTemplates);
+      if (settings) {
+        await onSaveSettings({
+          ...settings,
+          clientReelTemplates: updatedTemplates
+        });
+      }
+      setIsEditing(false);
+      setEditingTemplate(null);
+    } catch (error: any) {
+      console.error(error);
+      setErrorMsg(`Database Error: Please ensure you've added the 'clientReelTemplates' column (type: jsonb) to your 'site_settings' table in Supabase. Detailed error: ${error.message}`);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm('Are you sure you want to delete this template?')) {
+      try {
+        const updatedTemplates = templates.filter(t => t.id !== id);
+        setTemplates(updatedTemplates);
+        if (settings) {
+          await onSaveSettings({
+            ...settings,
+            clientReelTemplates: updatedTemplates
+          });
+        }
+      } catch (error: any) {
+        console.error(error);
+        setErrorMsg(`Failed to delete template: ${error.message}`);
+      }
+    }
+  };
+
+  const toggleActive = async (id: string) => {
+    const updatedTemplates = templates.map(t => t.id === id ? { ...t, isActive: !t.isActive } : t);
+    setTemplates(updatedTemplates);
+    if (settings) {
+      await onSaveSettings({
+        ...settings,
+        clientReelTemplates: updatedTemplates
+      });
+    }
+  };
+
+  const renderError = () => {
+    if (!errorMsg) return null;
+    return (
+      <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-start gap-3">
+        <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 whitespace-pre-wrap">{errorMsg}</div>
+        <button onClick={() => setErrorMsg(null)} className="text-red-500 hover:text-red-700 font-bold">&times;</button>
+      </div>
+    );
+  };
+
+  if (isEditing && editingTemplate) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+        {renderError()}
+        <TemplateEditor 
+          template={editingTemplate as ReelTemplate}
+          onSave={handleSave}
+          onCancel={() => {
+            setIsEditing(false);
+            setEditingTemplate(null);
+            setErrorMsg(null);
+          }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+      {renderError()}
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <ImageIcon className="text-blue-600" />
+          Client Reel Templates
+        </h2>
+        <button 
+          onClick={handleAddNew}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"
+        >
+          <Plus size={18} /> Add Template
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {templates.map(template => (
+          <div key={template.id} className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50 flex flex-col">
+            <div className="h-48 bg-gray-200 relative">
+              {template.screenshotUrl ? (
+                <img src={template.screenshotUrl} alt={template.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                  <ImageIcon size={32} className="mb-2" />
+                  <span>No preview</span>
+                </div>
+              )}
+              {!template.isActive && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <span className="bg-red-600 text-white px-3 py-1 text-xs font-bold rounded uppercase tracking-wider">Inactive</span>
+                </div>
+              )}
+              <div className="absolute top-2 right-2 flex gap-2">
+                <button 
+                  onClick={() => { setEditingTemplate(template); setIsEditing(true); }}
+                  className="bg-white/90 p-1.5 rounded text-gray-700 hover:text-blue-600 shadow-sm"
+                  title="Edit Template"
+                >
+                  <Edit size={16} />
+                </button>
+                <button 
+                  onClick={() => handleDelete(template.id)}
+                  className="bg-white/90 p-1.5 rounded text-gray-700 hover:text-red-600 shadow-sm"
+                  title="Delete Template"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+            <div className="p-4 flex-1">
+              <h3 className="font-bold text-lg text-gray-900 mb-1">{template.name || 'Unnamed Template'}</h3>
+              <p className="text-sm text-gray-500 mb-3 uppercase tracking-wider font-semibold">{template.category}</p>
+              
+              <div className="space-y-4">
+                <button 
+                  onClick={() => toggleActive(template.id)}
+                  className={`w-full py-2 rounded-md font-bold transition-all flex justify-center items-center gap-2 ${
+                    template.isActive 
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  <CheckCircle size={16} />
+                  {template.isActive ? 'Active Template' : 'Activate Template'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {templates.length === 0 && (
+          <div className="col-span-full py-12 text-center text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+            <ImageIcon size={48} className="mx-auto mb-4 opacity-50" />
+            <p className="text-lg font-medium">No templates found.</p>
+            <p className="text-sm mb-4">Add your first template to enable completely automated hybrid reels.</p>
+            <button 
+              onClick={handleAddNew}
+              className="text-blue-600 font-bold hover:underline"
+            >
+              + Create Template
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ClientTemplatesAdmin;
+
+// --- Template Editor Component (includes visual editor) ---
+
+interface TemplateEditorProps {
+  template: ReelTemplate;
+  onSave: (template: ReelTemplate) => Promise<void>;
+  onCancel: () => void;
+}
+
+const TemplateEditor: React.FC<TemplateEditorProps> = ({ template: initialTemplate, onSave, onCancel }) => {
+  const [template, setTemplate] = useState<ReelTemplate>(initialTemplate);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isRenderingPreview, setIsRenderingPreview] = useState(false);
+  const [ffmpegPreviewUrl, setFfmpegPreviewUrl] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Drag state
+  const [activeBox, setActiveBox] = useState<keyof ReelTemplate['coordinates'] | null>(null);
+  const [dragAction, setDragAction] = useState<'move' | 'resize' | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number, y: number }>({ x: 0, y: 0 });
+  const [startCoords, setStartCoords] = useState<{ x: number, y: number, w: number, h: number } | null>(null);
+
+  const parseCoords = (coordStr: string) => {
+    const [x, y, w, h] = coordStr.split(',').map(Number);
+    return { x: isNaN(x) ? 0 : x, y: isNaN(y) ? 0 : y, w: isNaN(w) ? 100 : w, h: isNaN(h) ? 100 : h };
+  };
+
+  const stringifyCoords = (c: { x: number, y: number, w: number, h: number }) => {
+    return `${Math.round(c.x)},${Math.round(c.y)},${Math.round(c.w)},${Math.round(c.h)}`;
+  };
+
+  const handleRenderPreview = async () => {
+    const backgroundUrl = template.mediaUrl || template.screenshotUrl;
+    if (!backgroundUrl) {
+      alert("Please upload a Background Media or Screenshot Preview first.");
+      return;
+    }
+
+    setIsRenderingPreview(true);
+    setFfmpegPreviewUrl(null);
+    try {
+      const response = await fetch('/api/render-reel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          templateMediaUrl: backgroundUrl,
+          template: template,
+          scriptData: {
+            headline: "{\n  \"Role\": \"Software Engineer\",\n  \"Location\": \"Remote\"\n}",
+            ticker: "LATEST NEWS TICKER SCROLLING ... LATEST NEWS ... LATEST NEWS TICKER SCROLLING ...",
+            subtitles: ["Current Subtitle Line"]
+          },
+          overlayMediaUrl: template.coordinates.video_box !== 'hidden' ? 'https://images.unsplash.com/photo-1542204165-65bf26472b9b?auto=format&fit=crop&q=80&w=1000' : undefined // Using a dummy image if video box is active
+        })
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to render');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setFfmpegPreviewUrl(url);
+    } catch (err: any) {
+      console.error(err);
+      alert("Render failed: " + err.message);
+    } finally {
+      setIsRenderingPreview(false);
+    }
+  };
+
+  const handleScreenshotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        const uploadedUrl = await uploadImage(base64);
+        setTemplate(prev => ({ ...prev, screenshotUrl: uploadedUrl }));
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error(err);
+      alert('Upload failed');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+  
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetField: 'mediaUrl' | 'introMediaUrl' | 'outroMediaUrl' | 'bgmUrl') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      // Depending on file type, we might want to upload to object storage instead of base64
+      // For images, we can use the same base64 proxy
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        // if file.type.startsWith('video/'), you might want to upload natively. 
+        // For now let's assume images.
+        const uploadedUrl = await uploadImage(base64);
+        setTemplate(prev => ({ ...prev, [targetField]: uploadedUrl }));
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error(err);
+      alert('Upload failed');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const updateSafeLimits = () => {
+    const parse = (cStr: string) => {
+      const [x,y,w,h] = cStr.split(',').map(Number);
+      return {w,h};
+    };
+    
+    // Check if coordinates exist before parsing
+    if (!template.coordinates) return;
+
+    try {
+      const headlineBox = parse(template.coordinates.headline_box || '0,0,100,100');
+      const subtitleBox = parse(template.coordinates.subtitle_box || '0,0,100,100');
+      const tickerBox = parse(template.coordinates.ticker_box || '0,0,100,100');
+
+      // Rough approximations for 1080x1920 logical space
+      const headlineWords = Math.floor((headlineBox.w * headlineBox.h) / (50 * 50 * 5)); 
+      const subtitleLines = Math.floor(subtitleBox.h / 50);
+      const wordsPerLine = Math.floor(subtitleBox.w / (45 * 5));
+      const tickerChars = Math.floor(tickerBox.w / 25) * 3;
+
+      setTemplate(prev => ({
+        ...prev,
+        safe_limits: {
+          ...prev.safe_limits,
+          headline_words: Math.max(3, Math.min(25, headlineWords || 10)),
+          subtitle_lines: Math.max(1, Math.min(6, subtitleLines || 3)),
+          words_per_line: Math.max(3, Math.min(15, wordsPerLine || 8)),
+          ticker_characters: Math.max(50, Math.min(200, tickerChars || 100))
+        }
+      }));
+    } catch (e) {
+      console.error("Error auto calculating limits", e);
+    }
+  };
+
+  useEffect(() => {
+    // Only auto calculate if not manually typing (i.e. only on drag end or when it loads)
+  }, [template.coordinates.headline_box, template.coordinates.subtitle_box, template.coordinates.ticker_box]);
+
+  // --- Visual Editor Handlers ---
+
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent, boxName: keyof ReelTemplate['coordinates'], action: 'move' | 'resize') => {
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveBox(boxName);
+    setDragAction(action);
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    setDragStart({ x: clientX, y: clientY });
+    setStartCoords(parseCoords(template.coordinates[boxName] || 'hidden'));
+  };
+
+  useEffect(() => {
+    if (!activeBox || !dragAction || !startCoords || !containerRef.current) return;
+
+    const handleWindowMouseMove = (e: globalThis.MouseEvent | globalThis.TouchEvent) => {
+      // Don't prevent default on touch move passively
+      if (e.cancelable) e.preventDefault();
+      
+      const rect = containerRef.current!.getBoundingClientRect();
+      const scaleX = 1080 / rect.width;
+      const scaleY = 1920 / rect.height;
+      
+      const clientX = 'touches' in e ? e.touches[0].clientX : (e as globalThis.MouseEvent).clientX;
+      const clientY = 'touches' in e ? e.touches[0].clientY : (e as globalThis.MouseEvent).clientY;
+
+      const dx = (clientX - dragStart.x) * scaleX;
+      const dy = (clientY - dragStart.y) * scaleY;
+
+      if (dragAction === 'move') {
+        const newX = Math.max(0, Math.min(1080 - startCoords.w, startCoords.x + dx));
+        const newY = Math.max(0, Math.min(1920 - startCoords.h, startCoords.y + dy));
+        
+        setTemplate(prev => ({
+          ...prev,
+          coordinates: {
+            ...prev.coordinates,
+            [activeBox]: stringifyCoords({ ...startCoords, x: newX, y: newY })
+          }
+        }));
+      } else if (dragAction === 'resize') {
+        const newW = Math.max(20, Math.min(1080 - startCoords.x, startCoords.w + dx));
+        const newH = Math.max(20, Math.min(1920 - startCoords.y, startCoords.h + dy));
+        
+        setTemplate(prev => ({
+          ...prev,
+          coordinates: {
+            ...prev.coordinates,
+            [activeBox]: stringifyCoords({ ...startCoords, w: newW, h: newH })
+          }
+        }));
+      }
+    };
+
+    const handleWindowMouseUp = () => {
+      setActiveBox(null);
+      setDragAction(null);
+      updateSafeLimits();
+    };
+
+    window.addEventListener('mousemove', handleWindowMouseMove, { passive: false });
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    window.addEventListener('touchmove', handleWindowMouseMove, { passive: false });
+    window.addEventListener('touchend', handleWindowMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+      window.removeEventListener('touchmove', handleWindowMouseMove);
+      window.removeEventListener('touchend', handleWindowMouseUp);
+    };
+  }, [activeBox, dragAction, dragStart, startCoords]);
+  
+  const boxColors: Record<keyof ReelTemplate['coordinates'], string> = {
+    video_box: 'rgba(59, 130, 246, 0.4)', // blue
+    headline_box: 'rgba(239, 68, 68, 0.4)', // red
+    subtitle_box: 'rgba(16, 185, 129, 0.4)', // green
+    ticker_box: 'rgba(245, 158, 11, 0.4)', // yellow
+    logo_box: 'rgba(139, 92, 246, 0.4)', // purple
+    json_box: 'rgba(236, 72, 153, 0.4)', // pink
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          {initialTemplate.name ? 'Edit Template' : 'New Template'}
+        </h2>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={onCancel}
+            disabled={isSaving}
+            className="text-gray-500 hover:text-gray-700 px-4 py-2 font-bold disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={async () => {
+              setIsSaving(true);
+              try {
+                await onSave(template);
+              } finally {
+                setIsSaving(false);
+              }
+            }}
+            disabled={isSaving}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50"
+          >
+            {isSaving ? 'Saving...' : <><CheckCircle size={18} /> Save Template</>}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-4 space-y-6">
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">Template Name</label>
+            <input 
+              type="text" 
+              value={template.name}
+              onChange={e => setTemplate({...template, name: e.target.value})}
+              className="w-full px-4 py-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" 
+              placeholder="e.g. Breaking News Blue"
+            />
+          </div>
+          
+          <div className="flex items-center gap-2 mt-4 p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+            <input 
+              type="checkbox" 
+              id="hasVoiceover"
+              checked={template.hasVoiceover ?? true} 
+              onChange={e => setTemplate({...template, hasVoiceover: e.target.checked})}
+              className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+            />
+            <label htmlFor="hasVoiceover" className="text-sm font-bold text-indigo-900 cursor-pointer">
+              Include AI Voiceover Step
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">Category</label>
+            <select 
+              value={template.category}
+              onChange={e => setTemplate({...template, category: e.target.value})}
+              className="w-full px-4 py-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="general">General</option>
+              <option value="product">Product Reel</option>
+              <option value="hiring">Hiring Reel</option>
+              <option value="marketing">Marketing Reel</option>
+              <option value="offer">Offer/Discount Reel</option>
+              <option value="event">Event Promo Reel</option>
+              <option value="testimonial">Testimonial Reel</option>
+            </select>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded border">
+             <label className="block text-sm font-bold text-gray-700 mb-2">Background Media (Image/Video)</label>
+             {template.mediaUrl && (
+               <div className="mb-2 text-sm text-green-600 font-bold break-all">
+                 Using custom media.
+               </div>
+             )}
+             <input type="file" accept="image/*,video/mp4" onChange={(e) => handleMediaUpload(e, 'mediaUrl')} disabled={isUploading} className="text-sm" />
+          </div>
+
+          <div className="bg-purple-50 p-4 rounded border border-purple-100">
+             <label className="flex items-center gap-2 block text-sm font-bold text-purple-900 mb-2 cursor-pointer">
+               <input
+                 type="checkbox"
+                 checked={template.isIntroCombined || false}
+                 onChange={(e) => setTemplate({...template, isIntroCombined: e.target.checked})}
+                 className="w-4 h-4 cursor-pointer"
+               />
+               Set as Intro Combined Template
+             </label>
+             {template.isIntroCombined && (
+               <div className="mt-2 mb-4 bg-white p-3 rounded shadow-sm">
+                 <label className="block text-xs font-bold text-gray-700 mb-1">Intro Timing for FFmpeg (Seconds before visual overlay starts)</label>
+                 <input
+                   type="number"
+                   step="0.1"
+                   value={template.introDuration !== undefined ? template.introDuration : 3}
+                   onChange={e => setTemplate({...template, introDuration: parseFloat(e.target.value) || 0})}
+                   className="w-full p-2 border rounded outline-none text-sm"
+                   placeholder="e.g. 3.5"
+                 />
+                 <p className="text-xs text-gray-500 mt-1 pb-1">
+                   FFmpeg will wait this long playing only the media, then it will overlay the headlines, visual elements, and ticker.
+                 </p>
+               </div>
+             )}
+
+             <div className="flex justify-between items-center mb-2">
+               <label className="block text-sm font-bold text-purple-900">Intro Video (Optional)</label>
+               {template.introMediaUrl && (
+                 <button type="button" onClick={() => setTemplate({...template, introMediaUrl: ''})} className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 px-2 py-1 bg-red-50 rounded border border-red-100">
+                   <X size={12} /> Remove
+                 </button>
+               )}
+             </div>
+             {template.introMediaUrl && (
+               <div className="mb-2 text-sm text-green-600 font-bold break-all">
+                 Using intro video.
+               </div>
+             )}
+             <input type="file" accept="video/mp4" onChange={(e) => handleMediaUpload(e, 'introMediaUrl')} disabled={isUploading} className="text-sm" />
+          </div>
+
+          <div className="bg-purple-50 p-4 rounded border border-purple-100">
+             <div className="flex justify-between items-center mb-2">
+               <label className="block text-sm font-bold text-purple-900">Outro Video (Optional)</label>
+               {template.outroMediaUrl && (
+                 <button type="button" onClick={() => setTemplate({...template, outroMediaUrl: ''})} className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 px-2 py-1 bg-red-50 rounded border border-red-100">
+                   <X size={12} /> Remove
+                 </button>
+               )}
+             </div>
+             {template.outroMediaUrl && (
+               <div className="mb-2 text-sm text-green-600 font-bold break-all">
+                 Using outro video.
+               </div>
+             )}
+             <input type="file" accept="video/mp4" onChange={(e) => handleMediaUpload(e, 'outroMediaUrl')} disabled={isUploading} className="text-sm" />
+          </div>
+
+          <div className="bg-purple-50 p-4 rounded border border-purple-100">
+             <div className="flex justify-between items-center mb-2">
+               <label className="block text-sm font-bold text-purple-900">Background Music (Optional)</label>
+               {template.bgmUrl && (
+                 <button type="button" onClick={() => setTemplate({...template, bgmUrl: ''})} className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 px-2 py-1 bg-red-50 rounded border border-red-100">
+                   <X size={12} /> Remove
+                 </button>
+               )}
+             </div>
+             {template.bgmUrl && (
+               <div className="mb-2 text-sm text-green-600 font-bold break-all">
+                 Using custom BGM.
+               </div>
+             )}
+             <input type="file" accept="audio/*" onChange={(e) => handleMediaUpload(e, 'bgmUrl')} disabled={isUploading} className="text-sm border-purple-200" />
+          </div>
+
+          <div className="bg-blue-50 p-4 rounded border border-blue-100">
+             <label className="block text-sm font-bold text-blue-900 mb-2">Screenshot Preview for Manual Layout</label>
+             <input type="file" accept="image/*" onChange={handleScreenshotUpload} disabled={isUploading} className="text-sm" />
+          </div>
+          
+          <div>
+             <h3 className="font-bold border-b pb-2 mb-3">Safe Limits</h3>
+             <div className="grid grid-cols-2 gap-4">
+               <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Max Headline Words</label>
+                  <input type="number" 
+                    value={template.safe_limits.headline_words} 
+                    onChange={e => setTemplate({...template, safe_limits: {...template.safe_limits, headline_words: parseInt(e.target.value) || 10}})}
+                    className="w-full p-2 border rounded outline-none"
+                  />
+               </div>
+               <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Max Subtitle Lines</label>
+                  <input type="number" 
+                    value={template.safe_limits.subtitle_lines} 
+                    onChange={e => setTemplate({...template, safe_limits: {...template.safe_limits, subtitle_lines: parseInt(e.target.value) || 3}})}
+                    className="w-full p-2 border rounded outline-none"
+                  />
+               </div>
+             </div>
+          </div>
+        </div>
+
+        {/* Visual Editor */}
+        <div className="lg:col-span-8 flex flex-col items-center">
+          <div className="flex flex-col sm:flex-row justify-between w-full max-w-[360px] items-end sm:items-center mb-2 gap-2">
+            <p className="text-sm text-gray-500 font-bold leading-tight">
+              Visual Editor<br/>
+              <span className="text-xs font-normal">Drag to move, corner to resize</span>
+            </p>
+            <button
+              onClick={handleRenderPreview}
+              disabled={isRenderingPreview}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs font-bold transition-colors shadow-sm disabled:opacity-50"
+            >
+              {isRenderingPreview ? 'Rendering...' : 'Test FFmpeg Render'}
+            </button>
+          </div>
+          <div 
+             ref={containerRef}
+             className="relative border-4 border-gray-200 bg-gray-100 shadow-xl overflow-hidden touch-none select-none"
+             style={{ width: '360px', height: '640px' }} // Scale factor: 360/1080 = 0.333
+          >
+             {ffmpegPreviewUrl ? (
+                <video src={ffmpegPreviewUrl} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+             ) : template.screenshotUrl ? (
+                <img src={template.screenshotUrl} alt="Preview" className="absolute inset-0 w-full h-full object-cover opacity-80 pointer-events-none" />
+             ) : (
+                <div className="absolute inset-0 flex items-center justify-center text-gray-400 font-bold text-lg pointer-events-none">
+                  1080 x 1920
+                </div>
+             )}
+
+             {/* Rendering the boxes */}
+             {(['video_box', 'headline_box', 'subtitle_box', 'ticker_box', 'logo_box', 'json_box'] as const).map(boxName => {
+                if (!template.coordinates[boxName] || template.coordinates[boxName] === 'hidden') return null;
+
+                const c = parseCoords(template.coordinates[boxName] || '0,0,100,100');
+                const scale = 360 / 1080; // visual scale relative to logical 1080px width
+                
+                // MOCK FFmpeg Styles
+                let boxStyle: React.CSSProperties = {
+                  left: `${c.x * scale}px`,
+                  top: `${c.y * scale}px`,
+                  width: `${c.w * scale}px`,
+                  height: `${c.h * scale}px`,
+                  position: 'absolute',
+                  cursor: dragAction === 'move' && activeBox === boxName ? 'grabbing' : 'grab',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'flex-start',
+                  border: `2px dashed ${boxColors[boxName].replace('0.4', '1')}`,
+                  backgroundColor: ffmpegPreviewUrl ? 'transparent' : boxColors[boxName],
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  zIndex: activeBox === boxName ? 50 : 10
+                };
+
+                let content = <span className={`px-2 py-1 text-[10px] font-bold rounded capitalize pointer-events-none ${ffmpegPreviewUrl ? 'text-white drop-shadow-md' : 'bg-black/50 text-white'}`}>{boxName.replace('_box', '')}</span>;
+
+                if (boxName === 'headline_box') {
+                  const fontSize = 50 * scale;
+                  const padding = 10 * scale;
+                  if (!ffmpegPreviewUrl) {
+                    boxStyle.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+                  }
+                  boxStyle.border = `2px dashed ${ffmpegPreviewUrl ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.8)'}`;
+                  if (!ffmpegPreviewUrl) {
+                    content = (
+                      <div style={{
+                        padding: `${padding}px`,
+                        color: 'white',
+                        fontSize: `${fontSize}px`,
+                        fontFamily: '"Noto Sans Devanagari", sans-serif',
+                        lineHeight: 1,
+                        pointerEvents: 'none',
+                      }}>
+                        BREAKING NEWS TEXT
+                      </div>
+                    );
+                  }
+                } else if (boxName === 'subtitle_box') {
+                  const fontSize = 45 * scale;
+                  const padding = 10 * scale;
+                  if (!ffmpegPreviewUrl) {
+                    boxStyle.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                  }
+                  boxStyle.border = `2px dashed ${ffmpegPreviewUrl ? 'rgba(255,255,0,0.4)' : 'rgba(255,255,0,0.8)'}`;
+                  if (!ffmpegPreviewUrl) {
+                    content = (
+                      <div style={{
+                        padding: `${padding}px`,
+                        color: 'yellow',
+                        fontSize: `${fontSize}px`,
+                        fontFamily: '"Noto Sans Devanagari", sans-serif',
+                        lineHeight: 1,
+                        pointerEvents: 'none',
+                      }}>
+                        Current Subtitle Line
+                      </div>
+                    );
+                  }
+                } else if (boxName === 'ticker_box') {
+                  const fontSize = 40 * scale;
+                  const padding = 10 * scale;
+                  if (!ffmpegPreviewUrl) {
+                    boxStyle.backgroundColor = 'rgba(255, 0, 0, 0.8)';
+                  }
+                  boxStyle.border = `2px dashed ${ffmpegPreviewUrl ? 'rgba(255,0,0,0.4)' : 'rgba(255,0,0,0.9)'}`;
+                  if (!ffmpegPreviewUrl) {
+                    content = (
+                      <div style={{
+                        padding: `${padding}px`,
+                        color: 'white',
+                        fontSize: `${fontSize}px`,
+                        fontFamily: '"Noto Sans Devanagari", sans-serif',
+                        lineHeight: 1,
+                        pointerEvents: 'none',
+                      }}>
+                        LATEST NEWS TICKER SCROLLING ... LATEST NEWS ...
+                      </div>
+                    );
+                  }
+                } else if (boxName === 'video_box') {
+                  boxStyle.alignItems = 'center';
+                  boxStyle.justifyContent = 'center';
+                } else if (boxName === 'json_box') {
+                  const fontSize = 35 * scale;
+                  const padding = 20 * scale;
+                  if (!ffmpegPreviewUrl) {
+                    boxStyle.backgroundColor = 'rgba(15, 23, 42, 0.8)';
+                  }
+                  boxStyle.border = `2px dashed ${ffmpegPreviewUrl ? 'rgba(255,255,255,0.4)' : 'rgba(236,72,153,0.9)'}`;
+                  if (!ffmpegPreviewUrl) {
+                    content = (
+                      <div style={{
+                        padding: `${padding}px`,
+                        color: 'white',
+                        fontSize: `${fontSize}px`,
+                        fontFamily: 'sans-serif',
+                        lineHeight: 1.5,
+                        pointerEvents: 'none',
+                        width: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        whiteSpace: 'normal',
+                        gap: `${10 * scale}px`
+                      }}>
+                        <div style={{ fontWeight: 'bold', fontSize: `${45 * scale}px`, borderBottom: '2px solid rgba(255,255,255,0.2)', paddingBottom: `${10 * scale}px` }}>SALES MANAGER</div>
+                        <div>
+                          <div style={{ color: '#FBBF24', fontSize: `${25 * scale}px` }}>SALES</div>
+                          <div>₹35,000 - ₹50,000</div>
+                        </div>
+                        <div>
+                          <div style={{ color: '#FBBF24', fontSize: `${25 * scale}px` }}>LOCATION</div>
+                          <div>RAIPUR</div>
+                        </div>
+                        <div>
+                          <div style={{ color: '#FBBF24', fontSize: `${25 * scale}px` }}>EXPERIENCE</div>
+                          <div>3-5 YEARS</div>
+                        </div>
+                      </div>
+                    );
+                  }
+                }
+
+                return (
+                    <div 
+                    key={boxName}
+                    style={boxStyle}
+                    onMouseDown={(e) => handleDragStart(e, boxName, 'move')}
+                    onTouchStart={(e) => handleDragStart(e, boxName, 'move')}
+                  >
+                    {content}
+                    
+                    {/* Resize handle */}
+                    <div 
+                      className="absolute bottom-0 right-0 w-8 h-8 -mr-4 -mb-4 bg-transparent cursor-nwse-resize flex items-center justify-center pointer-events-auto z-10"
+                      onMouseDown={(e) => handleDragStart(e, boxName, 'resize')}
+                      onTouchStart={(e) => handleDragStart(e, boxName, 'resize')}
+                    >
+                      <div className="w-4 h-4 bg-white border border-gray-400"></div>
+                    </div>
+                  </div>
+                );
+             })}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-4 w-full justify-center text-xs">
+            {(['video_box', 'headline_box', 'subtitle_box', 'ticker_box', 'logo_box', 'json_box'] as const).map((boxName) => {
+              const isHidden = !template.coordinates[boxName] || template.coordinates[boxName] === 'hidden';
+              return (
+                <button 
+                  key={boxName} 
+                  onClick={() => {
+                    setTemplate(prev => {
+                      const newCoords = { ...prev.coordinates };
+                      if (isHidden) {
+                        newCoords[boxName] = boxName === 'json_box' ? '100,500,800,600' : '100,100,800,200'; // Default unhide
+                      } else {
+                        newCoords[boxName] = 'hidden';
+                      }
+                      return { ...prev, coordinates: newCoords };
+                    });
+                  }}
+                  className={`flex items-center gap-1 font-mono hover:bg-gray-200 px-2 py-1 rounded transition-colors ${isHidden ? 'text-gray-400 opacity-50' : 'text-gray-800'}`}
+                >
+                  <div className="w-3 h-3 rounded border border-gray-300" style={{ backgroundColor: isHidden ? 'transparent' : boxColors[boxName] }}></div>
+                  {boxName.replace('_box', '')}
+                  {isHidden ? ' ⌀' : ''}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+```
+
+## File: src/utils/audioUtils.ts
+Create or overwrite this file with the exact content below:
+```tsx
+export function pcmBase64ToWavUrl(base64: string, sampleRate: number = 24000): string {
+  const view = getWavDataView(base64, sampleRate);
+  const blob = new Blob([view.buffer as ArrayBuffer], { type: 'audio/wav' });
+  return URL.createObjectURL(blob);
+}
+
+export function pcmBase64ToWavDataUri(base64: string, sampleRate: number = 24000): string {
+  const view = getWavDataView(base64, sampleRate);
+  let binary = '';
+  const bytes = new Uint8Array(view.buffer);
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return 'data:audio/wav;base64,' + btoa(binary);
+}
+
+function getWavDataView(base64: string, sampleRate: number): DataView {
+  const binaryStr = atob(base64);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
+  
+  // It's 16-bit PCM little endian
+  const pcmData = new Int16Array(bytes.buffer);
+  
+  const numChannels = 1;
+  const byteRate = sampleRate * numChannels * 2;
+  const blockAlign = numChannels * 2;
+  const buffer = new ArrayBuffer(44 + pcmData.length * 2);
+  const view = new DataView(buffer);
+  
+  // RIFF chunk descriptor
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + pcmData.length * 2, true);
+  writeString(view, 8, 'WAVE');
+  
+  // fmt sub-chunk
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true); // 16 bit
+  
+  // data sub-chunk
+  writeString(view, 36, 'data');
+  view.setUint32(40, pcmData.length * 2, true);
+  
+  // write the PCM samples
+  let offset = 44;
+  for (let i = 0; i < pcmData.length; i++, offset += 2) {
+    view.setInt16(offset, pcmData[i], true); // little endian
+  }
+  
+  return view;
+}
+
+function writeString(view: DataView, offset: number, string: string) {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
+}
+
+```
+
+## File: services/geminiReelService.ts
+Create a new service specifically for the Reel Generation AI logic:
+```typescript
+import { getAiClient } from "./geminiService"; // Adjust this to your AI client getter
+
+export interface ReelScript {
+  headline?: string;
+  ticker?: string;
+  voiceoverScript: string;
+  fullScript: string;
+}
+
+export const cleanVoiceoverScript = (text: string, enableAudioTags: boolean = true) => {
+  let cleanText = text
+    .replace(/\*/g, "") // Remove bold/italic markdown
+    .replace(/\[.*?\]/g, "") // Remove UI brackets
+    .replace(/\(.*?\)/g, "") // Remove parentheses notes
+    .replace(/\b(Visual|Audio|Text|Caption|Music|SFX|Headline|Ticker):.*?\n/gi, "") // Remove script directions
+    .trim();
+
+  if (!enableAudioTags) {
+    cleanText = cleanText.replace(/<[^>]*>/g, ""); // Strip SSML tags
+  }
+  return cleanText;
+};
+
+export const improveTemplateConfig = async (prompt: string, currentTemplate: any) => {
+  const ai = getAiClient();
+  if (!ai) throw new Error("API Key missing");
+
+  const systemPrompt = `You are an expert video template config improver. 
+  The user wants to adjust a video template.
+  Current Template Config: ${JSON.stringify(currentTemplate)}
+  User Request: "${prompt}"
+  
+  Return the updated JSON template. Keep the same structure, just modify the values.`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3.5-flash',
+    contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
+    config: { responseMimeType: "application/json" }
+  });
+
+  const text = response.text || "{}";
+  let cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+  const firstBrace = cleanText.indexOf('{');
+  const lastBrace = cleanText.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+  }
+  return JSON.parse(cleanText);
+};
+
+export const generateClientReelScript = async (
+  client: any,
+  category: string,
+  prompt: string,
+  template: any,
+  enableAudioTags: boolean = true
+) => {
+  const ai = getAiClient();
+  if (!ai) throw new Error("API Key missing");
+
+  const coords = template?.coordinates || {};
+  const hasHeadline = coords.headline_box && coords.headline_box !== "hidden";
+  const hasTicker = coords.ticker_box && coords.ticker_box !== "hidden";
+  
+  const limits = template?.safe_limits || { headline_words: 6, subtitle_lines: 2, ticker_characters: 50 };
+
+  const systemPrompt = `You are an expert marketing copywriter and video script creator for businesses.
+We are creating a ${category} reel for our client:
+- Business Name: ${client.business_name}
+- Category: ${client.category}
+- Services: ${client.services}
+- Special Offer: ${client.offer || 'N/A'}
+- Owner Name: ${client.owner_name}
+
+The user's specific prompt for this reel is: "${prompt}"
+
+Generate the script components for a 15-30 second reel.
+${hasHeadline ? `- \`headline\`: A very short, punchy headline text for the video (Max ${limits.headline_words} words).` : ''}
+${hasTicker ? `- \`ticker\`: A short scrolling text (Max ${limits.ticker_characters} chars) highlighting the CTA or offer.` : ''}
+- \`voiceoverScript\`: The spoken audio script. Must sound natural, persuasive, and fit the brand. Use SSML if helpful, but plain text is fine.
+- \`fullScript\`: A plain text transcript of the voiceover.
+
+Output as pure JSON, with keys: ${hasHeadline ? '"headline", ' : ''}${hasTicker ? '"ticker", ' : ''}"voiceoverScript", "fullScript".`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3.5-flash',
+    contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
+    config: {
+      temperature: 0.7,
+      responseMimeType: "application/json"
+    }
+  });
+
+  let text = response.text || '';
+  try {
+    let cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    const firstBrace = cleanText.indexOf('{');
+    const lastBrace = cleanText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    }
+    const result = JSON.parse(cleanText);
+    if (result.voiceoverScript) {
+        result.voiceoverScript = cleanVoiceoverScript(result.voiceoverScript, enableAudioTags);
+    }
+    return result;
+  } catch (e) {
+    console.error("Failed to parse JSON response:", text);
+    throw new Error("Failed to generate client reel script");
+  }
+};
+```
+
+## File: types.ts (Append these types)
+Merge these types into the existing global types file:
+```typescript
+export interface ReelTemplate {
+  id: string;
+  name: string;
+  category: string;
+  description?: string;
+  preview_url?: string;
+  duration?: number;
+  hasVoiceover?: boolean;
+  base_video_url?: string;
+  music_url?: string;
+  font_family?: string;
+  font_color?: string;
+  bg_color?: string;
+  accent_color?: string;
+  safe_limits?: {
+    headline_words: number;
+    subtitle_lines: number;
+    ticker_characters: number;
+  };
+  coordinates?: {
+    headline_box?: string;
+    subtitle_box?: string;
+    ticker_box?: string;
+    logo_box?: string;
+  };
+  created_at?: string;
+}
+```
+
+## Final Setup Step
+1. Inside your backend server (e.g., `server.ts` or Next.js API Routes), import and expose the logic from `api/render-reel.js` under the `POST /api/render-reel` endpoint.
+2. Ensure you have a Supabase/Firebase database table setup for storing `ReelTemplate` configurations.
