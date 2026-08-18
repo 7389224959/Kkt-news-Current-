@@ -21,7 +21,7 @@ import {
 } from '../services/articleService';
 import { uploadImage } from '../services/supabase';
 import { draftNewsReport, getStockImageUrl, generateAiImage, mapCategory, fetchTrendingKeywords, generateViralPost, generateViralImage } from '../services/geminiService';
-import { postToFacebook, publishFacebookPost } from '../services/facebookService';
+import { postToFacebook } from '../services/facebookService';
 import { compressImage, overlayTextOnImage } from '../src/utils/imageUtils';
 import { 
   Plus, Edit, Trash2, Save, X, LogOut, LayoutDashboard, 

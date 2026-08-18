@@ -33,36 +33,3 @@ export const postToFacebook = async (message: string, imageUrl?: string, schedul
   }
 };
 
-export const publishFacebookPost = async (postId: string): Promise<boolean> => {
-  try {
-    const response = await fetch('/api/facebook/publish', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ postId }),
-    });
-
-    const textData = await response.text();
-    let data: any = {};
-    
-    if (textData) {
-      try {
-        data = JSON.parse(textData);
-      } catch (e) {
-        if (!response.ok) {
-          throw new Error(`Server returned ${response.status}`);
-        }
-      }
-    }
-
-    if (!response.ok) {
-      throw new Error(data.error || `Failed to publish post (Status: ${response.status})`);
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Error publishing Facebook post:', error);
-    throw error;
-  }
-};
