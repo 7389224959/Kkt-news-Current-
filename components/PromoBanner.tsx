@@ -57,18 +57,18 @@ const PromoBanner = () => {
         {/* Right Side: Stats & Info */}
         <div className="flex-grow flex flex-col justify-center w-full lg:max-w-4xl">
           <h3 className="text-3xl md:text-4xl lg:text-5xl font-serif font-bold text-white mb-5 leading-tight text-center lg:text-left drop-shadow-sm">
-            Reaching <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-500 font-black tracking-tight drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">7 Lakh+</span><br/>
+            Reaching <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-500 font-black tracking-tight drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">1M+</span><br/>
             Chhattisgarhis Every Month
           </h3>
           <p className="text-slate-300 mb-8 text-base md:text-lg text-center lg:text-left max-w-2xl leading-relaxed font-light mx-auto lg:mx-0">
-            <span className="text-yellow-400 font-medium">Across Web, Facebook & Video</span> — distributed through 
+            <span className="text-yellow-400 font-medium">Across Website, Instagram & Facebook</span> — distributed through 
             a network of <span className="text-white font-medium">5 Lakh+</span> local group members.
           </p>
           
           <div className="flex flex-wrap justify-center lg:justify-start gap-4 md:gap-6">
             {/* Stat Box 1 */}
             <div className="bg-[#152038]/60 backdrop-blur-md border border-[#2a3c5a] rounded-xl px-6 py-4 flex flex-col items-center lg:items-start transition-all duration-300 hover:bg-[#1a2744] hover:border-yellow-500/40 hover:shadow-[0_0_20px_rgba(234,179,8,0.15)] hover:-translate-y-1 group">
-              <span className="text-2xl md:text-3xl font-black bg-gradient-to-br from-yellow-200 to-yellow-500 bg-clip-text text-transparent mb-1 drop-shadow-sm">7 Lakh+</span>
+              <span className="text-2xl md:text-3xl font-black bg-gradient-to-br from-yellow-200 to-yellow-500 bg-clip-text text-transparent mb-1 drop-shadow-sm">1M+</span>
               <span className="text-[10px] md:text-xs text-slate-400 font-semibold tracking-[0.2em] uppercase">
                  Monthly Reach
               </span>
@@ -76,9 +76,9 @@ const PromoBanner = () => {
             
             {/* Stat Box 2 */}
             <div className="bg-[#152038]/60 backdrop-blur-md border border-[#2a3c5a] rounded-xl px-6 py-4 flex flex-col items-center lg:items-start transition-all duration-300 hover:bg-[#1a2744] hover:border-yellow-500/40 hover:shadow-[0_0_20px_rgba(234,179,8,0.15)] hover:-translate-y-1 group">
-              <span className="text-2xl md:text-3xl font-black text-white mb-1 group-hover:text-yellow-100 transition-colors drop-shadow-sm">65K+</span>
+              <span className="text-xl md:text-2xl font-black text-white mb-1 group-hover:text-yellow-100 transition-colors drop-shadow-sm whitespace-nowrap">Web • Insta • FB</span>
               <span className="text-[10px] md:text-xs text-slate-400 font-semibold tracking-[0.2em] uppercase">
-                 Facebook
+                 Digital Channels
               </span>
             </div>
             

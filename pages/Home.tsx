@@ -6,6 +6,7 @@ import { Category } from '../types';
 import { sortArticlesByDate } from '../services/articleService';
 import NewsCard from '../components/NewsCard';
 import PromoBanner from '../components/PromoBanner';
+import BalajiAdBanner from '../components/BalajiAdBanner';
 import NewsImage from '../components/NewsImage';
 import { ChevronRight, TrendingUp, Zap, Newspaper } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
@@ -118,6 +119,9 @@ const Home: React.FC = () => {
       <div className="container mx-auto px-4 py-6">
         {/* Promotional Banner */}
         <PromoBanner />
+        
+        {/* Shree Balaji Mobile Advertisement Banner */}
+        <BalajiAdBanner />
         
         {/* Hero Section */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12">
