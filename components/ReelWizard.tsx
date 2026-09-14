@@ -337,7 +337,18 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
   useEffect(() => {
     if (autoStart && articles.length > 0 && activeTemplates.length > 0 && !autoStarted.current) {
        autoStarted.current = true;
-       let articleToUse = selectedArticle || articles[0];
+       // Reel Gatekeeper: Prioritize top scoring viral article
+       let articleToUse = selectedArticle;
+       if (!articleToUse) {
+         articleToUse = articles[0];
+         for (const art of articles) {
+           const artScore = (art as any).viral_score ?? 0;
+           const bestScore = (articleToUse as any).viral_score ?? 0;
+           if (artScore > bestScore) {
+             articleToUse = art;
+           }
+         }
+       }
        
        let templateToUse = activeTemplates[0];
        let oldestTime = templateToUse.lastUsedTimestamp || 0;

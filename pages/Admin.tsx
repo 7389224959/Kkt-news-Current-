@@ -445,7 +445,14 @@ const Admin: React.FC = () => {
       }
       
       refreshData();
-      let articleToUse = articles[0]; // Newest published post
+      let articleToUse = articles[0]; // Prioritize highest scoring viral article
+      for (const art of articles) {
+        const artScore = (art as any).viral_score ?? 0;
+        const bestScore = (articleToUse as any).viral_score ?? 0;
+        if (artScore > bestScore) {
+          articleToUse = art;
+        }
+      }
       
       if (!articleToUse) {
         alert("Auto Viral Error: No articles available.");
@@ -637,7 +644,15 @@ const Admin: React.FC = () => {
       if (newArticles.length > 0) {
         refreshData();
         
-        let articleToUse = newArticles[0]; // Newest published post
+        // Gatekeeper: pick the top scoring published article
+        let articleToUse = newArticles[0];
+        for (const art of newArticles) {
+          const artScore = (art as any).viral_score ?? 0;
+          const bestScore = (articleToUse as any).viral_score ?? 0;
+          if (artScore > bestScore) {
+            articleToUse = art;
+          }
+        }
         let cachedSeoInfo;
         try {
           if (typeof window !== 'undefined' && articleToUse?.slug) {
@@ -3448,6 +3463,14 @@ const Admin: React.FC = () => {
                 ) : (
                   <p className="text-sm text-red-500 italic py-2">Please add at least one RSS link.</p>
                 )}
+              </div>
+
+              {/* Gatekeeper Shield Notice */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-800 flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <span className="font-bold">Reel Selection Gatekeeper Active:</span> Articles must pass a strict 75+ virality score and full 5W fact completeness check (verified real names, locations, and status) before publication to guarantee viral, high-quality reels.
+                </div>
               </div>
 
               <div className="pt-2 flex justify-end">

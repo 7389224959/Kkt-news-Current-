@@ -938,121 +938,120 @@ export const fetchDailyNews = async (
 
   try {
     const prompt = `
-      VIRAL NEWS SCORING ENGINE (KKT NEWS)
+      VIRAL NEWS SCORING ENGINE & REEL SELECTION GATEKEEPER (KKT NEWS)
 
-      You are an expert news editor for short-form social media content.
-      Your task is to analyze the fetched CANDIDATE ARTICLES below and assign a Virality Score from 0-100 based on public interest, emotional impact, practical relevance, curiosity, controversy, and shareability.
+      You are an expert news editor and senior digital journalist for short-form viral news reels.
+      Your task is to analyze the fetched CANDIDATE ARTICLES below, enforce a STRICT VIRALITY & COMPLETENESS GATEKEEPER, and assign a Virality Score from 0-100.
 
-      Your goal is NOT to select the most important journalism.
-      Your goal is to select stories that ordinary people are most likely to watch, discuss, share, and react to on Facebook Reels, Instagram Reels, and YouTube Shorts.
+      THE USER'S SYSTEM AUTOMATICALLY GENERATES A VIRAL REEL FOR THE LATEST PUBLISHED NEWS ARTICLE.
+      THEREFORE, YOU MUST ONLY SELECT AND PUBLISH AN ARTICLE IF IT PASSES THE REEL SELECTION GATEKEEPER WITH FLYING COLORS.
 
-      STEP 1: REJECT LOW-INTEREST STORIES
-      Immediately assign LOW priority unless extraordinary circumstances exist:
-      - Routine government meetings, Department transfers, Ceremonial events, Generic press conferences, Political greetings, Award distributions, Weather updates without danger, Minor local notices, Corporate announcements affecting few people, Repeated updates on same story
+      =======================================================
+      CRITICAL GATEKEEPER RULE #1: FACT COMPLETENESS (NO INCOMPLETE NEWS)
+      =======================================================
+      A candidate MUST BE IMMEDIATELY REJECTED (Score = 0, SKIP) if it lacks key facts:
+      - MISSING SPECIFICS: Does it lack the concrete names of people, official designations, specific organizations, exact villages/locations, or police stations involved? If the article only says vague things like "एक शख्स", "कुछ युवकों ने", "एक व्यक्ति" without any names or concrete details from the source, REJECT IT.
+      - TRUNCATED RSS TEASER: If the extracted content is just a 1-2 sentence teaser or incomplete snippet without the core resolution, what happened, who did it, and current police/authority status, REJECT IT.
+      - SENSELESS / UNVERIFIED / CLICKBAIT: If the story lacks a coherent cause-and-effect timeline (Who did what, where, why, and what was the official action/result), REJECT IT.
+      - COMPLETE 5Ws REQUIRED: The candidate MUST clearly answer:
+        1. WHO (Real names, victim/accused names, designations, or official bodies)
+        2. WHERE (Exact district, town, road, police station, or hospital)
+        3. WHAT (Specific concrete incident, amounts, sections, or actions)
+        4. WHEN & HOW (Timeline of the event)
+        5. CURRENT STATUS (FIR registered, arrest, hospital condition, inquiry ordered)
 
-      STEP 2: SCORE VIRALITY
+      =======================================================
+      CRITICAL GATEKEEPER RULE #2: VIRAL THRESHOLD (MINIMUM SCORE >= 75)
+      =======================================================
+      Do NOT publish routine, low-interest, or administrative news. 
+      The candidate MUST score 75 OR HIGHER to be published.
+      If NO candidate achieves a score of 75 or higher with complete facts, YOU MUST RETURN AN EMPTY ARRAY [].
+
+      STEP 1: AUTOMATIC ZERO-SCORE REJECTIONS (SCORE = 0)
+      Immediately reject and give Score = 0 to:
+      - Routine government meetings, department transfers, routine postings, bureaucratic circulars
+      - Routine weather forecasts/updates (e.g. "अगले 24 घंटे में हल्की बारिश के आसार") without severe disaster/life risk
+      - Ceremonial events, political greetings, birthday wishes, floral tributes, standard press releases
+      - Routine tenders, municipal notices, standard road repairs without scandal
+      - Generic speeches where no concrete policy change or controversy occurred
+      - Stories already covered in Recent Titles (duplicates)
+
+      STEP 2: VIRALITY SCORING (Only for stories with full concrete facts)
       A. HUMAN IMPACT (0-25)
-      +25 Direct impact on public money, jobs, safety, education, health
-      +20 Large number of people affected
-      +15 Community-level impact
-      +5 Limited audience impact
-      +0 No practical impact
+      +25 Direct impact on public safety, citizen rights, public money, jobs, health, or security
+      +20 Widespread community or state-level impact
+      +10 Moderate impact
+      +0 No impact on common people
 
-      B. EMOTIONAL TRIGGER (0-20)
-      +20 Shock, Anger, Fear
-      +18 Inspiration, Hope
-      +15 Happiness, Sadness
-      +10 Sympathy
-      +0 Emotionally neutral
+      B. EMOTIONAL TRIGGER & CONFLICT (0-25)
+      +25 Shocking crime, fraud exposed, major corruption, life-saving rescue, intense injustice
+      +20 Police confrontation, public protest, court verdict, tragic incident with heroism
+      +15 Public outrage or high sympathy
+      +0 Emotionally flat / dry report
 
-      C. CRIME & CONFLICT (0-20)
-      +20 Murder, Major scam, Corruption
-      +18 Assault, Police action, Political clash
-      +15 Court drama, Gang activity
-      +12 Theft
-      +0 No conflict
+      C. CURIOSITY & SURPRISE (0-20)
+      +20 Bizarre, rare, or unexpected incident with proof
+      +15 Fascinating development, viral event with recorded evidence
+      +10 Interesting local phenomenon
+      +0 Predictable, ordinary event
 
-      D. CURIOSITY FACTOR (0-15)
-      +15 Unexpected event, Strange incident, Rare occurrence
-      +12 Mystery, Viral video
-      +10 Celebrity controversy
-      +5 Predictable event
-      +0 Completely ordinary
+      D. LOCAL & CITIZEN RELEVANCE (0-15)
+      +15 Deep Chhattisgarh / regional local connection with immediate interest
+      +10 High-stakes national news directly impacting citizens
+      +0 Disconnected or irrelevant topic
 
-      E. LOCAL RELEVANCE (0-10)
-      +10 Chhattisgarh-specific issue
-      +8 Nearby district issue
-      +6 State-level matter
-      +4 National issue
-      +2 International issue
-      +0 Irrelevant to target audience
+      E. VISUAL & REEL STORYTELLING POTENTIAL (0-15)
+      +15 Highly visual (crime scene, protest, rescue, CCTV, clear action)
+      +10 Good visual potential with identifiable locations and people
+      +0 Static paperwork or notification
 
-      F. DISCUSSION POTENTIAL (0-10)
-      +10 Highly debatable
-      +8 Political issue, Social issue, Religious controversy
-      +7 Public policy impact
-      +0 No discussion value
+      FINAL SCORE CALCULATION:
+      Sum A + B + C + D + E (Max 100).
+      - If Score < 75 OR Facts are incomplete: DO NOT SELECT. Return [].
+      - If Score >= 75 AND 5Ws Facts are 100% complete: SELECT the highest scoring candidate!
 
-      STEP 3: SPECIAL VIRAL BONUSES
-      Add bonuses:
-      +15 Child involved, Woman safety issue, Viral CCTV footage, Viral social media trend, Corruption exposed, Government benefit affecting citizens
-      +12 Rescue operation, Heroic act
-      +10 Celebrity involved, Election-related controversy, Major accident, Natural disaster
-
-      STEP 4: PENALTIES
-      Subtract:
-      -20 Purely informational
-      -15 Duplicate of recent news (Check Recent Titles provided below)
-      -15 Technical announcement
-      -10 Excessively bureaucratic, No emotional element, No visual storytelling potential
-
-      STEP 5: VISUAL POTENTIAL SCORE
-      Rate 0-10 (10 = Crime scene, rescue, protest, accident, viral video; 0 = PDF notification)
-
-      FINAL CALCULATION
-      Final Score = Human Impact + Emotional Trigger + Crime & Conflict + Curiosity + Local Relevance + Discussion Potential + Bonuses - Penalties + Visual Potential
-      Cap at 100.
-
-      PRIORITY RULES
-      90-100 = BREAKING VIRAL
-      75-89 = HIGH PRIORITY
-      60-74 = MEDIUM PRIORITY
-      40-59 = LOW PRIORITY
-      0-39 = SKIP
-
-      IMPORTANT: Prefer stories involving Crime, Corruption, Public money, Government schemes, Accidents, Rescues, Viral videos, Political conflict, Social issues. Avoid selecting news solely because it is politically important.
-
-      CRITICAL CONTEXT - RECENT TITLES (APPLY DUPLICATE PENALTY IF MATCH):
+      CRITICAL CONTEXT - RECENT TITLES (DO NOT DUPLICATE):
       ${recentTitlesList}
       
       YOUR TASK:
       1. Review the CANDIDATE ARTICLES below.
-      2. Evaluate their Virality Score based on the rules above.
-      3. Choose EXACTLY ONE candidate article that has the HIGHEST Virality Score.
-      4. If the HIGHEST score is below 40 (SKIP), you must still return an empty array [].
-      5. Otherwise, write a 100% SEO-optimized, fact-based, human-like Hindi news article (450–650 words) based ONLY on your chosen candidate.
+      2. Evaluate their Fact Completeness and Virality Score strictly.
+      3. If no candidate scores >= 75 with complete facts, RETURN AN EMPTY ARRAY [].
+      4. If one or more candidates score >= 75 with full facts, choose the SINGLE BEST candidate.
+      5. Write a 100% journalistic, highly accurate, natural Hindi news article (450–650 words) based ONLY on verified facts from that candidate.
+         - Ensure ALL real names, designations, locations, and numbers from the candidate are preserved accurately.
+         - Do NOT invent fake names or sensationalize beyond the facts.
+         - Format with proper Markdown subheadings (##).
       
       CANDIDATE ARTICLES:
       ${promptContext}
 
       ARTICLE WRITING RULES (For the chosen candidate):
-      1. Headline: Powerful, clickable Hindi headline (8–12 words)
-      2. Breaking Summary: 2 short lines summarizing the news (viral style)
-      3. Main Content: 3–5 SEO subheadings (Markdown ##), deeply journalistic, deeply human, no HTML tags.
-      4. User Value Section: "आम लोगों पर इसका क्या असर पड़ेगा?" or "आपको क्या करना चाहिए?"
-      5. ONLY use provided candidate text. Provide exact Source Link and Image.
+      1. Headline: Powerful, high-retention, factual Hindi headline (8–14 words) containing the key place or person.
+      2. Breaking Summary: 2 punchy lines summarizing the complete core fact (Who, What, Where, Status).
+      3. Main Content: 3–5 well-structured Markdown sections (##), deeply human, logical narrative progression.
+      4. Concrete Facts: Explicitly mention the person's name, designation, location, and official police/authority statement.
+      5. User Value Section: "आम जनता के लिए क्या है खास?" or "इस घटना/फैसले का सीधा असर".
+      6. ONLY use provided candidate text. Retain exact Source Link and Image.
 
       OUTPUT FORMAT
-      Return a JSON array CONTAINING EXACTLY ONE OBJECT (or empty [] if all candidates score < 40). Do not include any markdown formatting or code blocks outside the JSON.
+      Return a JSON array CONTAINING EXACTLY ONE OBJECT (or empty [] if all candidates fail the Gatekeeper or score < 75).
+      Do not include any conversational text or markdown code fence outside the JSON.
       
       JSON Structure:
       [
         {
-          "viral_score": 87,
+          "viral_score": 88,
           "priority": "HIGH",
-          "reason": ["Strong emotional impact", "Crime related"],
+          "fact_completeness": {
+            "who": "Names of persons, victims, accused, or officials",
+            "where": "Exact town/location/district",
+            "what": "Specific incident/action",
+            "status": "FIR/Arrest/Inquiry status"
+          },
+          "reason": ["High emotional conflict", "Complete key facts with real names"],
           "recommended_for_reel": true,
-          "hook_angle": "curiosity",
+          "hook_angle": "crime_injustice" | "public_impact" | "shock_reveal",
           "title": "HEADLINE (Hindi)",
           "candidateId": "MUST be the integer CANDIDATE ID from the chosen candidate",
           "excerpt": "SUMMARY (Hindi)",
@@ -1234,8 +1233,15 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
       throw new Error("AI response is not an array.");
     }
     
-    if (rawArticles.length === 0) {
-      throw new Error("No viral news found in the candidates (all scored < 40).");
+    // Gatekeeper enforcement: ensure the candidate passes the 75-point gatekeeper
+    const gatekeeperApproved = rawArticles.filter((a: any) => {
+      const score = typeof a.viral_score === 'number' ? a.viral_score : 0;
+      return score >= 75 || a.priority === 'HIGH' || a.priority === 'BREAKING VIRAL' || a.recommended_for_reel;
+    });
+
+    if (gatekeeperApproved.length === 0) {
+      console.log("Reel Gatekeeper active: No candidate passed the >= 75 score & completeness threshold. Skipping publish.");
+      return [];
     }
 
     // Helper for delay
@@ -1245,7 +1251,7 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
     const articles: Article[] = [];
 
     // Process articles sequentially to avoid rate limits
-    for (const a of rawArticles) {
+    for (const a of gatekeeperApproved) {
       const category = mapCategory(a.category);
       let imageUrl = "";
 
@@ -2004,58 +2010,30 @@ export const generateReelScript = async (
   if (!ai) throw new Error("API Key missing");
 
   const prompt = `# ROLE AND PERSONA
-You are an elite Hindi News Reel Scriptwriter and Digital Journalist. You possess the calm authority of a top-tier investigative YouTuber, the emotional storytelling of a master novelist, and the psychological manipulation skills of a viral content creator. 
+You are an elite Hindi News Reel Scriptwriter and Senior Digital Broadcast Journalist.
+Your job is to transform the provided news article into a factual, high-retention, and 100% sensible 25-40 second Hindi/Hinglish news reel script.
 
-Your goal is to transform raw, basic news into a 25-40 second Hindi reel script that stops the scroll, hooks the viewer psychologically, triggers deep emotions, and retains them until the very last second without feeling "force-spiced" or overly sensationalized.
+# ABSOLUTE INTEGRITY & FACT-ANCHORING RULES (MANDATORY)
+1. ANCHOR WITH REAL FACTS & SPECIFIC NAMES:
+   - YOU MUST EXPLICITLY MENTION the actual names of people, victims, accused, officials, police stations, and exact towns/locations from the article.
+   - NEVER use vague, nameless placeholders like "एक शख्स", "एक व्यक्ति", "कुछ लोगों ने", or "एक अफसर" when the specific names or designations are in the source.
+2. NO SENSELESS / DISCONNECTED HOOKS:
+   - THE HOOK MUST DIRECTLY STATE THE ACTUAL EVENT IN THE FIRST 5 WORDS:
+     * Crime Example: "Raipur ke Pandri mein din-dahade 25 lakh ki loot, aur aaropi ab bhi farar..."
+     * Public Policy Example: "Chhattisgarh ke bijli upbhoktaon ke liye bada update, agle mahine se..."
+3. LOGICAL CAUSE-AND-EFFECT STORYTELLING:
+   - Every sentence must logically follow the previous one without disjointed jumps.
+   - Explain: 1. What happened & Where -> 2. Who is involved (names/roles) -> 3. The exact conflict or consequence -> 4. What action police or authorities have taken right now.
 
-# DURATION & FACT-BASED SCALING RULE (STRICT 25-40 SECONDS)
-Target Duration MUST BE STRICTLY BETWEEN 25 AND 40 SECONDS (approximately 50 to 80 words spoken in Hinglish).
-Dynamically adjust script length based on the number of facts available in the news:
-- Few facts (1-2 facts): ~25 seconds (~50-55 words)
-- Moderate facts (3 facts): ~30-35 seconds (~60-70 words)
-- Rich facts (4+ facts): ~35-40 seconds (~70-80 words)
-DO NOT force stretch a simple story, and DO NOT rush a multi-fact story. Always keep the total duration strictly within 25 to 40 seconds.
+# DURATION & WORD COUNT (STRICT 25-40 SECONDS)
+Target word count: 65 to 90 words spoken in natural Hinglish.
+- Fast, punchy, articulate, and realistic newsroom anchor delivery.
 
-# CORE PSYCHOLOGICAL FRAMEWORK (Apply these to every script)
-1. The Pattern Interrupt (0-2s): Break the user's scrolling trance with a visual/verbal contradiction or a highly relatable question.
-2. The Zeigarnik Effect (Open Loops): Introduce a mystery or an unfinished thought in the first 5 seconds that the brain *must* see resolved.
-3. Loss Aversion & WIIFM (What's In It For Me): Immediately connect the news to the viewer's wallet, family, safety, or daily routine. Humans pay 2x more attention to avoiding a loss than gaining something.
-4. The Empathy Bridge: Ground the news in a human story. Don't talk about "1000 people affected"; talk about "Ramesh, who lost his livelihood."
-5. Cognitive Ease: Use simple, conversational Hinglish (80% Conversational Hindi, 20% Common English words). Avoid heavy, pure Hindi (Shuddh Hindi) unless used for a single powerful punchline. 
-
-# SCRIPT STRUCTURE & PACING (25-40 Second Arc)
-
-[0:00 - 0:05] THE SCROLL-STOPPER (The Hook)
-- Do NOT start with "Namaskar dosto", "Aaj ki badi khabar", "Badi khabar", "Breaking news", or "[Location] se badi khabar". 
-- Start with a hard-hitting statement, a paradox, or a direct question. 
-- Example: "Aapke phone ki ek setting aapka bank account khali kar sakti hai..." or "Sarkar kehti hai sab theek hai, par ground reality kuch aur hai."
-
-[0:05 - 0:15] THE CONTEXT & THE STAKES (Building the Loop)
-- Explain the core news simply, but immediately raise the stakes. 
-- Use natural conversational bridges like "Asli matter ye hai ki..." (The real matter is...) to transition.
-- Make the viewer feel the urgency. Why does this matter *today*?
-
-[0:15 - 0:30] THE CORE STORY / THE CONFLICT (The Meat)
-- Tell the story using "Show, Don't Tell". 
-- Pacing: Speak slightly faster here to build momentum. Use short, punchy sentences.
-
-[0:30 - 0:35] THE EMOTIONAL CLIMAX / THE TWIST (The Peak)
-- Deliver the most shocking fact, the emotional peak, or the "Aha!" moment. 
-- Add a pause ("..."). Let the weight of the words sink in.
-- Trigger specific emotion: Outrage (for injustice), Fear (for safety), Hope (for a solution), or Shock (for a twist).
-
-[0:35 - 0:40] THE RESOLUTION & STRATEGIC CTA (The Payoff)
-- Close the open loop from the beginning. Give a clear takeaway.
-- THE CTA: DO NOT say "Like, share, and subscribe."
-- Instead, use a "Friction CTA" or "Identity CTA". Ask a polarizing, thought-provoking question that forces them to comment to defend their opinion. 
-- Example: "Kya aapko lagta hai ye naya rule aam aadmi ke haq mein hai? Comment mein apni raye zaroor batayein. Aur aisi hi ground reality janne ke liye follow karein." (DO NOT use 'subscribe', strictly use 'follow').
-
-# TONE, LANGUAGE & ANTI-PATTERNS (CRITICAL RULES)
-- Language: 80% Conversational Hindi, 20% Common English words (Hinglish). Use words like 'Reality', 'Impact', 'System', 'Ground level'.
-- Tone: Empathetic, slightly serious, authoritative, but conversational. Like a smart friend explaining a serious issue.
-- ANTI-PATTERN 1: NO FORCE-SPICING. Do not use words like "Kalyug", "Maha-prahar", or "Trahhi-trahi" for basic news. Let the *facts* create the drama, not your adjectives.
-- ANTI-PATTERN 2: NO ROBOTIC TRANSITIONS. Avoid "Chaliye jante hain", "Dosto aaj hum baat karenge". Use natural conversational bridges like "Ab sawal ye uthta hai ki...", "Yahan sabse bada twist ye hai ki...".
-- ANTI-PATTERN 3: NO FAKE URGENCY. Match the emotion to the actual severity of the news.
+# SCRIPT ARC (25-40 SECONDS)
+[0:00 - 0:06] THE SCROLL-STOPPER HOOK: Concrete shock event + location + person involved.
+[0:06 - 0:18] THE DETAILS & CONFLICT: Exact details, who did what, victim/accused actions, and key numbers.
+[0:18 - 0:30] THE CLIMAX & CURRENT STATUS: Police FIR/arrest, hospital update, court order, or official statement.
+[0:30 - 0:40] LOGICAL CONTEXTUAL CTA: A direct question about THIS SPECIFIC EVENT (strictly use "follow", never "subscribe").
 
 # RAW NEWS ARTICLE INPUT:
 ${articleContent.substring(0, 2000)}
@@ -2757,58 +2735,35 @@ export const generateFullReelScript = async (
   const hasSubtitles = coords.subtitle_box && coords.subtitle_box !== "hidden";
 
   const prompt = `# ROLE AND PERSONA
-You are an elite Hindi News Reel Scriptwriter and Digital Journalist. You possess the calm authority of a top-tier investigative YouTuber, the emotional storytelling of a master novelist, and the psychological manipulation skills of a viral content creator. 
+You are an elite Hindi News Reel Scriptwriter and Senior Digital Broadcast Journalist.
+Your job is to transform the provided news article into a factual, high-retention, and 100% sensible 25-40 second Hindi/Hinglish news reel script.
 
-Your goal is to transform raw, basic news into a 25-40 second Hindi reel script that stops the scroll, hooks the viewer psychologically, triggers deep emotions, and retains them until the very last second without feeling "force-spiced" or overly sensationalized.
+# ABSOLUTE INTEGRITY & FACT-ANCHORING RULES (MANDATORY)
+1. ANCHOR WITH REAL FACTS & SPECIFIC NAMES:
+   - YOU MUST EXPLICITLY MENTION the actual names of people, victims, accused, officials, police stations, and exact towns/locations from the article.
+   - NEVER use vague, nameless placeholders like "एक शख्स", "एक व्यक्ति", "कुछ लोगों ने", or "एक अफसर" when the specific names or designations are in the source.
+   - If the news mentions "Telibandha", say "Raipur ke Telibandha mein". If the accused is "Ramesh", say "aaropi Ramesh".
+2. NO SENSELESS / DISCONNECTED HOOKS:
+   - BANNED CLICHÉS: DO NOT start with generic conspiracy lines like "Sarkar kehti hai sab theek hai par ground reality kuch aur hai" or "Aapke phone ki ek setting aapka account khali kar sakti hai" UNLESS the news is literally about government failure or phone hacking.
+   - THE HOOK MUST DIRECTLY STATE THE ACTUAL EVENT IN THE FIRST 5 WORDS:
+     * Crime Example: "Raipur ke Pandri mein din-dahade 25 lakh ki loot, aur aaropi ab bhi farar..."
+     * Accident Example: "Ambikapur highway par tej raftar bus aur truck ki takkar, 4 logon ki halat gambhir..."
+     * Public Policy Example: "Chhattisgarh ke bijli upbhoktaon ke liye bada update, agle mahine se..."
+3. LOGICAL CAUSE-AND-EFFECT STORYTELLING (MUST MAKE 100% SENSE):
+   - Every sentence must logically follow the previous one.
+   - Explain: 1. What happened & Where -> 2. Who is involved (names/roles) -> 3. The exact conflict or consequence -> 4. What action police or authorities have taken right now.
+   - No abrupt non-sequiturs or disjointed jumps.
 
-# DURATION & FACT-BASED SCALING RULE (STRICT 25-40 SECONDS)
-Target Duration MUST BE STRICTLY BETWEEN 25 AND 40 SECONDS (approximately 50 to 80 words spoken in Hinglish).
-Dynamically adjust script length based on the number of facts available in the news:
-- Few facts (1-2 facts): ~25 seconds (~50-55 words)
-- Moderate facts (3 facts): ~30-35 seconds (~60-70 words)
-- Rich facts (4+ facts): ~35-40 seconds (~70-80 words)
-DO NOT force stretch a simple story, and DO NOT rush a multi-fact story. Always keep the total voiceover duration strictly within 25 to 40 seconds.
+# DURATION & WORD COUNT (STRICT 25-40 SECONDS)
+Target word count: 65 to 90 words spoken in natural Hinglish.
+- Fast, punchy, articulate, and realistic newsroom anchor delivery.
+- DO NOT artificially truncate sentences into unintelligible fragments. Give enough words for the listener to understand the full reality.
 
-# CORE PSYCHOLOGICAL FRAMEWORK (Apply these to every script)
-1. The Pattern Interrupt (0-2s): Break the user's scrolling trance with a visual/verbal contradiction or a highly relatable question.
-2. The Zeigarnik Effect (Open Loops): Introduce a mystery or an unfinished thought in the first 5 seconds that the brain *must* see resolved.
-3. Loss Aversion & WIIFM (What's In It For Me): Immediately connect the news to the viewer's wallet, family, safety, or daily routine. Humans pay 2x more attention to avoiding a loss than gaining something.
-4. The Empathy Bridge: Ground the news in a human story. Don't talk about "1000 people affected"; talk about "Ramesh, who lost his livelihood."
-5. Cognitive Ease: Use simple, conversational Hinglish (80% Conversational Hindi, 20% Common English words). Avoid heavy, pure Hindi (Shuddh Hindi) unless used for a single powerful punchline.
-
-# SCRIPT STRUCTURE & PACING (25-40 Second Arc)
-
-[0:00 - 0:05] THE SCROLL-STOPPER (The Hook)
-- Do NOT start with "Namaskar dosto", "Aaj ki badi khabar", "Badi khabar", "Breaking news", or "[Location] se badi khabar".
-- Start with a hard-hitting statement, a paradox, or a direct question.
-- Example: "Aapke phone ki ek setting aapka bank account khali kar sakti hai..." or "Sarkar kehti hai sab theek hai, par ground reality kuch aur hai."
-
-[0:05 - 0:15] THE CONTEXT & THE STAKES (Building the Loop)
-- Explain the core news simply, but immediately raise the stakes.
-- Use natural conversational transitions like "Asli matter ye hai ki..." (The real matter is...) to transition.
-- Make the viewer feel the urgency. Why does this matter *today*?
-
-[0:15 - 0:30] THE CORE STORY / THE CONFLICT (The Meat)
-- Tell the story using "Show, Don't Tell".
-- Pacing: Speak slightly faster here to build momentum. Short, punchy sentences.
-
-[0:30 - 0:35] THE EMOTIONAL CLIMAX / THE TWIST (The Peak)
-- Deliver the most shocking fact, the emotional peak, or the "Aha!" moment.
-- Add a pause ("..."). Let the weight of the words sink in.
-- Trigger specific emotion: Outrage (for injustice), Fear (for safety), Hope (for a solution), or Shock (for a twist).
-
-[0:35 - 0:40] THE RESOLUTION & STRATEGIC CTA (The Payoff)
-- Close the open loop from the beginning. Give a clear takeaway.
-- THE CTA: Ask a polarizing, thought-provoking question forcing comments ("Friction CTA" or "Identity CTA").
-- Example: "Kya aapko lagta hai ye naya rule aam aadmi ke haq mein hai? Comment mein apni raye zaroor batayein. Aur aisi hi ground reality janne ke liye follow karein."
-- DO NOT say "Like, share, and subscribe." Strictly use "follow".
-
-# TONE, LANGUAGE & ANTI-PATTERNS (CRITICAL RULES)
-- Language: 80% Conversational Hindi, 20% Common English words (Hinglish). Use words like 'Reality', 'Impact', 'System', 'Ground level'.
-- Tone: Empathetic, slightly serious, authoritative, but conversational.
-- ANTI-PATTERN 1: NO FORCE-SPICING. Do not use words like "Kalyug", "Maha-prahar", or "Trahhi-trahi" for basic news. Let the *facts* create the drama, not your adjectives.
-- ANTI-PATTERN 2: NO ROBOTIC TRANSITIONS. Avoid "Chaliye jante hain", "Dosto aaj hum baat karenge". Use natural conversational bridges like "Ab sawal ye uthta hai ki...", "Yahan sabse bada twist ye hai ki...".
-- ANTI-PATTERN 3: NO FAKE URGENCY. Match the emotion to the actual severity of the news.
+# SCRIPT ARC (25-40 SECONDS)
+[0:00 - 0:06] THE SCROLL-STOPPER HOOK: Concrete shock event + location + person involved.
+[0:06 - 0:18] THE DETAILS & CONFLICT: Exact details, who did what, victim/accused actions, and key numbers.
+[0:18 - 0:30] THE CLIMAX & CURRENT STATUS: Police FIR/arrest, hospital update, court order, or official statement.
+[0:30 - 0:40] LOGICAL CONTEXTUAL CTA: A direct question about THIS SPECIFIC EVENT (e.g. "Kya police ki aisi karwayi se aisi ghatnaon par rok lagegi? Apni raye comment mein zaroor batayein aur KKT News ko follow karein."). Strictly use "follow", never "subscribe".
 
 # RAW NEWS ARTICLE INPUT:
 ${articleContent}
