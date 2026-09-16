@@ -14,7 +14,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [scriptData, setScriptData] = useState<any>({ fullScript: '', headline: '', ticker: '', voiceoverScript: '', subtitles: [] });
   const [selectedVoice, setSelectedVoice] = useState<string>('Puck');
-  const [enableAudioTags, setEnableAudioTags] = useState<boolean>(true);
+  const [enableAudioTags, setEnableAudioTags] = useState<boolean>(false);
   
   const [showHeadline, setShowHeadline] = useState(true);
   const [showTicker, setShowTicker] = useState(true);
@@ -670,10 +670,10 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
             <div className="pt-3 border-t border-gray-200 flex items-center justify-between">
               <div>
                 <h4 className="font-medium flex items-center gap-1.5 text-sm text-pink-900">
-                  <Volume2 size={16} className="text-pink-600"/> Audio Tags & Expression Directives
+                  <Volume2 size={16} className="text-pink-600"/> KKT News Anchor Style (Clean Narration)
                 </h4>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Insert bracketed emotion & pacing tags (e.g. <code>[serious]</code>, <code>[fast]</code>, <code>[slow]</code>, <code>[dramatic]</code>) to dynamically modulate voiceover inflection mid-sentence.
+                  Generates a crisp 70-90 word factual script, strong opening hook, neutral crime reporting, and official KKT news follow CTA without robotic tags.
                 </p>
               </div>
               <label className="flex items-center gap-2 cursor-pointer bg-pink-50 px-3 py-1.5 rounded-lg border border-pink-200 text-xs font-bold text-pink-900 shrink-0 ml-3 hover:bg-pink-100 transition-all">
@@ -698,7 +698,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
         <div className="space-y-4">
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="font-medium text-sm text-gray-900">Voiceover Script (Hindi/Hinglish)</label>
+              <label className="font-medium text-sm text-gray-900">Voiceover Script (KKT News Anchor Style)</label>
               <label className="flex items-center gap-1.5 text-xs text-pink-900 font-bold cursor-pointer bg-pink-50 px-2.5 py-1 rounded border border-pink-200 hover:bg-pink-100 transition-all">
                 <input 
                   type="checkbox" 
@@ -706,7 +706,7 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
                   onChange={(e) => setEnableAudioTags(e.target.checked)} 
                   className="rounded text-pink-600 focus:ring-pink-500"
                 />
-                <span>Audio Tags ([serious], [fast]): <strong>{enableAudioTags ? 'ON' : 'OFF'}</strong></span>
+                <span>Audio Tags: <strong>{enableAudioTags ? 'ON' : 'OFF'}</strong></span>
               </label>
             </div>
             <textarea 
@@ -715,11 +715,9 @@ export default function ReelWizard({ articles, settings, onClose, autoStart = fa
               onChange={(e) => setScriptData({...scriptData, fullScript: e.target.value})}
               className="w-full border rounded p-2 text-sm font-sans"
             />
-            {enableAudioTags && (
-              <p className="text-[11px] text-pink-700 mt-1 font-medium">
-                💡 Insert bracketed tags directly into the text (e.g. <code>[serious]</code>, <code>[fast]</code>, <code>[slow]</code>, <code>[pause]</code>, <code>[dramatic]</code>) to dynamically alter pacing and emotion mid-sentence.
-              </p>
-            )}
+            <p className="text-[11px] text-gray-600 mt-1 font-medium">
+              💡 KKT Anchor Standard: 70-90 words, strong factual hook in first 5 words, neutral tone, no judgment questions, and clean KKT follow CTA.
+            </p>
           </div>
           
           {showHeadline && (

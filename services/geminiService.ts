@@ -148,6 +148,127 @@ export const getAiClient = () => {
   return baseClient;
 };
 
+/**
+ * Safely extracts and parses JSON from AI model outputs, handling:
+ * 1. Markdown code fences (```json ... ```)
+ * 2. Preceding conversational chatter or trailing hallucinated text / extra characters
+ * 3. Syntax anomalies repaired via jsonrepair
+ */
+export function safeExtractAndParseJson<T = any>(rawText: string, fallback?: T): T {
+  if (!rawText || typeof rawText !== "string") {
+    if (fallback !== undefined) return fallback;
+    throw new Error("Cannot parse empty or non-string input as JSON.");
+  }
+
+  let text = rawText.trim();
+
+  // 1. Strip markdown code fences if wrapped
+  const fenceMatch = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fenceMatch) {
+    text = fenceMatch[1].trim();
+  } else if (text.includes("```")) {
+    text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+  }
+
+  // 2. Try direct parse
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Continue to balanced extraction first
+  }
+
+  // 3. Find opening brace '{' or bracket '['
+  const firstBrace = text.indexOf("{");
+  const firstBracket = text.indexOf("[");
+
+  let startIndex = -1;
+  let isObject = false;
+
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    startIndex = firstBrace;
+    isObject = true;
+  } else if (firstBracket !== -1) {
+    startIndex = firstBracket;
+    isObject = false;
+  }
+
+  if (startIndex !== -1) {
+    const openChar = isObject ? "{" : "[";
+    const closeChar = isObject ? "}" : "]";
+
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    let matchedEnd = -1;
+
+    for (let i = startIndex; i < text.length; i++) {
+      const char = text[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (char === "\\") {
+        if (inString) {
+          escape = true;
+        }
+        continue;
+      }
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (!inString) {
+        if (char === openChar) {
+          depth++;
+        } else if (char === closeChar) {
+          depth--;
+          if (depth === 0) {
+            matchedEnd = i;
+            break;
+          }
+        }
+      }
+    }
+
+    if (matchedEnd !== -1) {
+      const candidate = text.slice(startIndex, matchedEnd + 1);
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        try {
+          return JSON.parse(jsonrepair(candidate));
+        } catch {
+          // Continue
+        }
+      }
+    }
+
+    // Fallback: try from startIndex to last closing character
+    const lastCloseIndex = text.lastIndexOf(closeChar);
+    if (lastCloseIndex > startIndex) {
+      const candidate = text.slice(startIndex, lastCloseIndex + 1);
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        try {
+          return JSON.parse(jsonrepair(candidate));
+        } catch {
+          // Continue
+        }
+      }
+    }
+  }
+
+  // 4. Final attempt with jsonrepair on the whole text
+  try {
+    return JSON.parse(jsonrepair(text));
+  } catch (finalError) {
+    if (fallback !== undefined) return fallback;
+    console.error("Failed to parse JSON string:", text);
+    throw finalError;
+  }
+}
+
 export interface NewsDraft {
   title: string;
   excerpt: string;
@@ -1193,38 +1314,15 @@ CRITICAL: आउटपुट देने से पहले, एक बार 
       rawText = response.text || "[]";
     }
 
-    let cleanedText = rawText.trim();
-    if (cleanedText.includes("```")) {
-      const match = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (match) cleanedText = match[1];
-    }
-
-    const firstB = cleanedText.indexOf("[");
-    const lastB = cleanedText.lastIndexOf("]");
-    if (firstB !== -1 && lastB !== -1 && lastB >= firstB) {
-      cleanedText = cleanedText.substring(firstB, lastB + 1);
-    }
-
-    // Replace all actual newlines with spaces to avoid control character errors in strings
-    cleanedText = cleanedText.replace(/\r?\n|\r/g, " ").replace(/\t/g, " ");
-
-    // Fix common JSON errors models sometimes make
-    cleanedText = cleanedText.replace(/"\s*\.\s*,/g, '",'); // Fixes "...".,
-    cleanedText = cleanedText.replace(/"\s*।\s*,/g, '",'); // Fixes "..."।, (Hindi full stop)
-    cleanedText = cleanedText.replace(/""\s*,/g, '",'); // Fixes trailing double quotes "...",
-    cleanedText = cleanedText.replace(/,\s*}/g, "}"); // Fixes trailing commas in objects
-    cleanedText = cleanedText.replace(/,\s*]/g, "]"); // Fixes trailing commas in arrays
-
     let rawArticles;
     try {
-      cleanedText = jsonrepair(cleanedText);
-      rawArticles = JSON.parse(cleanedText);
+      rawArticles = safeExtractAndParseJson<any[]>(rawText);
     } catch (parseError) {
       console.error(
         "JSON Parse Error:",
         parseError,
         "Cleaned text was:",
-        cleanedText.substring(0, 500) + "...",
+        rawText.substring(0, 500) + "...",
       );
       throw new Error("Failed to parse AI response as JSON.");
     }
@@ -1983,14 +2081,22 @@ export interface ReelScript {
 
 export const cleanVoiceoverScript = (text: string, preserveAudioTags: boolean = false): string => {
   if (!text) return "";
-  if (preserveAudioTags) {
-    return text.replace(/\s+/g, " ").trim();
-  }
-  return text
+  let cleaned = text
+    // 1. Never keep bracketed audio/emotion tags like [urgent], [dramatic], [pause], [serious], [fast], etc.
     .replace(/\[[^\]]*\]/g, "")
-    .replace(/\*[^*]+\*/g, "") // Also strip *asterisk* emotion tags just in case
+    // 2. Strip asterisk tags like *pause*, *dramatic*
+    .replace(/\*[^*]+\*/g, "")
+    // 3. Strip robotic / forbidden conversational cliches if they appear at start of script
+    .replace(/^(🚨\s*)?(badi khabar\s*[:|-]?|breaking news\s*[:|-]?|dosto\s*[,|-]?)\s*/i, "")
+    // 4. Replace judgment or opinion-seeking questions with KKT news follow CTA
+    .replace(
+      /kya aise aaropiyo[n]? ko (turant )?kadi saza milni chahiye\??\s*(apni raye )?(comment mein (zaroor )?batayein)?(\s*aur kkt news ko follow karein)?/gi,
+      "Zyada updates ke liye KKT News ko follow karein."
+    )
     .replace(/\s+/g, " ")
     .trim();
+
+  return cleaned;
 };
 
 export const formatReelCaption = (caption: string): string => {
@@ -2004,36 +2110,30 @@ export const formatReelCaption = (caption: string): string => {
 
 export const generateReelScript = async (
   articleContent: string,
-  enableAudioTags: boolean = true,
+  enableAudioTags: boolean = false,
 ): Promise<ReelScript> => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
 
   const prompt = `# ROLE AND PERSONA
-You are an elite Hindi News Reel Scriptwriter and Senior Digital Broadcast Journalist.
-Your job is to transform the provided news article into a factual, high-retention, and 100% sensible 25-40 second Hindi/Hinglish news reel script.
+You are an elite Digital Broadcast Journalist and Professional Hindi News Anchor for KKT News.
+Your job is to transform the provided news article into a factual, high-retention, credible, and 100% sensible 25-40 second Hindi/Hinglish news reel script.
 
-# ABSOLUTE INTEGRITY & FACT-ANCHORING RULES (MANDATORY)
-1. ANCHOR WITH REAL FACTS & SPECIFIC NAMES:
-   - YOU MUST EXPLICITLY MENTION the actual names of people, victims, accused, officials, police stations, and exact towns/locations from the article.
-   - NEVER use vague, nameless placeholders like "एक शख्स", "एक व्यक्ति", "कुछ लोगों ने", or "एक अफसर" when the specific names or designations are in the source.
-2. NO SENSELESS / DISCONNECTED HOOKS:
-   - THE HOOK MUST DIRECTLY STATE THE ACTUAL EVENT IN THE FIRST 5 WORDS:
-     * Crime Example: "Raipur ke Pandri mein din-dahade 25 lakh ki loot, aur aaropi ab bhi farar..."
-     * Public Policy Example: "Chhattisgarh ke bijli upbhoktaon ke liye bada update, agle mahine se..."
-3. LOGICAL CAUSE-AND-EFFECT STORYTELLING:
-   - Every sentence must logically follow the previous one without disjointed jumps.
-   - Explain: 1. What happened & Where -> 2. Who is involved (names/roles) -> 3. The exact conflict or consequence -> 4. What action police or authorities have taken right now.
+# CRITICAL KKT AI PROMPT RULES (MANDATORY & STRICTLY ENFORCED):
+1. NEVER USE TAGS: Absolutely NEVER use tags like [urgent], [dramatic], [pause], [serious], [fast], [slow], or any bracketed stage directions. Output ONLY clean spoken narration script.
+2. PROFESSIONAL HINDI NEWS ANCHOR STYLE: Deliver in a clean, authoritative, articulate digital news reporter voice. Sound natural and credible, never robotic or tabloid.
+3. FIRST SENTENCE MUST CONTAIN THE STRONGEST FACT (HOOK, 0-3 SEC): The first sentence MUST state the single strongest, most shocking or crucial verified fact immediately with location and incident.
+   - Example: "Raipur ke Mana mein ek yuvti ko zinda jalane ki koshish ka sansanikhej mamla saamne aaya."
+4. NO QUESTIONS ASKING VIEWERS TO JUDGE GUILT, PUNISHMENT OR POLITICS: Viewers want facts, not judgement. STRICTLY FORBIDDEN to ask leading opinion questions like "Kya aise aaropiyon ko kadi saza milni chahiye?", "kya lagta hai?", or "comment karke batayein".
+5. CLEAN NEWS CALL-TO-ACTION ENDING: End the narration with official investigation status followed strictly by: "Zyada updates ke liye KKT News ko follow karein." (or "Is mamle se judi har update ke liye KKT News ko follow karein.").
+6. LENGTH & DURATION: STRICTLY 70 to 90 words spoken in natural Hinglish/Hindi (25-40 seconds duration).
+7. SHORT SENTENCES, MOBILE-FRIENDLY: Write in short, crisp sentences that are easy to understand on mobile feeds.
+8. AVOID BANNED CLICHÉS: STRICTLY AVOID "badi khabar", "agar aap", "dosto", "comment karke bataye", "aapki kya raye hai", "sarkar so rahi hai".
+9. CRIME NEWS MUST REMAIN FACTUAL & NEUTRAL: State verified names of the accused, victim, police officers, police stations, and hospital. Clearly attribute details to police and official sources without sensationalizing moral judgement.
+10. OUTPUT ONLY NARRATION SCRIPT: Pure narration script without stage directions.
 
-# DURATION & WORD COUNT (STRICT 25-40 SECONDS)
-Target word count: 65 to 90 words spoken in natural Hinglish.
-- Fast, punchy, articulate, and realistic newsroom anchor delivery.
-
-# SCRIPT ARC (25-40 SECONDS)
-[0:00 - 0:06] THE SCROLL-STOPPER HOOK: Concrete shock event + location + person involved.
-[0:06 - 0:18] THE DETAILS & CONFLICT: Exact details, who did what, victim/accused actions, and key numbers.
-[0:18 - 0:30] THE CLIMAX & CURRENT STATUS: Police FIR/arrest, hospital update, court order, or official statement.
-[0:30 - 0:40] LOGICAL CONTEXTUAL CTA: A direct question about THIS SPECIFIC EVENT (strictly use "follow", never "subscribe").
+# REFERENCE GOLDEN KKT SCRIPT:
+"Raipur ke Mana mein ek yuvti ko zinda jalane ki koshish ka sansanikhej mamla saamne aaya. Police ke mutabik aaropi Veeru Dheewar ne apni parichit Rajkumari Sahu par petrol daal kar aag laga di. Gambhir roop se jhulsi Rajkumari ko Mekahara aspatal mein bharti karaya gaya. Jaanch mein pata chala hai ki dono pehle se ek doosre ko jaante the. ASP Abhishek Jha ke anusar Mana police CCTV footage aur anya sabooton ke aadhar par aaropi ki talash kar rahi hai. Aaropi ki giraftari hote hi sabse pehle update milegi KKT News par. Zyada updates ke liye KKT News ko follow karein."
 
 # RAW NEWS ARTICLE INPUT:
 ${articleContent.substring(0, 2000)}
@@ -2041,11 +2141,11 @@ ${articleContent.substring(0, 2000)}
 # OUTPUT FORMAT (STRICT JSON ONLY):
 {
   "titleCaptionIdea": "A highly clickable, curiosity-driven 1-liner for the reel caption",
-  "onScreenHookText": "The exact text to show on screen in the first 2 seconds",
+  "onScreenHookText": "Exact hook text to show on screen in the first 2 seconds",
   "scriptLines": ["Line 1", "Line 2", "Line 3"],
   "hookVariation": "An optional alternative hook for A/B testing",
-  "fullScript": ${enableAudioTags ? '"The complete spoken Hinglish script with bracketed audio emotion/pacing tags (e.g., [serious], [fast], [slow], [pause], [dramatic], [excited], [urgent]) to dynamically alter voice inflection."' : '"The complete clean spoken Hinglish script (50-80 words, 25-40 seconds, scaled to facts). NO bracketed cues in this string."'},
-  "strategicCtaQuestion": "The exact question to ask in the video and pin in the comments to drive engagement"
+  "fullScript": "The complete clean spoken Hinglish script (STRICTLY 70-90 words, 25-40 seconds, following all 10 KKT rules. NO bracketed cues).",
+  "strategicCtaQuestion": "Is mamle se judi sabhi taaza updates ke liye KKT News ko follow karein."
 }
 `;
 
@@ -2059,20 +2159,12 @@ ${articleContent.substring(0, 2000)}
     });
 
     const text = response.text || "{}";
-    let cleanedText = text
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
-    
-    const firstBrace = cleanedText.indexOf('{');
-    const lastBrace = cleanedText.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      cleanedText = cleanedText.substring(firstBrace, lastBrace + 1);
-    }
-
-    const result = JSON.parse(cleanedText) as ReelScript;
+    const result = safeExtractAndParseJson<ReelScript>(text);
     if (result.fullScript) {
-      result.fullScript = cleanVoiceoverScript(result.fullScript, enableAudioTags);
+      result.fullScript = cleanVoiceoverScript(result.fullScript, false);
+    }
+    if (result.strategicCtaQuestion && /saza|phaansi|guilt|aaropi.*kadi/i.test(result.strategicCtaQuestion)) {
+      result.strategicCtaQuestion = "Is mamle par police jaanch aur aage ki sabhi taaza updates ke liye KKT News ko follow karein.";
     }
     return result;
   } catch (error) {
@@ -2145,11 +2237,7 @@ ${script}`;
   let parsed: any;
   try {
     const text = response?.text || '{}';
-    let cleanedText = text;
-    if (text.includes('```json')) {
-      cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-    }
-    parsed = JSON.parse(cleanedText);
+    parsed = safeExtractAndParseJson<any>(text);
   } catch(e) {
     throw new Error("Failed to parse Gemini JSON response for planning scenes.");
   }
@@ -2392,11 +2480,7 @@ Return strictly ONLY the raw JSON without markdown formatting.`;
   let parsed: any;
   try {
     const text = response?.text || '{}';
-    let cleanedText = text;
-    if (text.includes('```json')) {
-      cleanedText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-    }
-    parsed = JSON.parse(cleanedText);
+    parsed = safeExtractAndParseJson<any>(text);
   } catch(e) {
     throw new Error("Failed to parse Gemini JSON response for finding visuals.");
   }
@@ -2545,7 +2629,7 @@ Return ONLY a JSON array:
       config: { responseMimeType: "application/json", temperature: 0.1 }
     });
     const text = response?.text || '[]';
-    classifications = JSON.parse(text.replace(/```json/g, "").replace(/```/g, "").trim());
+    classifications = safeExtractAndParseJson<any[]>(text, []);
   } catch (e) {
     console.error("Classification error:", e);
   }
@@ -2724,7 +2808,7 @@ Return ONLY a JSON array:
 export const generateFullReelScript = async (
   articleContent: string,
   template: any,
-  enableAudioTags: boolean = true,
+  enableAudioTags: boolean = false,
 ) => {
   const ai = getAiClient();
   if (!ai) throw new Error("API Key missing");
@@ -2735,35 +2819,24 @@ export const generateFullReelScript = async (
   const hasSubtitles = coords.subtitle_box && coords.subtitle_box !== "hidden";
 
   const prompt = `# ROLE AND PERSONA
-You are an elite Hindi News Reel Scriptwriter and Senior Digital Broadcast Journalist.
-Your job is to transform the provided news article into a factual, high-retention, and 100% sensible 25-40 second Hindi/Hinglish news reel script.
+You are an elite Digital Broadcast Journalist and Professional Hindi News Anchor for KKT News.
+Your job is to transform the provided news article into a factual, high-retention, credible, and 100% sensible 25-40 second Hindi/Hinglish news reel script.
 
-# ABSOLUTE INTEGRITY & FACT-ANCHORING RULES (MANDATORY)
-1. ANCHOR WITH REAL FACTS & SPECIFIC NAMES:
-   - YOU MUST EXPLICITLY MENTION the actual names of people, victims, accused, officials, police stations, and exact towns/locations from the article.
-   - NEVER use vague, nameless placeholders like "एक शख्स", "एक व्यक्ति", "कुछ लोगों ने", or "एक अफसर" when the specific names or designations are in the source.
-   - If the news mentions "Telibandha", say "Raipur ke Telibandha mein". If the accused is "Ramesh", say "aaropi Ramesh".
-2. NO SENSELESS / DISCONNECTED HOOKS:
-   - BANNED CLICHÉS: DO NOT start with generic conspiracy lines like "Sarkar kehti hai sab theek hai par ground reality kuch aur hai" or "Aapke phone ki ek setting aapka account khali kar sakti hai" UNLESS the news is literally about government failure or phone hacking.
-   - THE HOOK MUST DIRECTLY STATE THE ACTUAL EVENT IN THE FIRST 5 WORDS:
-     * Crime Example: "Raipur ke Pandri mein din-dahade 25 lakh ki loot, aur aaropi ab bhi farar..."
-     * Accident Example: "Ambikapur highway par tej raftar bus aur truck ki takkar, 4 logon ki halat gambhir..."
-     * Public Policy Example: "Chhattisgarh ke bijli upbhoktaon ke liye bada update, agle mahine se..."
-3. LOGICAL CAUSE-AND-EFFECT STORYTELLING (MUST MAKE 100% SENSE):
-   - Every sentence must logically follow the previous one.
-   - Explain: 1. What happened & Where -> 2. Who is involved (names/roles) -> 3. The exact conflict or consequence -> 4. What action police or authorities have taken right now.
-   - No abrupt non-sequiturs or disjointed jumps.
+# CRITICAL KKT AI PROMPT RULES (MANDATORY & STRICTLY ENFORCED):
+1. NEVER USE TAGS: Absolutely NEVER use tags like [urgent], [dramatic], [pause], [serious], [fast], [slow], or any bracketed stage directions. Output ONLY clean spoken narration script.
+2. PROFESSIONAL HINDI NEWS ANCHOR STYLE: Deliver in a clean, authoritative, articulate digital news reporter voice. Sound natural and credible, never robotic or sensationalized tabloid.
+3. FIRST SENTENCE MUST CONTAIN THE STRONGEST FACT (HOOK, 0-3 SEC): The first sentence MUST state the single strongest, most shocking or crucial verified fact immediately with location and incident.
+   - Example: "Raipur ke Mana mein ek yuvti ko zinda jalane ki koshish ka sansanikhej mamla saamne aaya."
+4. NO QUESTIONS ASKING VIEWERS TO JUDGE GUILT, PUNISHMENT OR POLITICS: Viewers want verified facts, not judgement or moral lecturing. STRICTLY FORBIDDEN to ask leading opinion questions like "Kya aise aaropiyon ko kadi saza milni chahiye?", "kya lagta hai?", or "comment karke batayein".
+5. CLEAN NEWS CALL-TO-ACTION ENDING: End the narration with official investigation status followed strictly by: "Zyada updates ke liye KKT News ko follow karein." (or "Is mamle se judi har update ke liye KKT News ko follow karein.").
+6. LENGTH & DURATION: STRICTLY 70 to 90 words spoken in natural Hinglish/Hindi (25-40 seconds duration).
+7. SHORT SENTENCES, MOBILE-FRIENDLY: Write in short, crisp sentences (8-14 words each) that are easy to digest on mobile feeds.
+8. AVOID BANNED CLICHÉS: STRICTLY AVOID "badi khabar", "agar aap", "dosto", "comment karke bataye", "aapki kya raye hai", "sarkar so rahi hai".
+9. CRIME NEWS MUST REMAIN FACTUAL & NEUTRAL: State verified names of the accused, victim, police officers, police stations, and hospital. Clearly attribute details to police and official sources without sensationalizing moral judgement.
+10. OUTPUT ONLY NARRATION SCRIPT: Pure narration script without stage directions.
 
-# DURATION & WORD COUNT (STRICT 25-40 SECONDS)
-Target word count: 65 to 90 words spoken in natural Hinglish.
-- Fast, punchy, articulate, and realistic newsroom anchor delivery.
-- DO NOT artificially truncate sentences into unintelligible fragments. Give enough words for the listener to understand the full reality.
-
-# SCRIPT ARC (25-40 SECONDS)
-[0:00 - 0:06] THE SCROLL-STOPPER HOOK: Concrete shock event + location + person involved.
-[0:06 - 0:18] THE DETAILS & CONFLICT: Exact details, who did what, victim/accused actions, and key numbers.
-[0:18 - 0:30] THE CLIMAX & CURRENT STATUS: Police FIR/arrest, hospital update, court order, or official statement.
-[0:30 - 0:40] LOGICAL CONTEXTUAL CTA: A direct question about THIS SPECIFIC EVENT (e.g. "Kya police ki aisi karwayi se aisi ghatnaon par rok lagegi? Apni raye comment mein zaroor batayein aur KKT News ko follow karein."). Strictly use "follow", never "subscribe".
+# REFERENCE GOLDEN KKT SCRIPT:
+"Raipur ke Mana mein ek yuvti ko zinda jalane ki koshish ka sansanikhej mamla saamne aaya. Police ke mutabik aaropi Veeru Dheewar ne apni parichit Rajkumari Sahu par petrol daal kar aag laga di. Gambhir roop se jhulsi Rajkumari ko Mekahara aspatal mein bharti karaya gaya. Jaanch mein pata chala hai ki dono pehle se ek doosre ko jaante the. ASP Abhishek Jha ke anusar Mana police CCTV footage aur anya sabooton ke aadhar par aaropi ki talash kar rahi hai. Aaropi ki giraftari hote hi sabse pehle update milegi KKT News par. Zyada updates ke liye KKT News ko follow karein."
 
 # RAW NEWS ARTICLE INPUT:
 ${articleContent}
@@ -2776,20 +2849,20 @@ ${hasSubtitles ? `Subtitles Requirements:
 Categorization & Style:
 - "reelType": Breaking News, Explainer, Debate, or Useful Update.
 - "stylePreset": breaking_news (Fast zoom, red urgency), explainer (Clean style, slower pacing), debate, useful_update.
-- "facebookCaption": Write an engaging caption for Facebook Reels and Instagram Reels. IMPORTANT: The caption MUST start with "🚨 [Category or Location] Breaking News | [Headline]". For example: "🚨 Chhattisgarh Breaking News | रायपुर के अंबेडकर अस्पताल में AC ब्लास्ट से भीषण आग". The caption MUST BE STRICTLY 200-400 characters long. Limit hashtags to 1-3 strictly. Ensure the hashtags are highly relevant to the news topic involving location, person, or any topic related trending tag.
+- "facebookCaption": Write an engaging caption for Facebook Reels and Instagram Reels. IMPORTANT: The caption MUST start with "🚨 [Category or Location] Breaking News | [Headline]". For example: "🚨 Raipur Breaking News | रायपुर के माना में युवती को जलाने की कोशिश". The caption MUST BE STRICTLY 200-400 characters long. Include 1-3 highly relevant hashtags. End caption with: "Zyada updates ke liye KKT News ko follow karein."
 
 Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly escape inner quotes):
 {
   ${hasHeadline ? '"headline": "Short top headline (On-screen hook text)",' : ""}
-  "voiceoverScript": ${enableAudioTags ? '"Full script combining Hook, Context, Core Story, Climax, and Strategic CTA (Must read like fluent conversational Hindi/Hinglish, STRICTLY 50-80 words). IMPORTANT: Insert bracketed audio emotion and pacing tags directly into the text (e.g., [serious], [fast], [slow], [pause], [dramatic], [excited], [urgent]) to dynamically change tone mid-sentence."' : '"Full script combining Hook, Context, Core Story, Climax, and Strategic CTA (Must read like fluent conversational Hindi/Hinglish, STRICTLY 50-80 words for 25-40 seconds duration). NO bracketed cues in this string."'},
+  "voiceoverScript": "Full spoken narration script (Strictly 70-90 words in professional Hindi/Hinglish news anchor style). Must follow all 10 KKT rules: strongest fact hook, factual neutral body, official status, ending with news follow CTA. NO BRACKETED TAGS OR DIRECTIVES.",
   ${hasSubtitles ? '"subtitleChunks": ["रायपुर में", "बड़ा मामला", "सामने आया"],' : ""}
-  ${hasTicker ? '"ticker": "Scrolling breaking news text",' : ""}
-  "reelType": "string",
-  "stylePreset": "string",
+  ${hasTicker ? '"ticker": "Scrolling breaking news text (Max 50-60 characters)",' : ""}
+  "reelType": "Breaking News",
+  "stylePreset": "breaking_news",
   "visualKeywords": "3-5 keywords for searching stock footage",
   "facebookCaption": "String containing the facebook and instagram reel caption (STRICTLY 200-400 characters long) with 1-3 highly relevant hashtags",
-  "onScreenHookText": "Exact text to show on screen in the first 2 seconds",
-  "strategicCtaQuestion": "Polarizing question to ask in video & pin in comments"
+  "onScreenHookText": "Exact punchy text to show on screen in the first 2 seconds",
+  "strategicCtaQuestion": "Is mamle se judi sabhi taaza updates ke liye KKT News ko follow karein."
 }`;
 
   try {
@@ -2802,29 +2875,14 @@ Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly 
     });
 
     const rawText = response.text || "{}";
-    let cleanedText = rawText;
-
-    // Sometimes models wrap json in markdown
-    const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      cleanedText = jsonMatch[0];
-    } else {
-      cleanedText = cleanedText
-        .replace(/```json/gi, "")
-        .replace(/```/g, "")
-        .trim();
-    }
-
-    let result;
-    try {
-      result = JSON.parse(cleanedText);
-    } catch (parseError) {
-      console.error("Failed to parse JSON string:", cleanedText);
-      throw parseError;
-    }
+    const result = safeExtractAndParseJson<any>(rawText);
 
     if (result.voiceoverScript) {
-      result.voiceoverScript = cleanVoiceoverScript(result.voiceoverScript, enableAudioTags);
+      result.voiceoverScript = cleanVoiceoverScript(result.voiceoverScript, false);
+    }
+
+    if (result.strategicCtaQuestion && /saza|phaansi|guilt|aaropi.*kadi/i.test(result.strategicCtaQuestion)) {
+      result.strategicCtaQuestion = "Is mamle par police jaanch aur aage ki sabhi taaza updates ke liye KKT News ko follow karein.";
     }
 
     if (result.facebookCaption) {
@@ -2833,7 +2891,7 @@ Return EXACTLY VALID MAPPED JSON (No markdown formatting, no comments, properly 
 
     // Fallbacks for subtitleChunks / subtitles
     if (result.subtitleChunks && Array.isArray(result.subtitleChunks)) {
-      result.subtitles = result.subtitleChunks.map((chunk: string) => cleanVoiceoverScript(chunk));
+      result.subtitles = result.subtitleChunks.map((chunk: string) => cleanVoiceoverScript(chunk, false));
       result.subtitleChunks = result.subtitles;
     } else if (result.voiceoverScript) {
       const words = result.voiceoverScript.split(/\s+/).filter(Boolean);
@@ -2933,7 +2991,7 @@ Please return the updated Data and Styles in JSON format matching this schema. N
       },
     });
 
-    return JSON.parse(response.text || "{}");
+    return safeExtractAndParseJson<any>(response.text || "{}");
   } catch (error) {
     console.error("Failed to edit reel script with AI", error);
     throw error;
@@ -3034,7 +3092,7 @@ Return a JSON object with this exact structure (if an element is not present, ma
       },
     });
 
-    return JSON.parse(response.text || "{}");
+    return safeExtractAndParseJson<any>(response.text || "{}");
   } catch (error) {
     console.error("Error analyzing viral template:", error);
     throw error;
@@ -3114,13 +3172,7 @@ Return a STRICT JSON response only (no markdown, no explanations) containing:
     });
 
     const text = response.text || "{}";
-    let cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-    const firstBrace = cleanText.indexOf('{');
-    const lastBrace = cleanText.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
-    }
-    return JSON.parse(cleanText);
+    return safeExtractAndParseJson<any>(text);
   } catch (error) {
     console.error("Error analyzing template improvement:", error);
     throw error;
@@ -3172,13 +3224,7 @@ Output as pure JSON, with keys: ${hasHeadline ? '"headline", ' : ''}${hasTicker 
 
   let text = response.text || '';
   try {
-    let cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-    const firstBrace = cleanText.indexOf('{');
-    const lastBrace = cleanText.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
-    }
-    return JSON.parse(cleanText);
+    return safeExtractAndParseJson<any>(text);
   } catch (e) {
     console.error("Failed to parse JSON response:", text);
     throw new Error("Failed to generate client reel script");
